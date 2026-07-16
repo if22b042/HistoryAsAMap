@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Historical Map{% endblock %}
+
+{% block content %}
+<div class="map-page">
+  <div class="map-content">
+    <!-- Year Filter -->
+    <div class="year-filter">
+      <h3>Filter by Year</h3>
+      <div class="year-slider">
+        <div id="year-slider"></div>
+        <div class="year-values">
+          <span id="year-from-display"></span> – <span id="year-to-display"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Filter -->
+    <div class="category-filter">
+      <h3>Filter by Category</h3>
+      <div class="category-buttons">
+        <button class="category-btn active" data-category="all">All</button>
+        <button class="category-btn" data-category="military">Military</button>
+        <button class="category-btn" data-category="diplomatic">Diplomatic</button>
+        <button class="category-btn" data-category="naval">Naval</button>
+        <button class="category-btn" data-category="political">Political</button>
+        <button class="category-btn" data-category="economic">Economic</button>
+        <button class="category-btn" data-category="cultural">Cultural</button>
+        <button class="category-btn" data-category="scientific">Scientific</button>
+        <button class="category-btn" data-category="other">Other</button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+  </div>
+
+  <!-- Events List Section -->
+  <div class="events-list-section" id="events-section">
+    <div class="events-header">
+      <h2>All Historical Events</h2>
+      <p>Browse through the complete timeline of historical events</p>
+    </div>
+    <div class="events-grid" id="events-grid">
+      {% for entry in entries %}
+        <div class="event-card" data-year="{{ entry.year }}" data-category="{{ entry.category or 'other' }}" onclick="showEventFromList({{ loop.index0 }})">
+          <div class="event-card-year">{{ entry.year }}</div>
+          <div class="event-card-category">{{ entry.category|title or 'Other' }}</div>
+          <div class="event-card-title">{{ entry.title or "Untitled" }}</div>
+          <div class="event-card-description">{{ entry.first_paragraph }}</div>
+          {% if entry.link %}
+            <a href="{{ entry.link }}" target="_blank" rel="noopener" class="event-card-link" onclick="event.stopPropagation()">Read more →</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h2>Event Details</h2>
+    <button class="close-btn" onclick="closeSidebar()">×</button>
+  </div>
+  <div class="sidebar-content" id="sidebar-content"></div>
+</div>
+
+<!-- Scroll to Events Button -->
+<button class="scroll-to-events-btn" onclick="scrollToEvents()">📍 View All Events</button>
+
+<!-- Dependencies -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='map.css') }}">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+
+<!-- Map & Filter Script -->
+<script>
+// @ts-nocheck
+const map = L.map('map', {
+  center: [20, 0],
+  zoom: 2,
+  minZoom: 2,
+  maxZoom: 18,
+  worldCopyJump: true,
+  maxBounds: [[-90, -180], [90, 180]],
+  maxBoundsViscosity: 0.5
+});
+
+// Professional basemap
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap & CARTO',
+  maxZoom: 18,
+  noWrap: true
+}).addTo(map);
+
+// Events from backend
+const eventsData = [
+  {% for entry in entries %}
+    {% if entry.location and entry.location.coordinates %}
+      {% set parts = entry.location.coordinates.split(',') %}
+      {% if parts|length >= 2 %}
+        {
+          lat: {{ parts[0]|float }},
+          lon: {{ parts[1]|float }},
+          title: {{ (entry.title or "Untitled")|tojson }},
+          year: {{ (entry.year or "")|tojson }},
+          description: {{ (entry.first_paragraph or "")|tojson }},
+          link: {{ (entry.link or "")|tojson }},
+          category: {{ (entry.category or "other")|tojson }}
+        }{% if not loop.last %},{% endif %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+];
+
+const customIcon = L.divIcon({
+  className: 'custom-marker-icon',
+  html: '<div style="background: #4299e1; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11]
+});
+
+let markers = [];
+
+// Add markers to map
+function addMarkers(filteredEvents) {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  filteredEvents.forEach((event, index) => {
+    const truncatedDesc = event.description.length > 150 
+      ? event.description.substring(0, 150) + '...' 
+      : event.description;
+
+    const popupContent = `
+      <div class="popup-content">
+        <strong>${event.title}</strong>
+        ${event.year ? `<em>${event.year}</em><br><br>` : ''}
+        ${truncatedDesc}
+      </div>
+      <button class="popup-btn" onclick="showEvent(${index})">View Full Details →</button>
+    `;
+
+    const marker = L.marker([event.lat, event.lon], { icon: customIcon })
+      .bindPopup(popupContent, { maxWidth: 300 })
+      .addTo(map);
+
+    markers.push(marker);
+  });
+}
+
+// Sidebar logic
+function showEvent(index) {
+  const event = eventsData[index];
+  const sidebar = document.getElementById('sidebar');
+  const content = document.getElementById('sidebar-content');
+  
+  content.innerHTML = `
+    <span class="event-detail-year">${event.year}</span>
+    <h3 class="event-detail-title">${event.title}</h3>
+    <div class="event-detail-coordinates">
+      📍 ${event.lat.toFixed(4)}, ${event.lon.toFixed(4)}
+    </div>
+    <div class="event-detail-description">${event.description}</div>
+    ${event.link ? `<a href="${event.link}" target="_blank" rel="noopener" class="event-detail-link">Read Full Article →</a>` : ''}
+  `;
+  
+  sidebar.classList.add('active');
+  document.getElementById('map').classList.add('with-sidebar');
+  map.setView([event.lat, event.lon], 5, { animate: true });
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('active');
+  document.getElementById('map').classList.remove('with-sidebar');
+}
+
+function scrollToEvents() {
+  document.getElementById('events-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function showEventFromList(index) {
+  showEvent(index);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Year slider setup
+const years = eventsData.map(e => parseInt(e.year)).filter(y => !isNaN(y));
+const minYear = Math.min(...years);
+const maxYear = Math.max(...years);
+
+const slider = document.getElementById('year-slider');
+const fromDisplay = document.getElementById('year-from-display');
+const toDisplay = document.getElementById('year-to-display');
+
+noUiSlider.create(slider, {
+  start: [minYear, maxYear],
+  connect: true,
+  step: 1,
+  range: { min: minYear, max: maxYear },
+  tooltips: false
+});
+
+fromDisplay.textContent = minYear;
+toDisplay.textContent = maxYear;
+
+slider.noUiSlider.on('update', (values, handle) => {
+  const from = Math.round(values[0]);
+  const to = Math.round(values[1]);
+  fromDisplay.textContent = from;
+  toDisplay.textContent = to;
+  filterByYear(from, to);
+});
+
+// Filter map + list
+function filterByYear(from, to) {
+  const filtered = eventsData.filter(e => {
+    const y = parseInt(e.year);
+    return !isNaN(y) && y >= from && y <= to;
+  });
+  addMarkers(filtered);
+
+  document.querySelectorAll('.event-card').forEach(card => {
+    const year = parseInt(card.getAttribute('data-year'));
+    card.style.display = (!isNaN(year) && year >= from && year <= to)
+      ? 'block' : 'none';
+  });
+}
+
+// Category filter functionality
+let selectedCategory = 'all';
+
+function filterByCategory(category) {
+  selectedCategory = category;
+  const filtered = eventsData.filter(e => {
+    return category === 'all' || e.category === category;
+  });
+  
+  // Apply year filter as well
+  const yearSlider = document.getElementById('year-slider');
+  if (yearSlider) {
+    const values = yearSlider.noUiSlider.get();
+    const from = Math.round(values[0]);
+    const to = Math.round(values[1]);
+    const yearFiltered = filtered.filter(e => {
+      const y = parseInt(e.year);
+      return !isNaN(y) && y >= from && y <= to;
+    });
+    addMarkers(yearFiltered);
+  } else {
+    addMarkers(filtered);
+  }
+  
+  // Update event cards
+  document.querySelectorAll('.event-card').forEach(card => {
+    const cardCategory = card.getAttribute('data-category');
+    const year = parseInt(card.getAttribute('data-year'));
+    
+    let showCard = true;
+    if (category !== 'all' && cardCategory !== category) {
+      showCard = false;
+    }
+    
+    // Apply year filter
+    const yearSlider = document.getElementById('year-slider');
+    if (yearSlider && showCard) {
+      const values = yearSlider.noUiSlider.get();
+      const from = Math.round(values[0]);
+      const to = Math.round(values[1]);
+      if (isNaN(year) || year < from || year > to) {
+        showCard = false;
+      }
+    }
+    
+    card.style.display = showCard ? 'block' : 'none';
+  });
+}
+
+// Category button event listeners
+document.addEventListener('DOMContentLoaded', function() {
+  const categoryButtons = document.querySelectorAll('.category-btn');
+  categoryButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      // Remove active class from all buttons
+      categoryButtons.forEach(b => b.classList.remove('active'));
+      // Add active class to clicked button
+      this.classList.add('active');
+      // Apply filter
+      filterByCategory(this.getAttribute('data-category'));
+    });
+  });
+});
+
+// Initialize full range
+addMarkers(eventsData);
+</script>
+{% endblock %}

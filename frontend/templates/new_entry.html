@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Add a New Event{% endblock %}
+
+{% block content %}
+<div class="new-entry-page">
+  <div class="new-entry-container">
+    <div class="new-entry-header">
+      <h1>Add a New Historical Event</h1>
+      <p class="new-entry-subtitle">Contribute to our historical map by adding a new event from Wikipedia</p>
+    </div>
+
+    <div class="new-entry-content">
+      <div class="info-card">
+        <div class="info-card-icon">i</div>
+        <div class="info-card-content">
+          <h3>How it works</h3>
+          <p>Simply enter a Wikipedia link to add an event to our historical map. We'll automatically extract the key information and allow you to review it before submission.</p>
+          <ul>
+            <li>Enter a valid Wikipedia article link</li>
+            <li>Review the automatically extracted data</li>
+            <li>Confirm or correct any information</li>
+            <li>Submit for admin approval</li>
+          </ul>
+        </div>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      {% if error %}
+        <div class="error-message">
+          <div class="error-icon">!</div>
+          <div class="error-content">
+            <strong>Error:</strong> {{ error }}
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="form-card">
+        <form action="{{ url_for('PreviewEntry') }}" method="post" class="new-entry-form">
+          <div class="form-group">
+            <label for="wikiLink" class="form-label">
+              <span class="label-icon">W</span>
+              Wikipedia Link
+            </label>
+            <div class="input-wrapper">
+              <input 
+                type="url" 
+                id="wikiLink" 
+                name="wikiLink" 
+                class="form-input" 
+                placeholder="https://en.wikipedia.org/wiki/Example_Event"
+                value="{{ wiki_link or '' }}"
+                required
+              >
+              <div class="input-hint">Enter a valid Wikipedia article URL</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="category" class="form-label">
+              <span class="label-icon">C</span>
+              Event Category (optional)
+            </label>
+            <div class="input-wrapper">
+              <select id="category" name="category" class="form-select">
+                <option value="">Select a category...</option>
+                <option value="military">Military</option>
+                <option value="diplomatic">Diplomatic</option>
+                <option value="naval">Naval</option>
+                <option value="political">Political</option>
+                <option value="economic">Economic</option>
+                <option value="cultural">Cultural</option>
+                <option value="scientific">Scientific</option>
+                <option value="other">Other</option>
+              </select>
+              <div class="input-hint">Choose the most appropriate category for this event (required in next step)</div>
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn">
+            <span class="btn-icon">Preview</span>
+            Preview the entry
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.new-entry-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f7fafc 0%, #e2e8f0 100%);
+  padding: 2rem;
+}
+
+.new-entry-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.new-entry-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.new-entry-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.new-entry-subtitle {
+  font-size: 1.125rem;
+  color: #718096;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.new-entry-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.info-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #4299e1;
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.info-card-icon {
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.info-card-content h3 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+  font-size: 1.25rem;
+}
+
+.info-card-content p {
+  margin: 0 0 1rem 0;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.info-card-content ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #4a5568;
+}
+
+.info-card-content li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.alert {
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.alert.error {
+  background: #fed7d7;
+  color: #c53030;
+  border: 1px solid #feb2b2;
+}
+
+.alert.success {
+  background: #c6f6d5;
+  color: #2f855a;
+  border: 1px solid #9ae6b4;
+}
+
+.error-message {
+  background: #fed7d7;
+  border: 1px solid #feb2b2;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.error-icon {
+  background: #e53e3e;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.error-content {
+  color: #c53030;
+  line-height: 1.5;
+}
+
+.error-content strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.form-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.new-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+
+.label-icon {
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.form-input, .form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.form-input:focus, .form-select:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.form-input::placeholder {
+  color: #a0aec0;
+}
+
+.required {
+  color: #e53e3e;
+  font-weight: 700;
+}
+
+.input-hint {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: #718096;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(43, 108, 176, 0.4);
+}
+
+.btn-icon {
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .new-entry-page {
+    padding: 1rem;
+  }
+  
+  .new-entry-header h1 {
+    font-size: 2rem;
+  }
+  
+  .info-card {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .info-card-icon {
+    align-self: flex-start;
+  }
+}
+</style>
+{% endblock %}
