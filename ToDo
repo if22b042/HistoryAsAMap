@@ -1,0 +1,11 @@
+Implement Approval Process:
+    - 
+Name: History As A Map (HAAM)
+Add check if entry already exists 
+Check that article is an english wiki article 
+Add google maps link
+Add different types of maps including one for heatmap
+The current map should always be centered around the average of coordinates
+Expand map for full page in a clever and aesthetic way
+Add model for list and for Event Collection (Like different wars)
+Add ability to like events
