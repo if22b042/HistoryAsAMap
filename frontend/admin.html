@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — History As A Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="nav-brand">
+        <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
+        <div class="brand-text"><h1>History As A Map</h1></div>
+      </a>
+      <nav class="nav-menu">
+        <a href="/" class="nav-link" data-page="home"><i class="fas fa-home"></i><span>Home</span></a>
+        <a href="/add-event.html" class="nav-link" data-page="add"><i class="fas fa-plus-circle"></i><span>Add Event</span></a>
+        <a href="/admin.html" class="nav-link" data-page="admin"><i class="fas fa-shield-alt"></i><span>Admin</span></a>
+      </nav>
+      <button class="nav-toggle" type="button"><i class="fas fa-bars"></i></button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="page-container">
+      <div class="page-header">
+        <h1>Admin Approval</h1>
+        <p>Review pending event submissions. Default API key for local dev: <code>dev-admin-key</code></p>
+      </div>
+
+      <div id="admin-error" class="error-message" hidden></div>
+
+      <div class="admin-key-form">
+        <input type="password" id="admin-key" class="form-input" placeholder="Admin API key">
+        <button type="button" id="load-pending" class="action-btn">Load Pending</button>
+      </div>
+
+      <div id="pending-list"></div>
+    </div>
+  </main>
+
+  <script type="module" src="/src/js/admin.js"></script>
+</body>
+</html>

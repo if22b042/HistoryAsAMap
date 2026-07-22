@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>History As A Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="nav-brand">
+        <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
+        <div class="brand-text">
+          <h1>History As A Map</h1>
+          <span class="brand-tagline">Explore historical events across time and space</span>
+        </div>
+      </a>
+      <nav class="nav-menu">
+        <a href="/" class="nav-link" data-page="home"><i class="fas fa-home"></i><span>Home</span></a>
+        <a href="/about.html" class="nav-link" data-page="about"><i class="fas fa-info-circle"></i><span>About</span></a>
+        <a href="/add-event.html" class="nav-link" data-page="add"><i class="fas fa-plus-circle"></i><span>Add Event</span></a>
+        <a href="/admin.html" class="nav-link" data-page="admin"><i class="fas fa-shield-alt"></i><span>Admin</span></a>
+      </nav>
+      <button class="nav-toggle" type="button" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="map-page">
+      <div class="map-content">
+        <div class="year-filter">
+          <h3>Filter by Year</h3>
+          <div class="year-slider"><div id="year-slider"></div></div>
+          <div class="year-values">
+            <span id="year-from-display"></span> – <span id="year-to-display"></span>
+          </div>
+        </div>
+
+        <div class="category-filter">
+          <h3>Filter by Category</h3>
+          <div class="category-buttons">
+            <button class="category-btn active" data-category="all" type="button">All</button>
+            <button class="category-btn" data-category="military" type="button">Military</button>
+            <button class="category-btn" data-category="diplomatic" type="button">Diplomatic</button>
+            <button class="category-btn" data-category="naval" type="button">Naval</button>
+            <button class="category-btn" data-category="political" type="button">Political</button>
+            <button class="category-btn" data-category="economic" type="button">Economic</button>
+            <button class="category-btn" data-category="cultural" type="button">Cultural</button>
+            <button class="category-btn" data-category="scientific" type="button">Scientific</button>
+            <button class="category-btn" data-category="other" type="button">Other</button>
+          </div>
+        </div>
+
+        <div id="map"></div>
+      </div>
+
+      <section class="events-list-section" id="events-section">
+        <div class="events-header">
+          <h2>Historical Events</h2>
+          <p>Approved events on the map — browse the timeline below</p>
+        </div>
+        <div class="events-grid" id="events-grid"></div>
+      </section>
+    </div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h2>Event Details</h2>
+        <button class="close-btn" type="button" onclick="closeSidebar()">×</button>
+      </div>
+      <div class="sidebar-content" id="sidebar-content"></div>
+    </aside>
+
+    <button class="scroll-to-events-btn" type="button" onclick="scrollToEvents()">View All Events</button>
+  </main>
+
+  <script type="module" src="/src/js/map.js"></script>
+</body>
+</html>

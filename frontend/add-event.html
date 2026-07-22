@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Event — History As A Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="nav-brand">
+        <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
+        <div class="brand-text"><h1>History As A Map</h1></div>
+      </a>
+      <nav class="nav-menu">
+        <a href="/" class="nav-link" data-page="home"><i class="fas fa-home"></i><span>Home</span></a>
+        <a href="/about.html" class="nav-link" data-page="about"><i class="fas fa-info-circle"></i><span>About</span></a>
+        <a href="/add-event.html" class="nav-link" data-page="add"><i class="fas fa-plus-circle"></i><span>Add Event</span></a>
+        <a href="/admin.html" class="nav-link" data-page="admin"><i class="fas fa-shield-alt"></i><span>Admin</span></a>
+      </nav>
+      <button class="nav-toggle" type="button"><i class="fas fa-bars"></i></button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="page-container">
+      <div class="page-header">
+        <h1>Add a New Historical Event</h1>
+        <p>Enter an English Wikipedia article link. Submissions are reviewed before appearing on the map.</p>
+      </div>
+
+      <div id="form-error" class="error-message" hidden></div>
+
+      <div class="info-card">
+        <h3>How it works</h3>
+        <ul>
+          <li>Enter a valid <strong>en.wikipedia.org</strong> article link</li>
+          <li>Review automatically extracted data on the next page</li>
+          <li>Submit for admin approval</li>
+        </ul>
+      </div>
+
+      <div class="form-card">
+        <form id="add-event-form">
+          <div class="form-group">
+            <label class="form-label" for="wikiLink">Wikipedia Link</label>
+            <input type="url" id="wikiLink" name="wikiLink" class="form-input" placeholder="https://en.wikipedia.org/wiki/Example_Event" required>
+            <span class="input-hint">Only English Wikipedia URLs are accepted</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="category">Event Category (optional here)</label>
+            <select id="category" name="category" class="form-select">
+              <option value="">Select on preview page...</option>
+            </select>
+          </div>
+
+          <button type="submit" class="submit-btn">Preview Entry</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="/src/js/add-event.js"></script>
+</body>
+</html>

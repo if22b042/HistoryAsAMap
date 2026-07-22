@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview Entry — History As A Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="/" class="nav-brand">
+        <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
+        <div class="brand-text"><h1>History As A Map</h1></div>
+      </a>
+      <nav class="nav-menu">
+        <a href="/" class="nav-link" data-page="home"><i class="fas fa-home"></i><span>Home</span></a>
+        <a href="/add-event.html" class="nav-link" data-page="add"><i class="fas fa-plus-circle"></i><span>Add Event</span></a>
+        <a href="/admin.html" class="nav-link" data-page="admin"><i class="fas fa-shield-alt"></i><span>Admin</span></a>
+      </nav>
+      <button class="nav-toggle" type="button"><i class="fas fa-bars"></i></button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="page-container">
+      <div class="page-header">
+        <h1>Preview Historical Event</h1>
+        <p>Review and edit the extracted information before submitting for approval.</p>
+      </div>
+
+      <div id="form-error" class="error-message" hidden></div>
+      <div id="success-message" class="success-message" hidden>
+        Your event was submitted and is pending admin approval. It will appear on the map once approved.
+        <br><br>
+        <a href="/">Back to map</a> · <a href="/add-event.html">Add another</a>
+      </div>
+
+      <form id="preview-form" class="form-card">
+        <input type="hidden" id="modified" name="modified" value="false">
+
+        <div class="form-group">
+          <label class="form-label" for="title">Event Title</label>
+          <div class="input-wrapper">
+            <input type="text" id="title" name="title" class="form-input" readonly>
+            <button type="button" class="edit-btn" onclick="enableEdit('title')">Edit</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="date">Date</label>
+            <div class="input-wrapper">
+              <input type="text" id="date" name="date" class="form-input" readonly>
+              <button type="button" class="edit-btn" onclick="enableEdit('date')">Edit</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="year">Year</label>
+            <div class="input-wrapper">
+              <input type="text" id="year" name="year" class="form-input" readonly required>
+              <button type="button" class="edit-btn" onclick="enableEdit('year')">Edit</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="category">Event Category <span class="required">*</span></label>
+          <select id="category" name="category" class="form-select" required></select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="lat">Latitude</label>
+            <div class="input-wrapper">
+              <input type="text" id="lat" name="lat" class="form-input" readonly required>
+              <button type="button" class="edit-btn" onclick="enableEdit('lat')">Edit</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="lon">Longitude</label>
+            <div class="input-wrapper">
+              <input type="text" id="lon" name="lon" class="form-input" readonly required>
+              <button type="button" class="edit-btn" onclick="enableEdit('lon')">Edit</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="first_paragraph">Description</label>
+          <div class="input-wrapper">
+            <textarea id="first_paragraph" name="first_paragraph" class="form-textarea" readonly required></textarea>
+            <button type="button" class="edit-btn" onclick="enableEdit('first_paragraph')">Edit</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="link">Wikipedia Link</label>
+          <div class="input-wrapper">
+            <input type="url" id="link" name="link" class="form-input" readonly required>
+            <button type="button" class="edit-btn" onclick="enableEdit('link')">Edit</button>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn">Submit for Approval</button>
+      </form>
+    </div>
+  </main>
+
+  <script type="module" src="/src/js/preview.js"></script>
+</body>
+</html>
