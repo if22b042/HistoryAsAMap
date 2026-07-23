@@ -60,3 +60,7 @@ export function rejectEvent(id, adminKey) {
     headers: { "X-Admin-Key": adminKey },
   });
 }
+
+export function fetchTags() {
+  return request("/api/tags");
+}

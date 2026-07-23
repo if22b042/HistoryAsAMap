@@ -78,17 +78,22 @@ def get_wikipedia_data(url: str):
         logger.info(f"Date matches: {date_matches}, selected: {date}")
 
         # Always extract the first year mentioned
-        year_match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", extract)
+        year_match = re.search(r"\b(1[0-9]\d{2}|20\d{2})\b", extract)
         year = year_match.group(1) if year_match else None
         logger.info(f"Year match: {year}")
 
+        google_maps_link = f"https://www.google.com/maps?q={lat},{lon}" if lat and lon else ""
+        
         result = {
             "title": title_clean,
+            "lat": lat,
+            "lon": lon,
             "coordinates": (lat, lon) if lat and lon else None,
             "first_paragraph": first_paragraph,
             "date": date,
             "year": year,
-            "link": url
+            "link": url,
+            "google_maps_link": google_maps_link
         }
         logger.info(f"Returning result: {result}")
         return result

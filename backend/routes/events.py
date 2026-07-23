@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from backend.models.event import EntryStatus
+from backend.models.event import EntryStatus, Tag
 from backend.services.events import (
     EventServiceError,
     create_event,
@@ -71,3 +71,9 @@ def submit_event():
         return _error_response(exc)
 
     return jsonify(entry.to_dict()), 201
+
+
+@events_bp.get("/tags")
+def get_tags():
+    tags = Tag.query.order_by(Tag.name).all()
+    return jsonify([tag.to_dict() for tag in tags])

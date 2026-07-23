@@ -79,3 +79,5 @@ yourdb.db
 # Local test/output files
 # =========================
 wikipedia_api_test.log
+.vercel
+.env*

@@ -1,15 +1,23 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import re
 
 from backend.controllers.CheckNewEntry import CheckEntry
 from backend.controllers.SaveEntry import SaveEntry
-from backend.models.model import db, Entry, Location
+from backend.models.model import db, Entry, Location, Tag
 from backend.controllers.LocationInfoRetriever import reverse_geocode, check_on_water
 WIKIPEDIA_REGEX = r"^https:\/\/([a-z]{2}\.)?wikipedia\.org\/wiki\/.*$"
 
+import os
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
+
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///yourdb.db"
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    "DATABASE_URL",
+    f"sqlite:///{os.path.join(INSTANCE_DIR, 'yourdb.db')}"
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
@@ -52,7 +60,13 @@ def PreviewEntry():
 
     entry_data = CheckEntry(wiki_link)
 
-    if not entry_data:
+    if isinstance(entry_data, dict) and "error" in entry_data:
+        return render_template(
+            "new_entry.html",
+            error=entry_data["error"],
+            wiki_link=wiki_link
+        )
+    elif not entry_data:
         return render_template(
             "new_entry.html",
             error="Entry could not be retrieved or already exists in the database.",
@@ -75,8 +89,14 @@ def create_new_entry():
     print(f"DEBUG CREATE - Form data: {dict(request.form)}")
     print(f"DEBUG CREATE - All keys: {list(request.form.keys())}")
 
-    if not entry_data:
-            return render_template(
+    if isinstance(entry_data, dict) and "error" in entry_data:
+        return render_template(
+            "new_entry.html",
+            error=entry_data["error"],
+            wiki_link=request.form.get("link")
+        )
+    elif not entry_data:
+        return render_template(
             "new_entry.html",
             error="Entry could not be retrieved or already exists in the database.",
             wiki_link=request.form.get("link")
@@ -119,6 +139,14 @@ def create_new_entry():
     # Save entry (this returns the created Entry object)
     new_entry = SaveEntry(entry_data, modified)
     
+    # Handle tags
+    tag_id = request.form.get("tags")
+    if tag_id:
+        tag = Tag.query.get(int(tag_id))
+        if tag:
+            new_entry.tags.append(tag)
+            db.session.commit()
+    
     print (lon, lat, country, on_water)
     # Create location object linked to the entry
     location = Location(
@@ -132,6 +160,12 @@ def create_new_entry():
     db.session.commit()
 
     return redirect(url_for("index"))
+
+
+@app.route("/api/tags")
+def get_tags():
+    tags = Tag.query.order_by(Tag.name).all()
+    return jsonify([tag.to_dict() for tag in tags])
 
 
 if __name__ == "__main__":

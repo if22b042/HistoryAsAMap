@@ -1,7 +1,7 @@
 import logging
 
 from backend.extensions import db
-from backend.models.event import Entry, Location, EventCategory, EntryStatus
+from backend.models.event import Entry, Location, EventCategory, EntryStatus, Tag
 from backend.services.geocoding import check_on_water, reverse_geocode
 from backend.services.wikipedia import get_wikipedia_data
 from backend.utils.validators import is_valid_english_wikipedia_url
@@ -40,6 +40,12 @@ def preview_event(wiki_link: str) -> dict:
         raise EventServiceError(
             "This Wikipedia article has no coordinates. Please choose an article "
             "with a mapped location."
+        )
+
+    if data.get("year") is None:
+        raise EventServiceError(
+            "This Wikipedia article has no extractable year. Please choose an article "
+            "with a clear date in the first paragraph."
         )
 
     return data
@@ -104,6 +110,12 @@ def create_event(payload: dict) -> Entry:
         on_water=on_water,
         entry=entry,
     )
+
+    # Handle tags
+    tag_ids = payload.get("tag_ids", [])
+    if tag_ids:
+        tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
+        entry.tags = tags
 
     db.session.add(entry)
     db.session.add(location)
