@@ -1,9 +1,18 @@
 import enum
 
-from sqlalchemy import Enum, ForeignKey, Float
+from sqlalchemy import Enum, ForeignKey, Float, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.extensions import db
+
+
+# Association table for many-to-many relationship between Entry and Tag
+entry_tags = Table(
+    'entry_tags',
+    db.Model.metadata,
+    Column('entry_id', ForeignKey('entries.id'), primary_key=True),
+    Column('tag_id', ForeignKey('tags.id'), primary_key=True)
+)
 
 
 class EventCategory(enum.Enum):
@@ -41,6 +50,9 @@ class Entry(db.Model):
     location: Mapped["Location"] = relationship(
         back_populates="entry", uselist=False, cascade="all, delete-orphan"
     )
+    tags: Mapped[list["Tag"]] = relationship(
+        "Tag", secondary=entry_tags, back_populates="entries"
+    )
 
     def to_dict(self):
         return {
@@ -54,6 +66,7 @@ class Entry(db.Model):
             "status": self.status.value if self.status else None,
             "modified": self.modified,
             "location": self.location.to_dict() if self.location else None,
+            "tags": [tag.name for tag in self.tags] if self.tags else [],
         }
 
 
@@ -71,6 +84,10 @@ class Location(db.Model):
     )
     entry: Mapped[Entry] = relationship(back_populates="location")
 
+    @property
+    def google_maps_link(self) -> str:
+        return f"https://www.google.com/maps?q={self.lat},{self.lon}"
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -78,4 +95,22 @@ class Location(db.Model):
             "lon": self.lon,
             "country": self.country,
             "on_water": self.on_water,
+            "google_maps_link": self.google_maps_link,
+        }
+
+
+class Tag(db.Model):
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(db.String(255), nullable=False, unique=True)
+
+    entries: Mapped[list["Entry"]] = relationship(
+        "Entry", secondary=entry_tags, back_populates="tags"
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
         }

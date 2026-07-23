@@ -88,6 +88,17 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label for="tags" class="form-label">
+              <span class="label-icon">T</span>
+              Historical Tag (optional)
+            </label>
+            <select id="tags" name="tags" class="form-select">
+              <option value="">No tag selected</option>
+            </select>
+            <span class="input-hint" style="font-size: 0.875rem; color: #718096; margin-top: 0.25rem;">Select a historical period/event that applies</span>
+          </div>
+
           <div class="form-row">
             <div class="form-group">
               <label for="lat" class="form-label">
@@ -139,6 +150,22 @@
               <button type="button" class="edit-btn" onclick="enableEdit('link')">
                 <span class="btn-icon">Edit</span>
               </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 1rem;">
+            <label class="form-label">
+              <span class="label-icon">G</span>
+              Google Maps Link
+            </label>
+            <div class="input-wrapper">
+              {% if entry.get('lat') and entry.get('lon') %}
+                <a href="https://www.google.com/maps?q={{ entry['lat'] }},{{ entry['lon'] }}" target="_blank" rel="noopener" class="form-link">View on Google Maps →</a>
+              {% elif entry.get('coordinates') %}
+                <a href="https://www.google.com/maps?q={{ entry['coordinates'][0] }},{{ entry['coordinates'][1] }}" target="_blank" rel="noopener" class="form-link">View on Google Maps →</a>
+              {% else %}
+                <span class="form-link" style="pointer-events: none; color: #999;">No Google Maps link available</span>
+              {% endif %}
             </div>
           </div>
 
@@ -360,6 +387,28 @@
   box-shadow: 0 4px 12px rgba(43, 108, 176, 0.4);
 }
 
+.form-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  color: #4299e1;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  width: 100%;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.form-link:hover {
+  background: #ebf8ff;
+  border-color: #4299e1;
+  color: #2b6cb0;
+}
+
 @media (max-width: 768px) {
   .preview-page {
     padding: 1rem;
@@ -399,6 +448,24 @@ function enableEdit(fieldId) {
     document.getElementById("modified").value = "true";
 }
 
+// Load tags from API
+async function loadTags() {
+    try {
+        const response = await fetch('/api/tags');
+        const tags = await response.json();
+        const select = document.getElementById('tags');
+        
+        tags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag.id;
+            option.textContent = tag.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load tags:', error);
+    }
+}
+
 // Enable category field before form submission
 document.getElementById('previewForm').addEventListener('submit', function() {
     const categorySelect = document.getElementById('category');
@@ -413,6 +480,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (categorySelect && categorySelect.value) {
         categorySelect.disabled = true;
     }
+    
+    // Load tags
+    loadTags();
 });
 </script>
 {% endblock %}

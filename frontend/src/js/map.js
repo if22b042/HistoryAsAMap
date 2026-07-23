@@ -128,7 +128,7 @@ function showEvent(eventId) {
   content.innerHTML = `
     <span class="event-detail-year">${event.year}</span>
     <h3 class="event-detail-title">${event.title}</h3>
-    <div class="event-detail-coordinates">📍 ${event.lat.toFixed(4)}, ${event.lon.toFixed(4)}</div>
+    <div class="event-detail-coordinates">Location: ${event.lat.toFixed(4)}, ${event.lon.toFixed(4)}</div>
     <div class="event-detail-description">${event.description}</div>
     ${event.link ? `<a href="${event.link}" target="_blank" rel="noopener" class="event-detail-link">Read Full Article →</a>` : ""}
   `;

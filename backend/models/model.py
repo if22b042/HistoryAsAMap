@@ -1,11 +1,20 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, Enum
+from sqlalchemy import ForeignKey, Enum, Table, Column
 from datetime import datetime
 import enum
 
 db = SQLAlchemy()
+
+
+# Association table for many-to-many relationship between Entry and Tag
+entry_tags = Table(
+    'entry_tags',
+    db.Model.metadata,
+    Column('entry_id', ForeignKey('entries.id'), primary_key=True),
+    Column('tag_id', ForeignKey('tags.id'), primary_key=True)
+)
 
 
 class EventCategory(enum.Enum):
@@ -34,6 +43,10 @@ class Entry(db.Model):
 
     # 1:1 relation – each entry has exactly one location
     location: Mapped["Location"] = relationship(back_populates="entry", uselist=False)
+    # Many-to-many relationship with tags
+    tags: Mapped[list["Tag"]] = relationship(
+        "Tag", secondary=entry_tags, back_populates="entries"
+    )
 
     def to_dict(self):
         return {
@@ -43,7 +56,8 @@ class Entry(db.Model):
             "first_paragraph": self.firstParagraph,
             "link": self.wikiLink,
             "category": self.category.value if self.category else None,
-            "location": self.location.to_dict() if self.location else None
+            "location": self.location.to_dict() if self.location else None,
+            "tags": [tag.name for tag in self.tags] if self.tags else []
         }
 
 
@@ -71,5 +85,21 @@ class Location(db.Model):
             "on_water": self.on_water,
         }
 
+
+class Tag(db.Model):
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(db.String(255), nullable=False, unique=True)
+
+    entries: Mapped[list["Entry"]] = relationship(
+        "Entry", secondary=entry_tags, back_populates="tags"
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+        }
 
 

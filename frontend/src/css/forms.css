@@ -129,6 +129,26 @@
   font-weight: 600;
 }
 
+.form-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  color: #4299e1;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.form-link:hover {
+  background: #ebf8ff;
+  border-color: #4299e1;
+  color: #2b6cb0;
+}
+
 .submit-btn,
 .action-btn {
   background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);

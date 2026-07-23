@@ -1,6 +1,6 @@
 import "../css/base.css";
 import "../css/forms.css";
-import { createEvent } from "./api.js";
+import { createEvent, fetchTags } from "./api.js";
 import { initNav, setActiveNav } from "./nav.js";
 
 const CATEGORIES = [
@@ -39,6 +39,23 @@ function populateCategorySelect(selected) {
   });
 }
 
+async function loadTags() {
+  try {
+    const tags = await fetchTags();
+    const select = document.getElementById("tags");
+    
+    tags.forEach(tag => {
+      const option = document.createElement("option");
+      option.value = tag.id;
+      option.textContent = tag.name;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    const select = document.getElementById("tags");
+    select.innerHTML = '<option value="">Failed to load tags</option>';
+  }
+}
+
 function loadPreviewData() {
   const raw = sessionStorage.getItem("haam_preview");
   if (!raw) {
@@ -58,6 +75,10 @@ async function handleSubmit(e) {
     return;
   }
 
+  // Collect selected tag ID (single selection)
+  const tagSelect = document.getElementById("tags");
+  const tagId = tagSelect.value ? parseInt(tagSelect.value, 10) : null;
+
   const payload = {
     title: document.getElementById("title").value.trim(),
     date: document.getElementById("date").value.trim(),
@@ -68,6 +89,7 @@ async function handleSubmit(e) {
     lat: parseFloat(document.getElementById("lat").value),
     lon: parseFloat(document.getElementById("lon").value),
     modified: document.getElementById("modified").value === "true",
+    tag_ids: tagId ? [tagId] : [],
   };
 
   try {
@@ -95,7 +117,20 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("link").value = data.link || "";
   document.getElementById("lat").value = data.lat ?? "";
   document.getElementById("lon").value = data.lon ?? "";
+  
+  // Set Google Maps link
+  const googleMapsLink = document.getElementById("google_maps_link");
+  if (data.google_maps_link) {
+    googleMapsLink.href = data.google_maps_link;
+    googleMapsLink.textContent = "View on Google Maps →";
+  } else {
+    googleMapsLink.href = "#";
+    googleMapsLink.textContent = "No Google Maps link available";
+    googleMapsLink.style.pointerEvents = "none";
+    googleMapsLink.style.color = "#999";
+  }
 
   populateCategorySelect(data.category || "");
+  loadTags();
   document.getElementById("preview-form").addEventListener("submit", handleSubmit);
 });

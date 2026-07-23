@@ -46,9 +46,11 @@ def get_wikipedia_data(url: str) -> dict | None:
         date_matches = re.findall(r"\b(\d{1,2}\s+\w+\s+\d{4})\b", extract)
         date = date_matches[0] if len(set(date_matches)) == 1 else None
 
-        year_match = re.search(r"\b(1[5-9]\d{2}|20\d{2})\b", extract)
+        year_match = re.search(r"\b(1[0-9]\d{2}|20\d{2})\b", extract)
         year = int(year_match.group(1)) if year_match else None
 
+        google_maps_link = f"https://www.google.com/maps?q={lat},{lon}" if lat and lon else ""
+        
         return {
             "title": title_clean,
             "lat": lat,
@@ -57,6 +59,7 @@ def get_wikipedia_data(url: str) -> dict | None:
             "date": date or "",
             "year": year,
             "link": url,
+            "google_maps_link": google_maps_link,
         }
     except requests.RequestException as exc:
         logger.error("Wikipedia request failed: %s", exc)
