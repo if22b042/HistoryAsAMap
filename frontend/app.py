@@ -76,32 +76,24 @@ def PreviewEntry():
     # Add category to entry data
     entry_data['category'] = category
 
+    # If it's a duplicate entry, pass the flag to the template
+    is_duplicate = entry_data.get('is_duplicate', False)
+    existing_id = entry_data.get('existing_id')
+
     # If everything is okay, show the preview page
-    return render_template("submit_entry.html", entry=entry_data)
+    return render_template("submit_entry.html", entry=entry_data, is_duplicate=is_duplicate, existing_id=existing_id)
 
 
 @app.route("/create_new_entry", methods=["POST"])
 def create_new_entry():
     modified = request.form.get("modified") == "true"
-    entry_data = CheckEntry(request.form.get("link"))
+    existing_id = request.form.get("existing_id")
     
     # Debug: Print all form data received
     print(f"DEBUG CREATE - Form data: {dict(request.form)}")
     print(f"DEBUG CREATE - All keys: {list(request.form.keys())}")
+    print(f"DEBUG CREATE - existing_id: {existing_id}")
 
-    if isinstance(entry_data, dict) and "error" in entry_data:
-        return render_template(
-            "new_entry.html",
-            error=entry_data["error"],
-            wiki_link=request.form.get("link")
-        )
-    elif not entry_data:
-        return render_template(
-            "new_entry.html",
-            error="Entry could not be retrieved or already exists in the database.",
-            wiki_link=request.form.get("link")
-        )
-    
     # Validate category
     category = request.form.get("category")
     print(f"DEBUG CREATE - category: '{category}' (type: {type(category)})")
@@ -130,34 +122,42 @@ def create_new_entry():
         "lon": lon
     }
 
-    # Coordinates for Location class
-
     # Fetch values dynamically
     country = reverse_geocode(lat, lon)
     on_water = check_on_water(lat, lon)
 
-    # Save entry (this returns the created Entry object)
-    new_entry = SaveEntry(entry_data, modified)
+    entry_data["country"] = country
+    entry_data["on_water"] = on_water
+
+    # Save entry (this returns the created or updated Entry object)
+    if existing_id:
+        new_entry = SaveEntry(entry_data, modified, existing_id=int(existing_id))
+    else:
+        new_entry = SaveEntry(entry_data, modified)
     
     # Handle tags
     tag_id = request.form.get("tags")
     if tag_id:
         tag = Tag.query.get(int(tag_id))
         if tag:
+            # Clear existing tags and add the new one
+            new_entry.tags.clear()
             new_entry.tags.append(tag)
             db.session.commit()
     
     print (lon, lat, country, on_water)
-    # Create location object linked to the entry
-    location = Location(
-        coordinates=f"{lat},{lon}",
-        country=country,
-        on_water=on_water,
-        entry_id=new_entry.id
-    )
-
-    db.session.add(location)
-    db.session.commit()
+    
+    # If we're creating a new entry (not updating), we need to create the location
+    # SaveEntry already handles location for updates, but for new entries we need to add it
+    if not existing_id:
+        location = Location(
+            coordinates=f"{lat},{lon}",
+            country=country,
+            on_water=on_water,
+            entry_id=new_entry.id
+        )
+        db.session.add(location)
+        db.session.commit()
 
     return redirect(url_for("index"))
 

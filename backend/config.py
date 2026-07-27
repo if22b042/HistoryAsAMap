@@ -13,5 +13,5 @@ class Config:
     ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "dev-admin-key")
     CORS_ORIGINS = os.environ.get(
         "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
+        "*",
+    ).split(",") if os.environ.get("CORS_ORIGINS") else ["*"]

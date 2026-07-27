@@ -85,7 +85,7 @@ def import_entries_from_csv(csv_file_path):
                             # Get or create tag
                             tag = Tag.query.filter_by(name=tag_name).first()
                             if not tag:
-                                tag = Tag(name=tag_name)
+                                tag = Tag(name=tag_name, start_year=None, end_year=None)
                                 db.session.add(tag)
                                 tags_added += 1
                             entry.tags.append(tag)

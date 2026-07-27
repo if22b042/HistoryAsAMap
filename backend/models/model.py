@@ -91,6 +91,8 @@ class Tag(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(db.String(255), nullable=False, unique=True)
+    start_year: Mapped[int] = mapped_column(nullable=True)
+    end_year: Mapped[int] = mapped_column(nullable=True)
 
     entries: Mapped[list["Entry"]] = relationship(
         "Entry", secondary=entry_tags, back_populates="tags"
@@ -100,6 +102,8 @@ class Tag(db.Model):
         return {
             "id": self.id,
             "name": self.name,
+            "start_year": self.start_year,
+            "end_year": self.end_year,
         }
 
 

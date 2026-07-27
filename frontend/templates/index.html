@@ -325,6 +325,51 @@ function filterByCategory(category) {
   applyAllFilters();
 }
 
+// Tag filter state
+let selectedTag = '';
+
+// Initialize tag filter
+async function initializeTagFilter() {
+  const tagFilter = document.getElementById('tag-filter');
+  console.log('initializeTagFilter called, tagFilter:', tagFilter);
+  alert('initializeTagFilter called! tagFilter: ' + (tagFilter ? 'found' : 'NOT found'));
+  
+  if (!tagFilter) {
+    console.error('tag-filter element not found!');
+    return;
+  }
+  
+  // Handle tag selection change
+  tagFilter.addEventListener('change', function() {
+    selectedTag = this.value;
+    applyAllFilters();
+  });
+  
+  // Fetch tags from backend
+  try {
+    console.log('Fetching tags from /api/tags...');
+    const response = await fetch('/api/tags');
+    console.log('Response status:', response.status);
+    if (response.ok) {
+      const tags = await response.json();
+      console.log('Tags received:', tags.length, 'tags');
+      
+      // Populate select dropdown
+      tags.forEach(tag => {
+        const option = document.createElement('option');
+        option.value = tag.name;
+        option.textContent = tag.name;
+        tagFilter.appendChild(option);
+      });
+      console.log('Tags populated into dropdown');
+    } else {
+      console.error('Failed to fetch tags, status:', response.status);
+    }
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+  }
+}
+
 // Category button event listeners
 document.addEventListener('DOMContentLoaded', function() {
   const categoryButtons = document.querySelectorAll('.category-btn');
@@ -351,38 +396,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Tag filter functionality
   initializeTagFilter();
 });
-
-// Tag filter state
-let selectedTag = '';
-
-// Initialize tag filter
-async function initializeTagFilter() {
-  const tagFilter = document.getElementById('tag-filter');
-  
-  // Handle tag selection change
-  tagFilter.addEventListener('change', function() {
-    selectedTag = this.value;
-    applyAllFilters();
-  });
-  
-  // Fetch tags from backend
-  try {
-    const response = await fetch('/api/tags');
-    if (response.ok) {
-      const tags = await response.json();
-      
-      // Populate select dropdown
-      tags.forEach(tag => {
-        const option = document.createElement('option');
-        option.value = tag.name;
-        option.textContent = tag.name;
-        tagFilter.appendChild(option);
-      });
-    }
-  } catch (error) {
-    console.error('Error fetching tags:', error);
-  }
-}
 
 // Apply all filters (year, category, search, tags)
 function applyAllFilters() {

@@ -11,6 +11,16 @@
     </div>
 
     <div class="preview-content">
+      {% if is_duplicate %}
+      <div class="duplicate-banner">
+        <div class="duplicate-banner-icon">!</div>
+        <div class="duplicate-banner-content">
+          <h3>This entry already exists</h3>
+          <p>This Wikipedia article is already in the database. You can modify the existing entry below or cancel to go back.</p>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="info-card">
         <div class="info-card-icon">i</div>
         <div class="info-card-content">
@@ -22,6 +32,9 @@
       <form id="previewForm" action="{{ url_for('create_new_entry') }}" method="post" class="preview-form">
         <input type="hidden" name="wikiLink" value="{{ wiki_link }}">
         <input type="hidden" id="modified" name="modified" value="false">
+        {% if existing_id %}
+        <input type="hidden" name="existing_id" value="{{ existing_id }}">
+        {% endif %}
 
         <div class="form-card">
           <div class="form-group">
@@ -171,7 +184,7 @@
 
           <button type="submit" class="submit-btn">
             <span class="btn-icon">Confirm</span>
-            Add Entry to Map
+            {% if is_duplicate %}Update Existing Entry{% else %}Add Entry to Map{% endif %}
           </button>
         </div>
       </form>
@@ -253,6 +266,42 @@
 .info-card-content p {
   margin: 0;
   color: #4a5568;
+  line-height: 1.6;
+}
+
+.duplicate-banner {
+  background: #fff5f5;
+  border: 2px solid #fc8181;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.duplicate-banner-icon {
+  background: #e53e3e;
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.duplicate-banner-content h3 {
+  margin: 0 0 0.5rem 0;
+  color: #c53030;
+  font-size: 1.25rem;
+}
+
+.duplicate-banner-content p {
+  margin: 0;
+  color: #742a2a;
   line-height: 1.6;
 }
 
@@ -413,23 +462,96 @@
   .preview-page {
     padding: 1rem;
   }
-  
+
   .preview-header h1 {
     font-size: 2rem;
   }
-  
+
+  .preview-subtitle {
+    font-size: 1rem;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  
+
   .info-card {
     flex-direction: column;
     gap: 1rem;
+    padding: 1.5rem;
   }
-  
+
   .info-card-icon {
     align-self: flex-start;
+  }
+
+  .duplicate-banner {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+
+  .duplicate-banner-icon {
+    align-self: flex-start;
+  }
+
+  .form-card {
+    padding: 1.5rem;
+  }
+
+  .form-label {
+    font-size: 0.9rem;
+  }
+
+  .form-input, .form-textarea, .form-select {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  .edit-btn {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.8rem;
+  }
+
+  .submit-btn {
+    padding: 0.85rem 1.5rem;
+    font-size: 0.95rem;
+  }
+
+  .input-hint {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .preview-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .preview-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .info-card,
+  .duplicate-banner,
+  .form-card {
+    padding: 1.25rem;
+  }
+
+  .form-input, .form-textarea, .form-select {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .edit-btn {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  .submit-btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
   }
 }
 </style>
