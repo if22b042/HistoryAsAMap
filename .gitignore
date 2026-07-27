@@ -25,7 +25,10 @@ instance/
 
 # Environment variables
 .env
-.env.*
+.env.local
+.env.*.local
+# But allow .env.example for documentation
+!.env.example
 
 # Logs
 *.log
@@ -80,4 +83,3 @@ yourdb.db
 # =========================
 wikipedia_api_test.log
 .vercel
-.env*

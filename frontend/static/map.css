@@ -555,6 +555,10 @@ body {
 }
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
+  .map-content {
+    height: calc(100vh - 50px);
+  }
+
   .sidebar {
     width: 100%;
     right: -100%;
@@ -582,8 +586,112 @@ body {
   }
 
   .year-filter {
+    top: 15%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 80%;
+    width: 90%;
+    max-width: 300px;
+    padding: 0.75rem 1rem;
+  }
+
+  .year-filter h3 {
+    font-size: 1rem;
+  }
+
+  .year-slider {
+    width: 100%;
+  }
+
+  .category-filter {
+    top: 35%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 300px;
+    padding: 0.75rem 1rem;
+  }
+
+  .category-filter h3 {
+    font-size: 1rem;
+  }
+
+  .category-btn {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .scroll-to-events-btn {
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .heatmap-toggle-btn {
+    top: 4rem;
+    right: 1rem;
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .search-input {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .tag-filter-select {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .event-detail-title {
+    font-size: 1.4rem;
+  }
+
+  .event-detail-description {
+    font-size: 0.95rem;
+  }
+
+  .close-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .year-filter,
+  .category-filter {
+    width: 95%;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .category-buttons {
+    gap: 0.4rem;
+  }
+
+  .category-btn {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .event-card {
+    padding: 1.25rem;
+  }
+
+  .event-card-title {
+    font-size: 1.1rem;
+  }
+
+  .event-card-description {
+    font-size: 0.875rem;
+  }
+
+  .events-header h2 {
+    font-size: 1.75rem;
+  }
+
+  .events-header p {
+    font-size: 1rem;
   }
 }

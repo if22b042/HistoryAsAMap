@@ -3,6 +3,154 @@
 {% block title %}About Us{% endblock %}
 
 {% block content %}
-<h1>About Us</h1>
-<p>Learn more about our mission.</p>
+<div class="about-page">
+  <div class="about-container">
+    <div class="about-header">
+      <h1>About Us</h1>
+      <p class="about-subtitle">Learn more about our mission to map historical events across time and space</p>
+    </div>
+
+    <div class="about-content">
+      <div class="info-card">
+        <div class="info-card-icon">M</div>
+        <div class="info-card-content">
+          <h3>Our Mission</h3>
+          <p>History As A Map is an interactive platform that visualizes historical events on a global map. We aim to make history more accessible and engaging by showing how events are connected across geography and time.</p>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-card-icon">C</div>
+        <div class="info-card-content">
+          <h3>How It Works</h3>
+          <p>Our system automatically extracts information from Wikipedia articles, including dates, locations, and descriptions. Users can contribute by submitting new events, which are then reviewed by administrators before being added to the map.</p>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-card-icon">T</div>
+        <div class="info-card-content">
+          <h3>Technology</h3>
+          <p>Built with modern web technologies, our platform uses Leaflet for interactive maps and Flask for the backend. We continuously improve our extraction algorithms to provide accurate and comprehensive historical data.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.about-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f7fafc 0%, #e2e8f0 100%);
+  padding: 2rem;
+}
+
+.about-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.about-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.about-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.about-subtitle {
+  font-size: 1.125rem;
+  color: #718096;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.about-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.info-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #4299e1;
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.info-card-icon {
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.info-card-content h3 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+  font-size: 1.25rem;
+}
+
+.info-card-content p {
+  margin: 0;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .about-page {
+    padding: 1rem;
+  }
+
+  .about-header h1 {
+    font-size: 2rem;
+  }
+
+  .about-subtitle {
+    font-size: 1rem;
+  }
+
+  .info-card {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .info-card-icon {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .about-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .about-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .info-card {
+    padding: 1.25rem;
+  }
+}
+</style>
 {% endblock %}

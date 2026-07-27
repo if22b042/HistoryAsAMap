@@ -12,7 +12,7 @@ def check_tags():
         tags = Tag.query.all()
         print(f"Found {len(tags)} tags in database:")
         for tag in tags:
-            print(f"  - {tag.id}: {tag.name}")
+            print(f"  - {tag.id}: {tag.name} ({tag.start_year} - {tag.end_year})")
         
         if len(tags) == 0:
             print("\nNo tags found. You need to run populate_tags.py first.")

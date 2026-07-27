@@ -1,16 +1,13 @@
-Implement Approval Process:
-    - 
+Implement Approval Process (?)
 Name: History As A Map (HAAM)
-Add check if entry already exists 
-Add google maps link
 
-Add different types of maps including one for heatmap
 
-Expand map for full page in a clever and aesthetic way
-Add model for list and for Event Collection (Like different wars)
 
-Add the ability to filter by tags and also create new ones
+Add the ability to filter by tags
+Add ability to also create new tags
 Also add tags with dates and sort them by that (find an elegant solution for this)
+Make it possible to enter multiple tags
 
-If Date Latitude and Longitude cannot be extracted do not allow entrz
-    Maybe find an alternative solution but for now I would prefer avoiding creating an approval process
+If Date Latitude and Longitude cannot be extracted do not allow entry
+
+Implement a way to modify and delte entries 

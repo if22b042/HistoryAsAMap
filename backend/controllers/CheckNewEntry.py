@@ -26,7 +26,26 @@ def CheckEntry(link, tablenum=0):
         existing_entry = Entry.query.filter_by(wikiLink=link).first()
         if existing_entry:
             logger.warning(f"Entry already exists in database - ID: {existing_entry.id}, Link: {link}")
-            return {"error": f"This Wikipedia article already exists in the database (ID: {existing_entry.id}). Duplicate entries are not allowed."}
+            # Return existing entry data with a flag indicating it's a duplicate
+            entry_dict = existing_entry.to_dict()
+            entry_dict['is_duplicate'] = True
+            entry_dict['existing_id'] = existing_entry.id
+            
+            # Normalize the data structure to match Wikipedia data format
+            if existing_entry.location:
+                coords = existing_entry.location.coordinates.split(',')
+                entry_dict['coordinates'] = [float(coords[0]), float(coords[1])]
+                entry_dict['lat'] = float(coords[0])
+                entry_dict['lon'] = float(coords[1])
+            else:
+                entry_dict['coordinates'] = [None, None]
+                entry_dict['lat'] = None
+                entry_dict['lon'] = None
+            
+            entry_dict['date'] = existing_entry.dateString
+            entry_dict['first_paragraph'] = existing_entry.firstParagraph
+            
+            return entry_dict
 
     logger.info("No existing entry found in database")
 
