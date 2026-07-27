@@ -586,9 +586,9 @@ body {
   }
 
   .year-filter {
-    top: 15%;
+    bottom: 5rem;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     width: 90%;
     max-width: 300px;
     padding: 0.75rem 1rem;
@@ -603,9 +603,9 @@ body {
   }
 
   .category-filter {
-    top: 35%;
+    bottom: 14rem;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     width: 90%;
     max-width: 300px;
     padding: 0.75rem 1rem;
