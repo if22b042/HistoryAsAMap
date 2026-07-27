@@ -35,6 +35,37 @@
     <div id="map"></div>
   </div>
 
+  <!-- Mobile Filters Section -->
+  <div class="mobile-filters-section">
+    <h3>Filter Events</h3>
+    <!-- Year Filter -->
+    <div style="margin-bottom: 1.5rem;">
+      <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #2d3748;">Filter by Year</h4>
+      <div class="year-slider">
+        <div id="year-slider-mobile"></div>
+        <div class="year-values">
+          <span id="year-from-display-mobile"></span> – <span id="year-to-display-mobile"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Filter -->
+    <div>
+      <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #2d3748;">Filter by Category</h4>
+      <div class="category-buttons">
+        <button class="category-btn active" data-category="all">All</button>
+        <button class="category-btn" data-category="military">Military</button>
+        <button class="category-btn" data-category="diplomatic">Diplomatic</button>
+        <button class="category-btn" data-category="naval">Naval</button>
+        <button class="category-btn" data-category="political">Political</button>
+        <button class="category-btn" data-category="economic">Economic</button>
+        <button class="category-btn" data-category="cultural">Cultural</button>
+        <button class="category-btn" data-category="scientific">Scientific</button>
+        <button class="category-btn" data-category="other">Other</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Events List Section -->
   <div class="events-list-section" id="events-section">
     <div class="events-header">
@@ -276,7 +307,12 @@ function closeSidebar() {
 }
 
 function scrollToEvents() {
-  document.getElementById('events-section').scrollIntoView({ behavior: 'smooth' });
+  // On mobile, scroll to filters section; on desktop, scroll to events section
+  if (window.innerWidth <= 768) {
+    document.querySelector('.mobile-filters-section').scrollIntoView({ behavior: 'smooth' });
+  } else {
+    document.getElementById('events-section').scrollIntoView({ behavior: 'smooth' });
+  }
 }
 
 function showEventFromList(index) {
@@ -311,6 +347,34 @@ slider.noUiSlider.on('update', (values, handle) => {
   toDisplay.textContent = to;
   filterByYear(from, to);
 });
+
+// Mobile year slider setup
+const mobileSlider = document.getElementById('year-slider-mobile');
+const mobileFromDisplay = document.getElementById('year-from-display-mobile');
+const mobileToDisplay = document.getElementById('year-to-display-mobile');
+
+if (mobileSlider) {
+  noUiSlider.create(mobileSlider, {
+    start: [minYear, maxYear],
+    connect: true,
+    step: 1,
+    range: { min: minYear, max: maxYear },
+    tooltips: false
+  });
+
+  mobileFromDisplay.textContent = minYear;
+  mobileToDisplay.textContent = maxYear;
+
+  mobileSlider.noUiSlider.on('update', (values, handle) => {
+    const from = Math.round(values[0]);
+    const to = Math.round(values[1]);
+    mobileFromDisplay.textContent = from;
+    mobileToDisplay.textContent = to;
+    // Sync with desktop slider
+    slider.noUiSlider.set([from, to]);
+    filterByYear(from, to);
+  });
+}
 
 // Filter map + list
 function filterByYear(from, to) {
