@@ -184,7 +184,8 @@ const customIcon = L.divIcon({
 let markers = [];
 let heatLayer = null;
 let heatmapEnabled = false;
-
+let selectedCategory = 'all';
+let selectedTag = '';
 // Create heatmap layer from events
 function createHeatmap(events) {
   const heatData = events.map(event => [event.lat, event.lon, 0.5]);
@@ -382,21 +383,18 @@ function filterByYear(from, to) {
 }
 
 // Category filter functionality
-let selectedCategory = 'all';
+
 
 function filterByCategory(category) {
   selectedCategory = category;
   applyAllFilters();
 }
 
-// Tag filter state
-let selectedTag = '';
 
 // Initialize tag filter
 async function initializeTagFilter() {
   const tagFilter = document.getElementById('tag-filter');
   console.log('initializeTagFilter called, tagFilter:', tagFilter);
-  alert('initializeTagFilter called! tagFilter: ' + (tagFilter ? 'found' : 'NOT found'));
   
   if (!tagFilter) {
     console.error('tag-filter element not found!');
