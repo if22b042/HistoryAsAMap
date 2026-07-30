@@ -8,6 +8,12 @@ Add ability to also create new tags
 Also add tags with dates and sort them by that (find an elegant solution for this)
 Make it possible to enter multiple tags
 
-If Date Latitude and Longitude cannot be extracted do not allow entry
+Fill up db
 
+why can it not read the year from https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest
+the wikipedia link title and description should not be changeable
+
+Seperate the google maps link to the bottom with a clear icon
+
+o add a - that puts the whole filter to the side 
 Implement a way to modify and delte entries 

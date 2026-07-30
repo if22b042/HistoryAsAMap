@@ -44,9 +44,6 @@
             </label>
             <div class="input-wrapper">
               <input type="text" id="title" name="title" class="form-input" value="{{ entry['title'] }}" readonly>
-              <button type="button" class="edit-btn" onclick="enableEdit('title')">
-                <span class="btn-icon">Edit</span>
-              </button>
             </div>
           </div>
 
@@ -67,10 +64,11 @@
             <div class="form-group">
               <label for="year" class="form-label">
                 <span class="label-icon">Y</span>
-                Year
+                Year <span class="required">*</span>
+                <span class="tooltip-icon" data-tooltip="If an event spans multiple years (e.g., '1914-1918'), enter the first year. This ensures correct timeline positioning.">?</span>
               </label>
               <div class="input-wrapper">
-                <input type="text" id="year" name="year" class="form-input" value="{{ entry['year'] }}" readonly>
+                <input type="text" id="year" name="year" class="form-input" value="{{ entry['year'] }}" readonly required>
                 <button type="button" class="edit-btn" onclick="enableEdit('year')">
                   <span class="btn-icon">Edit</span>
                 </button>
@@ -89,9 +87,6 @@
                 <option value="military" {% if entry.get('category') == 'military' %}selected{% endif %}>Military</option>
                 <option value="diplomatic" {% if entry.get('category') == 'diplomatic' %}selected{% endif %}>Diplomatic</option>
                 <option value="naval" {% if entry.get('category') == 'naval' %}selected{% endif %}>Naval</option>
-                <option value="political" {% if entry.get('category') == 'political' %}selected{% endif %}>Political</option>
-                <option value="economic" {% if entry.get('category') == 'economic' %}selected{% endif %}>Economic</option>
-                <option value="cultural" {% if entry.get('category') == 'cultural' %}selected{% endif %}>Cultural</option>
                 <option value="scientific" {% if entry.get('category') == 'scientific' %}selected{% endif %}>Scientific</option>
                 <option value="other" {% if entry.get('category') == 'other' %}selected{% endif %}>Other</option>
               </select>
@@ -104,12 +99,11 @@
           <div class="form-group">
             <label for="tags" class="form-label">
               <span class="label-icon">T</span>
-              Historical Tag (optional)
+              Tag (optional)
             </label>
             <select id="tags" name="tags" class="form-select">
-              <option value="">No tag selected</option>
+              <option value="">Select a tag...</option>
             </select>
-            <span class="input-hint" style="font-size: 0.875rem; color: #718096; margin-top: 0.25rem;">Select a historical period/event that applies</span>
           </div>
 
           <div class="form-row">
@@ -147,9 +141,6 @@
             </label>
             <div class="input-wrapper">
               <textarea id="first_paragraph" name="first_paragraph" class="form-textarea" readonly>{{ entry['first_paragraph'] }}</textarea>
-              <button type="button" class="edit-btn" onclick="enableEdit('first_paragraph')">
-                <span class="btn-icon">Edit</span>
-              </button>
             </div>
           </div>
 
@@ -160,9 +151,6 @@
             </label>
             <div class="input-wrapper">
               <input type="url" id="link" name="link" class="form-input" value="{{ entry['link'] }}" readonly>
-              <button type="button" class="edit-btn" onclick="enableEdit('link')">
-                <span class="btn-icon">Edit</span>
-              </button>
             </div>
           </div>
 
@@ -414,6 +402,47 @@
   font-weight: 700;
 }
 
+.tooltip-icon {
+  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: help;
+  margin-left: 0.5rem;
+  position: relative;
+}
+
+.tooltip-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2d3748;
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+  font-weight: 400;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.tooltip-icon:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
 .submit-btn {
   background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
   color: white;
@@ -579,8 +608,8 @@ async function loadTags() {
         
         tags.forEach(tag => {
             const option = document.createElement('option');
-            option.value = tag.id;
-            option.textContent = tag.name;
+            option.value = tag.name;
+            option.textContent = `${tag.name} (${tag.display_date})`;
             select.appendChild(option);
         });
     } catch (error) {
@@ -588,11 +617,30 @@ async function loadTags() {
     }
 }
 
-// Enable category field before form submission
+// Enable category field before form submission and handle tags
 document.getElementById('previewForm').addEventListener('submit', function() {
     const categorySelect = document.getElementById('category');
     if (categorySelect) {
         categorySelect.disabled = false;
+    }
+    
+    // Handle tags - single selection
+    const tagsSelect = document.getElementById('tags');
+    const selectedTag = tagsSelect.value;
+    
+    // Create a hidden input to store the selected tag as JSON array
+    let tagsInput = document.getElementById('tags-input');
+    if (!tagsInput) {
+        tagsInput = document.createElement('input');
+        tagsInput.type = 'hidden';
+        tagsInput.id = 'tags-input';
+        tagsInput.name = 'tags';
+        this.appendChild(tagsInput);
+    }
+    if (selectedTag) {
+        tagsInput.value = JSON.stringify([selectedTag]);
+    } else {
+        tagsInput.value = JSON.stringify([]);
     }
 });
 

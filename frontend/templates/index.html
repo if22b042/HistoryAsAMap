@@ -4,30 +4,32 @@
 {% block content %}
 <div class="map-page">
   <div class="map-content">
-    <!-- Year Filter -->
-    <div class="year-filter">
-      <h3>Filter by Year</h3>
-      <div class="year-slider">
-        <div id="year-slider"></div>
-        <div class="year-values">
-          <span id="year-from-display"></span> – <span id="year-to-display"></span>
+    <!-- Filters Panel -->
+    <div class="filters-panel">
+      <!-- Year Filter -->
+      <div class="year-filter">
+        <h3>Filter by Year</h3>
+        <div class="year-slider">
+          <div id="year-slider"></div>
+          <div class="year-values">
+            <input type="number" id="year-from-input" class="year-input" min="" max="">
+            <span>–</span>
+            <input type="number" id="year-to-input" class="year-input" min="" max="">
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Category Filter -->
-    <div class="category-filter">
-      <h3>Filter by Category</h3>
-      <div class="category-buttons">
-        <button class="category-btn active" data-category="all">All</button>
-        <button class="category-btn" data-category="military">Military</button>
-        <button class="category-btn" data-category="diplomatic">Diplomatic</button>
-        <button class="category-btn" data-category="naval">Naval</button>
-        <button class="category-btn" data-category="political">Political</button>
-        <button class="category-btn" data-category="economic">Economic</button>
-        <button class="category-btn" data-category="cultural">Cultural</button>
-        <button class="category-btn" data-category="scientific">Scientific</button>
-        <button class="category-btn" data-category="other">Other</button>
+      <!-- Category Filter -->
+      <div class="category-filter">
+        <h3>Filter by Category</h3>
+        <div class="category-buttons">
+          <button class="category-btn active" data-category="all">All</button>
+          <button class="category-btn" data-category="military">Military</button>
+          <button class="category-btn" data-category="diplomatic">Diplomatic</button>
+          <button class="category-btn" data-category="naval">Naval</button>
+          <button class="category-btn" data-category="scientific">Scientific</button>
+          <button class="category-btn" data-category="other">Other</button>
+        </div>
       </div>
     </div>
 
@@ -57,9 +59,6 @@
         <button class="category-btn" data-category="military">Military</button>
         <button class="category-btn" data-category="diplomatic">Diplomatic</button>
         <button class="category-btn" data-category="naval">Naval</button>
-        <button class="category-btn" data-category="political">Political</button>
-        <button class="category-btn" data-category="economic">Economic</button>
-        <button class="category-btn" data-category="cultural">Cultural</button>
         <button class="category-btn" data-category="scientific">Scientific</button>
         <button class="category-btn" data-category="other">Other</button>
       </div>
@@ -327,8 +326,14 @@ const minYear = Math.min(...years);
 const maxYear = Math.max(...years);
 
 const slider = document.getElementById('year-slider');
-const fromDisplay = document.getElementById('year-from-display');
-const toDisplay = document.getElementById('year-to-display');
+const fromInput = document.getElementById('year-from-input');
+const toInput = document.getElementById('year-to-input');
+
+// Set input field min/max attributes
+fromInput.min = minYear;
+fromInput.max = maxYear;
+toInput.min = minYear;
+toInput.max = maxYear;
 
 noUiSlider.create(slider, {
   start: [minYear, maxYear],
@@ -338,15 +343,36 @@ noUiSlider.create(slider, {
   tooltips: false
 });
 
-fromDisplay.textContent = minYear;
-toDisplay.textContent = maxYear;
+fromInput.value = minYear;
+toInput.value = maxYear;
 
 slider.noUiSlider.on('update', (values, handle) => {
   const from = Math.round(values[0]);
   const to = Math.round(values[1]);
-  fromDisplay.textContent = from;
-  toDisplay.textContent = to;
+  fromInput.value = from;
+  toInput.value = to;
   filterByYear(from, to);
+});
+
+// Manual input handling
+fromInput.addEventListener('change', function() {
+  let value = parseInt(this.value);
+  if (isNaN(value)) value = minYear;
+  if (value < minYear) value = minYear;
+  if (value > maxYear) value = maxYear;
+  if (value > parseInt(toInput.value)) value = parseInt(toInput.value);
+  this.value = value;
+  slider.noUiSlider.set([value, null]);
+});
+
+toInput.addEventListener('change', function() {
+  let value = parseInt(this.value);
+  if (isNaN(value)) value = maxYear;
+  if (value < minYear) value = minYear;
+  if (value > maxYear) value = maxYear;
+  if (value < parseInt(fromInput.value)) value = parseInt(fromInput.value);
+  this.value = value;
+  slider.noUiSlider.set([null, value]);
 });
 
 // Mobile year slider setup
@@ -420,7 +446,7 @@ async function initializeTagFilter() {
       tags.forEach(tag => {
         const option = document.createElement('option');
         option.value = tag.name;
-        option.textContent = tag.name;
+        option.textContent = `${tag.name} (${tag.display_date})`;
         tagFilter.appendChild(option);
       });
       console.log('Tags populated into dropdown');

@@ -2,7 +2,7 @@ import csv
 import sys
 import os
 from flask import Flask
-from backend.models.event import db, Entry, Location, Tag, EventCategory, EntryStatus
+from backend.models.event import db, Entry, Location, EventCategory, EntryStatus
 from backend.config import Config
 
 def import_entries_from_csv(csv_file_path):
@@ -16,7 +16,6 @@ def import_entries_from_csv(csv_file_path):
     with app.app_context():
         entries_added = 0
         entries_skipped = 0
-        tags_added = 0
         
         with open(csv_file_path, 'r', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -76,20 +75,6 @@ def import_entries_from_csv(csv_file_path):
                     except ValueError:
                         print(f"Invalid coordinates for {wiki_link}, skipping location")
                 
-                # Handle tags
-                tags_str = row.get('tags', '').strip()
-                if tags_str:
-                    tag_names = [tag.strip() for tag in tags_str.split(',')]
-                    for tag_name in tag_names:
-                        if tag_name:
-                            # Get or create tag
-                            tag = Tag.query.filter_by(name=tag_name).first()
-                            if not tag:
-                                tag = Tag(name=tag_name, start_year=None, end_year=None)
-                                db.session.add(tag)
-                                tags_added += 1
-                            entry.tags.append(tag)
-                
                 db.session.commit()
                 entries_added += 1
                 print(f"Added entry: {entry.title or wiki_link}")
@@ -97,7 +82,6 @@ def import_entries_from_csv(csv_file_path):
         print(f"\nImport complete!")
         print(f"Entries added: {entries_added}")
         print(f"Entries skipped: {entries_skipped}")
-        print(f"Tags added: {tags_added}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

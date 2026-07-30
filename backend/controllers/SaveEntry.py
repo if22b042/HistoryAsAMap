@@ -4,6 +4,14 @@ def SaveEntry(entry, modified, existing_id=None):
     # 1 Save the entry first
     link = entry.get("link")
     
+    # Validate that year is present
+    year = entry.get("year")
+    if year is None or year == "":
+        raise ValueError("Year is required. Every entry must have a year.")
+    
+    # Get tags from entry data
+    tags = entry.get("tags", [])
+    
     # If existing_id is provided, update the existing entry
     if existing_id:
         existing_entry = Entry.query.get(existing_id)
@@ -18,6 +26,7 @@ def SaveEntry(entry, modified, existing_id=None):
             existing_entry.firstParagraph = entry.get("first_paragraph")
             existing_entry.category = category
             existing_entry.modified = modified
+            existing_entry.tags = tags
             
             # Update the location
             lat = entry.get("lat")
@@ -58,7 +67,8 @@ def SaveEntry(entry, modified, existing_id=None):
         firstParagraph=entry.get("first_paragraph"),
         wikiLink=entry.get("link"),
         category=category,
-        modified=modified
+        modified=modified,
+        tags=tags
     )
     db.session.add(event)
     db.session.flush()  # Important: generate ID without committing

@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
+import sys
+import os
 
-from backend.models.event import EntryStatus, Tag
+from backend.models.event import EntryStatus
 from backend.services.events import (
     EventServiceError,
     create_event,
@@ -75,5 +77,44 @@ def submit_event():
 
 @events_bp.get("/tags")
 def get_tags():
-    tags = Tag.query.order_by(Tag.name).all()
-    return jsonify([tag.to_dict() for tag in tags])
+    # Import tags from the add_tags.py file
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+    from add_tags import TAGS
+    
+    def format_year(year):
+        if year is None:
+            return "Present"
+        if year < 0:
+            return f"{abs(year)} BC"
+        return f"{year} AD"
+    
+    def get_average_year(start_year, end_year):
+        if start_year is None and end_year is None:
+            return 0
+        if start_year is None:
+            return end_year
+        if end_year is None:
+            return start_year
+        return (start_year + end_year) / 2
+    
+    # Add IDs, formatted dates, and calculate average for sorting
+    tags_with_data = []
+    for idx, tag in enumerate(TAGS):
+        start_year = tag.get("start_year")
+        end_year = tag.get("end_year")
+        avg_year = get_average_year(start_year, end_year)
+        
+        tags_with_data.append({
+            "id": idx,
+            "name": tag["name"],
+            "start_year": start_year,
+            "end_year": end_year,
+            "display_date": f"{format_year(start_year)} - {format_year(end_year)}",
+            "average_year": avg_year
+        })
+    
+    # Sort by average year
+    tags_with_data.sort(key=lambda x: x["average_year"])
+    
+    return jsonify(tags_with_data)
+

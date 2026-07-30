@@ -7,9 +7,6 @@ const CATEGORIES = [
   "military",
   "diplomatic",
   "naval",
-  "political",
-  "economic",
-  "cultural",
   "scientific",
   "other",
 ];
