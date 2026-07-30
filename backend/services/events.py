@@ -1,7 +1,7 @@
 import logging
 
 from backend.extensions import db
-from backend.models.event import Entry, Location, EventCategory, EntryStatus, Tag
+from backend.models.event import Entry, Location, EventCategory, EntryStatus
 from backend.services.geocoding import check_on_water, reverse_geocode
 from backend.services.wikipedia import get_wikipedia_data
 from backend.utils.validators import is_valid_english_wikipedia_url
@@ -92,6 +92,7 @@ def create_event(payload: dict) -> Entry:
     modified = bool(payload.get("modified", False))
     country = reverse_geocode(lat, lon)
     on_water = check_on_water(lat, lon)
+    tags = payload.get("tags", [])
 
     entry = Entry(
         title=title,
@@ -102,6 +103,7 @@ def create_event(payload: dict) -> Entry:
         category=category,
         modified=modified,
         status=EntryStatus.PENDING,
+        tags=tags,
     )
     location = Location(
         lat=lat,
@@ -110,12 +112,6 @@ def create_event(payload: dict) -> Entry:
         on_water=on_water,
         entry=entry,
     )
-
-    # Handle tags
-    tag_ids = payload.get("tag_ids", [])
-    if tag_ids:
-        tags = Tag.query.filter(Tag.id.in_(tag_ids)).all()
-        entry.tags = tags
 
     db.session.add(entry)
     db.session.add(location)

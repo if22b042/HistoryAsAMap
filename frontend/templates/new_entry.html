@@ -20,7 +20,6 @@
             <li>Enter a valid Wikipedia article link</li>
             <li>Review the automatically extracted data</li>
             <li>Confirm or correct any information</li>
-            <li>Submit for admin approval</li>
           </ul>
         </div>
       </div>
@@ -66,21 +65,18 @@
           <div class="form-group">
             <label for="category" class="form-label">
               <span class="label-icon">C</span>
-              Event Category (optional)
+              Event Category <span class="required">*</span>
             </label>
             <div class="input-wrapper">
-              <select id="category" name="category" class="form-select">
+              <select id="category" name="category" class="form-select" required>
                 <option value="">Select a category...</option>
                 <option value="military">Military</option>
                 <option value="diplomatic">Diplomatic</option>
                 <option value="naval">Naval</option>
-                <option value="political">Political</option>
-                <option value="economic">Economic</option>
-                <option value="cultural">Cultural</option>
                 <option value="scientific">Scientific</option>
                 <option value="other">Other</option>
               </select>
-              <div class="input-hint">Choose the most appropriate category for this event (required in next step)</div>
+              <div class="input-hint">Choose the most appropriate category for this event</div>
             </div>
           </div>
 
@@ -417,3 +413,7 @@
 }
 </style>
 {% endblock %}
+ { %   e n d b l o c k   % } 
+ 
+ 
+

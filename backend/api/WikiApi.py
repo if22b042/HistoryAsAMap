@@ -72,10 +72,19 @@ def get_wikipedia_data(url: str):
         logger.info(f"Extract length: {len(extract)} chars")
         logger.info(f"First paragraph: {first_paragraph[:100]}...")
 
-        # Try to find a single date (like "21 February 1916")
-        date_matches = re.findall(r"\b(\d{1,2}\s+\w+\s+\d{4})\b", extract)
-        date = date_matches[0] if len(set(date_matches)) == 1 else None
-        logger.info(f"Date matches: {date_matches}, selected: {date}")
+        # Try to find date ranges like "23 August – 2 February 1943" and extract first date
+        date_range_match = re.search(r"\b(\d{1,2}\s+\w+)\s*(?:–|-|to)\s*\d{1,2}\s+\w+\s+\d{4}", extract)
+        if date_range_match:
+            # Extract the first date and add the year from the range
+            year_match = re.search(r"\b(1[0-9]\d{2}|20\d{2})\b", extract)
+            year = year_match.group(1) if year_match else None
+            date = f"{date_range_match.group(1)} {year}" if year else date_range_match.group(1)
+            logger.info(f"Date range match: {date_range_match.group(0)}, extracted first date: {date}")
+        else:
+            # Try to find single dates like "23 August 1942"
+            date_matches = re.findall(r"\b(\d{1,2}\s+\w+\s+\d{4})\b", extract)
+            date = date_matches[0] if date_matches else None
+            logger.info(f"Date matches: {date_matches}, selected: {date}")
 
         # Always extract the first year mentioned
         year_match = re.search(r"\b(1[0-9]\d{2}|20\d{2})\b", extract)

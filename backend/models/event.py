@@ -1,27 +1,15 @@
 import enum
 
-from sqlalchemy import Enum, ForeignKey, Float, Table, Column
+from sqlalchemy import Enum, ForeignKey, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.extensions import db
-
-
-# Association table for many-to-many relationship between Entry and Tag
-entry_tags = Table(
-    'entry_tags',
-    db.Model.metadata,
-    Column('entry_id', ForeignKey('entries.id'), primary_key=True),
-    Column('tag_id', ForeignKey('tags.id'), primary_key=True)
-)
 
 
 class EventCategory(enum.Enum):
     MILITARY = "military"
     DIPLOMATIC = "diplomatic"
     NAVAL = "naval"
-    POLITICAL = "political"
-    ECONOMIC = "economic"
-    CULTURAL = "cultural"
     SCIENTIFIC = "scientific"
     OTHER = "other"
 
@@ -46,12 +34,10 @@ class Entry(db.Model):
     status: Mapped[EntryStatus] = mapped_column(
         Enum(EntryStatus), nullable=False, default=EntryStatus.PENDING
     )
+    tags: Mapped[dict] = mapped_column(JSON, nullable=True, default=list)
 
     location: Mapped["Location"] = relationship(
         back_populates="entry", uselist=False, cascade="all, delete-orphan"
-    )
-    tags: Mapped[list["Tag"]] = relationship(
-        "Tag", secondary=entry_tags, back_populates="entries"
     )
 
     def to_dict(self):
@@ -65,8 +51,8 @@ class Entry(db.Model):
             "category": self.category.value if self.category else None,
             "status": self.status.value if self.status else None,
             "modified": self.modified,
+            "tags": self.tags if self.tags else [],
             "location": self.location.to_dict() if self.location else None,
-            "tags": [tag.name for tag in self.tags] if self.tags else [],
         }
 
 
@@ -98,23 +84,3 @@ class Location(db.Model):
             "google_maps_link": self.google_maps_link,
         }
 
-
-class Tag(db.Model):
-    __tablename__ = "tags"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(db.String(255), nullable=False, unique=True)
-    start_year: Mapped[int] = mapped_column(nullable=True)
-    end_year: Mapped[int] = mapped_column(nullable=True)
-
-    entries: Mapped[list["Entry"]] = relationship(
-        "Entry", secondary=entry_tags, back_populates="tags"
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "start_year": self.start_year,
-            "end_year": self.end_year,
-        }
