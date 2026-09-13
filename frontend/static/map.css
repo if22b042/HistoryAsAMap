@@ -59,6 +59,11 @@ body {
   opacity: 0;
 }
 
+body.dark-mode .sidebar {
+  background: rgba(45, 55, 72, 0.95);
+  border-left-color: rgba(66, 153, 225, 0.3);
+}
+
 .sidebar.active {
   right: 0;
   opacity: 1;
@@ -105,6 +110,10 @@ body {
   padding: var(--spacing-2xl);
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(6px);
+}
+
+body.dark-mode .sidebar-content {
+  background: rgba(45, 55, 72, 0.85);
 }
 
 .event-detail-year {
@@ -195,6 +204,11 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+body.dark-mode .google-maps-link {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+}
+
 .google-maps-link:hover {
   border-color: var(--color-primary-400);
   background: var(--color-primary-50);
@@ -253,6 +267,11 @@ body {
   width: 320px;
   border: 1px solid rgba(255, 255, 255, 0.5);
   transition: transform var(--transition-slow), opacity var(--transition-slow);
+}
+
+body.dark-mode .filters-panel {
+  background: rgba(45, 55, 72, 0.95);
+  border-color: var(--dark-border-color);
 }
 
 .filters-panel.collapsed {
@@ -351,6 +370,11 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
+body.dark-mode .mobile-filters-section {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+}
+
 .mobile-filters-section h3 {
   margin: 0 0 1.5rem 0;
   font-size: 1.25rem;
@@ -399,6 +423,12 @@ body {
   font-weight: var(--font-weight-medium);
   color: var(--color-gray-600);
   text-align: center;
+}
+
+body.dark-mode .category-btn {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+  color: var(--dark-text-secondary);
 }
 
 .category-btn:hover {
@@ -487,6 +517,10 @@ body {
   width: 100%;
   background: var(--color-gray-50);
   padding: var(--spacing-3xl) var(--spacing-xl);
+}
+
+body.dark-mode .events-list-section {
+  background: var(--dark-bg-primary);
 }
 
 .events-header {
@@ -578,6 +612,10 @@ body {
   cursor: pointer;
   transition: all var(--transition-slow);
   box-shadow: var(--shadow-md);
+}
+
+body.dark-mode .event-card {
+  background: var(--dark-card-bg);
 }
 
 .event-card:hover {
@@ -767,6 +805,56 @@ body {
 }
 .leaflet-container {
   background: radial-gradient(circle at center, var(--color-gray-50) 0%, var(--color-gray-200) 100%) !important;
+}
+
+/* ===== MARKER CLUSTER STYLING ===== */
+.marker-cluster {
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
+  border-radius: 50%;
+  color: white;
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+  border: 3px solid white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all var(--transition-base);
+}
+
+.marker-cluster:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.marker-cluster div {
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-weight: var(--font-weight-bold);
+}
+
+.marker-cluster span {
+  line-height: 30px;
+  color: white;
+  font-weight: var(--font-weight-bold);
+}
+
+/* Cluster size variations */
+.marker-cluster-small {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+}
+
+.marker-cluster-medium {
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
+}
+
+.marker-cluster-large {
+  background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+}
+
+/* Spiderfy styling */
+.marker-cluster-spider-leg {
+  background: var(--color-primary-400) !important;
+  opacity: 0.6;
 }
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {

@@ -378,6 +378,77 @@
   font-weight: var(--font-weight-bold);
 }
 
+/* Dark Mode Styles */
+body.dark-mode .new-entry-page {
+  background: var(--dark-bg-primary);
+}
+
+body.dark-mode .new-entry-header h1 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .new-entry-subtitle {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .info-card {
+  background: var(--dark-card-bg);
+  border-left-color: var(--color-primary-400);
+}
+
+body.dark-mode .info-card-content h3 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .info-card-content p,
+body.dark-mode .info-card-content ul,
+body.dark-mode .info-card-content li {
+  color: var(--dark-text-secondary);
+}
+
+body.dark-mode .form-card {
+  background: var(--dark-card-bg);
+}
+
+body.dark-mode .form-label {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .form-input,
+body.dark-mode .form-select {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .form-input::placeholder {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .input-hint {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .tags-container {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+}
+
+body.dark-mode .tags-loading {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .tag-pill {
+  background: var(--dark-bg-tertiary);
+  color: var(--dark-text-secondary);
+  border-color: var(--dark-border-color);
+}
+
+body.dark-mode .tag-pill:hover {
+  background: var(--dark-text-muted);
+  color: var(--dark-text-primary);
+}
+
 @media (max-width: 768px) {
   .new-entry-page {
     padding: var(--spacing-lg);
