@@ -120,6 +120,32 @@
   line-height: var(--line-height-relaxed);
 }
 
+/* Dark Mode Styles */
+body.dark-mode .about-page {
+  background: var(--dark-bg-primary);
+}
+
+body.dark-mode .about-header h1 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .about-subtitle {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .info-card {
+  background: var(--dark-card-bg);
+  border-left-color: var(--color-primary-400);
+}
+
+body.dark-mode .info-card-content h3 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .info-card-content p {
+  color: var(--dark-text-secondary);
+}
+
 @media (max-width: 768px) {
   .about-page {
     padding: var(--spacing-lg);

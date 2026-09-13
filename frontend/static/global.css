@@ -43,6 +43,16 @@
   --gradient-background: linear-gradient(135deg, var(--color-gray-50) 0%, var(--color-gray-200) 100%);
   --gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.65) 100%);
 
+  /* Dark Mode Variables */
+  --dark-bg-primary: #1a202c;
+  --dark-bg-secondary: #2d3748;
+  --dark-bg-tertiary: #4a5568;
+  --dark-text-primary: #f7fafc;
+  --dark-text-secondary: #e2e8f0;
+  --dark-text-muted: #a0aec0;
+  --dark-card-bg: #2d3748;
+  --dark-border-color: #4a5568;
+
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -123,6 +133,118 @@ body {
   background: var(--gradient-background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ===== DARK MODE ===== */
+body.dark-mode {
+  color: var(--dark-text-primary);
+  background: var(--dark-bg-primary);
+}
+
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode p,
+body.dark-mode span,
+body.dark-mode li {
+  color: var(--dark-text-secondary);
+}
+
+body.dark-mode .card,
+body.dark-mode .event-card,
+body.dark-mode .info-card,
+body.dark-mode .form-card,
+body.dark-mode .sidebar-content,
+body.dark-mode .filters-panel {
+  background: var(--dark-card-bg);
+  border-color: var(--dark-border-color);
+}
+
+body.dark-mode .form-input,
+body.dark-mode .form-select,
+body.dark-mode .form-textarea,
+body.dark-mode .search-input,
+body.dark-mode .tag-filter-select,
+body.dark-mode .year-input {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .form-input::placeholder,
+body.dark-mode .form-textarea::placeholder,
+body.dark-mode .search-input::placeholder {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .category-btn {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border-color);
+  color: var(--dark-text-secondary);
+}
+
+body.dark-mode .category-btn:hover {
+  background: var(--dark-bg-tertiary);
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .tag-badge {
+  background: var(--dark-bg-tertiary);
+  color: var(--dark-text-secondary);
+  border-color: var(--dark-border-color);
+}
+
+body.dark-mode .event-card-description,
+body.dark-mode .event-detail-description,
+body.dark-mode .info-card-content p {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .event-card-title,
+body.dark-mode .event-detail-title,
+body.dark-mode .info-card-content h3 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .footer {
+  background: var(--dark-bg-primary);
+}
+
+body.dark-mode .footer-section h4 {
+  color: var(--dark-text-primary);
+}
+
+body.dark-mode .footer-section p,
+body.dark-mode .footer-section a {
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode .footer-bottom {
+  border-color: var(--dark-border-color);
+  color: var(--dark-text-muted);
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+  background: var(--dark-bg-secondary);
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+  background: var(--dark-bg-tertiary);
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-text-muted);
+}
+
+body.dark-mode .leaflet-container {
+  background: radial-gradient(circle at center, var(--dark-bg-secondary) 0%, var(--dark-bg-primary) 100%) !important;
 }
 
 /* ===== TYPOGRAPHY ===== */

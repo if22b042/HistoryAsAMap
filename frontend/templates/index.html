@@ -135,10 +135,13 @@
 <!-- Dependencies -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <link rel="stylesheet" href="{{ url_for('static', filename='map.css') }}">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <!-- Map & Filter Script -->
 <script>
@@ -193,14 +196,29 @@ const eventsData = [
   {% endfor %}
 ];
 
-const customIcon = L.divIcon({
-  className: 'custom-marker-icon',
-  html: '<div style="background: #4299e1; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11]
-});
+// Category-based colors
+const categoryColors = {
+  military: '#e53e3e',
+  diplomatic: '#3182ce',
+  naval: '#2b6cb0',
+  scientific: '#38a169',
+  other: '#718096'
+};
+
+function getCategoryIcon(category) {
+  const color = categoryColors[category] || categoryColors.other;
+  return L.divIcon({
+    className: 'custom-marker-icon',
+    html: `<div style="background: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+}
+
+const customIcon = getCategoryIcon('other');
 
 let markers = [];
+let markerClusterGroup;
 let heatLayer = null;
 let heatmapEnabled = false;
 let selectedCategory = 'all';
@@ -256,8 +274,10 @@ function toggleHeatmap() {
     heatLayer = createHeatmap(filteredEvents);
     heatLayer.addTo(map);
     
-    // Hide markers when heatmap is on
-    markers.forEach(m => m.setOpacity(0));
+    // Hide cluster group when heatmap is on
+    if (markerClusterGroup) {
+      map.removeLayer(markerClusterGroup);
+    }
   } else {
     btn.classList.remove('active');
     btn.textContent = 'Heatmap';
@@ -267,15 +287,29 @@ function toggleHeatmap() {
       heatLayer = null;
     }
     
-    // Show markers again
-    markers.forEach(m => m.setOpacity(1));
+    // Show cluster group again
+    if (markerClusterGroup) {
+      map.addLayer(markerClusterGroup);
+    }
   }
 }
 
-// Add markers to map
+// Add markers to map with clustering
 function addMarkers(filteredEvents) {
+  // Remove existing markers and cluster group
   markers.forEach(m => map.removeLayer(m));
   markers = [];
+  if (markerClusterGroup) {
+    map.removeLayer(markerClusterGroup);
+  }
+
+  // Create new cluster group
+  markerClusterGroup = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    zoomToBoundsOnClick: true
+  });
 
   filteredEvents.forEach((event, index) => {
     const truncatedDesc = event.description.length > 150 
@@ -291,12 +325,17 @@ function addMarkers(filteredEvents) {
       <button class="popup-btn" onclick="showEvent(${index})">View Full Details →</button>
     `;
 
-    const marker = L.marker([event.lat, event.lon], { icon: customIcon })
-      .bindPopup(popupContent, { maxWidth: 300 })
-      .addTo(map);
+    const marker = L.marker([event.lat, event.lon], { 
+      icon: getCategoryIcon(event.category) 
+    })
+      .bindPopup(popupContent, { maxWidth: 300 });
 
     markers.push(marker);
+    markerClusterGroup.addLayer(marker);
   });
+
+  // Add cluster group to map
+  map.addLayer(markerClusterGroup);
 }
 
 // Sidebar logic
