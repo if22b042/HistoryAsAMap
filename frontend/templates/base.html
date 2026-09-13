@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}History As A Map{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -45,14 +45,34 @@
         {% block content %}{% endblock %}
     </main>
 
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>Our Mission</h4>
+                <p>History As A Map transforms how we explore and understand historical events by visualizing them across geography and time. We believe that seeing history spatially reveals patterns and connections that traditional formats often miss.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Data Source</h4>
+                <p>All events are sourced from English Wikipedia articles, ensuring accuracy and reliability. Our community-driven approach allows anyone to contribute verified historical events to our growing database.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Technology</h4>
+                <p>Built with Flask, Leaflet.js, and modern web technologies. Our platform combines interactive mapping with historical data to create an engaging educational experience.</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 History As A Map. All rights reserved.</p>
+        </div>
+    </footer>
+
     <style>
-        /* Modern Navigation Bar Styles */
+        /* Navigation Bar Styles - using CSS variables from global.css */
         .navbar {
-            background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            background: var(--gradient-primary);
+            box-shadow: var(--shadow-md);
             position: sticky;
             top: 0;
-            z-index: 1000;
+            z-index: var(--z-sticky);
             backdrop-filter: blur(8px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
@@ -60,7 +80,7 @@
         .nav-container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 0 1.5rem;
+            padding: 0 var(--spacing-lg);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -70,16 +90,21 @@
         .nav-brand {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: var(--spacing-md);
             color: white;
             text-decoration: none;
+            transition: opacity var(--transition-fast);
+        }
+
+        .nav-brand:hover {
+            opacity: 0.9;
         }
 
         .brand-icon {
             background: rgba(255, 255, 255, 0.15);
             width: 36px;
             height: 36px;
-            border-radius: 8px;
+            border-radius: var(--radius-lg);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -90,13 +115,13 @@
 
         .brand-text h1 {
             margin: 0;
-            font-size: 1.25rem;
-            font-weight: 600;
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
             color: white;
         }
 
         .brand-tagline {
-            font-size: 0.75rem;
+            font-size: var(--font-size-xs);
             color: rgba(255, 255, 255, 0.7);
             display: block;
             margin-top: 0.2rem;
@@ -104,23 +129,23 @@
 
         .nav-menu {
             display: flex;
-            gap: 0.5rem;
+            gap: var(--spacing-sm);
             align-items: center;
         }
 
         .nav-link {
             display: flex;
             align-items: center;
-            gap: 0.4rem;
-            padding: 0.5rem 1rem;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
             color: rgba(255, 255, 255, 0.9);
             text-decoration: none;
-            border-radius: 6px;
-            transition: all 0.2s ease;
-            font-weight: 500;
+            border-radius: var(--radius-md);
+            transition: all var(--transition-base);
+            font-weight: var(--font-weight-medium);
             position: relative;
             overflow: hidden;
-            font-size: 0.9rem;
+            font-size: var(--font-size-sm);
         }
 
         .nav-link:hover {
@@ -132,7 +157,7 @@
         .nav-link.active {
             background: rgba(255, 255, 255, 0.15);
             color: white;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+            box-shadow: var(--shadow-sm);
         }
 
         .nav-link.active::before {
@@ -142,7 +167,7 @@
             left: 0;
             right: 0;
             height: 2px;
-            background: linear-gradient(90deg, #4299e1, #63b3ed);
+            background: linear-gradient(90deg, var(--color-primary-400), var(--color-primary-300));
         }
 
         .nav-link i {
@@ -156,26 +181,31 @@
             background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
-            padding: 0.75rem;
-            border-radius: 8px;
+            padding: var(--spacing-md);
+            border-radius: var(--radius-lg);
             cursor: pointer;
             font-size: 1.25rem;
+            transition: background var(--transition-fast);
+        }
+
+        .nav-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .main-content {
             min-height: calc(100vh - 60px);
-            background: linear-gradient(135deg, #f7fafc 0%, #e2e8f0 100%);
+            background: var(--gradient-background);
         }
 
         /* Responsive Design */
         @media (max-width: 768px) {
             .nav-container {
-                padding: 0 1rem;
+                padding: 0 var(--spacing-md);
                 height: 50px;
             }
 
             .brand-text h1 {
-                font-size: 1.1rem;
+                font-size: var(--font-size-lg);
             }
 
             .brand-tagline {
@@ -187,12 +217,12 @@
                 top: 50px;
                 left: -100%;
                 width: 100%;
-                background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+                background: var(--gradient-primary);
                 flex-direction: column;
-                padding: 1.5rem;
-                gap: 0.75rem;
-                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
-                transition: left 0.3s ease;
+                padding: var(--spacing-xl);
+                gap: var(--spacing-md);
+                box-shadow: var(--shadow-lg);
+                transition: left var(--transition-slow);
             }
 
             .nav-menu.active {
@@ -201,9 +231,9 @@
 
             .nav-link {
                 width: 100%;
-                padding: 0.75rem;
+                padding: var(--spacing-md);
                 justify-content: center;
-                font-size: 1rem;
+                font-size: var(--font-size-base);
             }
 
             .nav-toggle {

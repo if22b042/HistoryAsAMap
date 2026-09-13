@@ -14,6 +14,14 @@ let eventsById = new Map();
 let selectedCategory = "all";
 let yearRange = { from: 0, to: 3000 };
 
+function formatYear(year) {
+  if (year === null || year === undefined || year === "") return "";
+  const numYear = parseInt(year, 10);
+  if (isNaN(numYear)) return year;
+  if (numYear < 0) return `${Math.abs(numYear)} BC`;
+  return numYear.toString();
+}
+
 const customIcon = L.divIcon({
   className: "custom-marker-icon",
   html:
@@ -66,7 +74,7 @@ function addMarkers(filteredEvents) {
     const popupContent = `
       <div class="popup-content">
         <strong>${event.title}</strong>
-        ${event.year ? `<em>${event.year}</em><br><br>` : ""}
+        ${event.year ? `<em>${formatYear(event.year)}</em><br><br>` : ""}
         ${truncated}
       </div>
       <button class="popup-btn" data-event-id="${event.id}">View Full Details →</button>
@@ -93,7 +101,7 @@ function renderEventCards(filteredEvents) {
     .map(
       (event) => `
       <div class="event-card" data-event-id="${event.id}">
-        <div class="event-card-year">${event.year}</div>
+        <div class="event-card-year">${formatYear(event.year)}</div>
         <div class="event-card-category">${(event.category || "other").replace(/^./, (c) => c.toUpperCase())}</div>
         <div class="event-card-title">${event.title}</div>
         <div class="event-card-description">${event.description}</div>
@@ -126,7 +134,7 @@ function showEvent(eventId) {
   const content = document.getElementById("sidebar-content");
 
   content.innerHTML = `
-    <span class="event-detail-year">${event.year}</span>
+    <span class="event-detail-year">${formatYear(event.year)}</span>
     <h3 class="event-detail-title">${event.title}</h3>
     <div class="event-detail-coordinates">Location: ${event.lat.toFixed(4)}, ${event.lon.toFixed(4)}</div>
     <div class="event-detail-description">${event.description}</div>
@@ -166,14 +174,14 @@ function setupYearSlider(events) {
     range: { min: minYear, max: maxYear },
   });
 
-  fromDisplay.textContent = minYear;
-  toDisplay.textContent = maxYear;
+  fromDisplay.textContent = formatYear(minYear);
+  toDisplay.textContent = formatYear(maxYear);
 
   slider.noUiSlider.on("update", (values) => {
     yearRange.from = Math.round(values[0]);
     yearRange.to = Math.round(values[1]);
-    fromDisplay.textContent = yearRange.from;
-    toDisplay.textContent = yearRange.to;
+    fromDisplay.textContent = formatYear(yearRange.from);
+    toDisplay.textContent = formatYear(yearRange.to);
     applyFilters();
   });
 }
@@ -201,8 +209,8 @@ async function initMapPage() {
     worldCopyJump: true,
   });
 
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-    attribution: "&copy; OpenStreetMap & CARTO",
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
     maxZoom: 18,
   }).addTo(map);
 

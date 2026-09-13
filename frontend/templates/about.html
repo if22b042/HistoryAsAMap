@@ -5,9 +5,8 @@
 {% block content %}
 <div class="about-page">
   <div class="about-container">
-    <div class="about-header">
-      <h1>About</h1>
-      <p class="about-subtitle">A new way to explore history</p>
+      <div class="about-header">
+      <h1 class="text-gradient">About</h1>
     </div>
 
     <div class="about-content">
@@ -31,6 +30,13 @@
           <p>Hi, I'm Alessandro Vilucchi. I'm a 22-year-old computer science student. I've always been massively interested in history, and I wanted to find a way to display historical data in a fun and interactive way that makes it accessible to everyone. This project combines my passion for technology with my love for history, creating something that I hope others will find as interesting as I do.</p>
         </div>
       </div>
+
+      <div class="info-card">
+        <div class="info-card-content">
+          <h3>Contact</h3>
+          <p>Email: alessandrovilucchiprojects@gmail.com</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -38,8 +44,8 @@
 <style>
 .about-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f7fafc 0%, #e2e8f0 100%);
-  padding: 2rem;
+  background: var(--gradient-background);
+  padding: var(--spacing-2xl);
 }
 
 .about-container {
@@ -49,86 +55,88 @@
 
 .about-header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: var(--spacing-3xl);
 }
 
 .about-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0 0 1rem 0;
-  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-800);
+  margin: 0 0 var(--spacing-md) 0;
 }
 
 .about-subtitle {
-  font-size: 1.125rem;
-  color: #718096;
+  font-size: var(--font-size-lg);
+  color: var(--color-gray-500);
   margin: 0;
-  line-height: 1.6;
+  line-height: var(--line-height-normal);
 }
 
 .about-content {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--spacing-xl);
 }
 
 .info-card {
   background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #4299e1;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-xl);
+  box-shadow: var(--shadow-md);
+  border-left: 4px solid var(--color-primary-400);
   display: flex;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
   align-items: flex-start;
+  transition: all var(--transition-base);
+}
+
+.info-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
 }
 
 .info-card-icon {
-  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  background: var(--gradient-primary);
   color: white;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   flex-shrink: 0;
 }
 
 .info-card-content h3 {
-  margin: 0 0 1rem 0;
-  color: #2d3748;
-  font-size: 1.25rem;
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--color-gray-700);
+  font-size: var(--font-size-xl);
 }
 
 .info-card-content p {
   margin: 0;
-  color: #4a5568;
-  line-height: 1.6;
+  color: var(--color-gray-600);
+  line-height: var(--line-height-relaxed);
 }
 
 @media (max-width: 768px) {
   .about-page {
-    padding: 1rem;
+    padding: var(--spacing-lg);
   }
 
   .about-header h1 {
-    font-size: 2rem;
+    font-size: var(--font-size-3xl);
   }
 
   .about-subtitle {
-    font-size: 1rem;
+    font-size: var(--font-size-base);
   }
 
   .info-card {
     flex-direction: column;
-    gap: 1rem;
-    padding: 1.5rem;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
   }
 
   .info-card-icon {
@@ -138,15 +146,15 @@
 
 @media (max-width: 480px) {
   .about-header h1 {
-    font-size: 1.75rem;
+    font-size: var(--font-size-2xl);
   }
 
   .about-subtitle {
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
   }
 
   .info-card {
-    padding: 1.25rem;
+    padding: var(--spacing-md);
   }
 }
 </style>
