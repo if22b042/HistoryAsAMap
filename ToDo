@@ -2,18 +2,24 @@ Implement Approval Process (?)
 Name: History As A Map (HAAM)
 
 
-
-Add the ability to filter by tags
+Figure out how to handle multiple points on the map so it does not just become a massive cluster
 Add ability to also create new tags
-Also add tags with dates and sort them by that (find an elegant solution for this)
-Make it possible to enter multiple tags
+
 
 Fill up db
 
 why can it not read the year from https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest
-the wikipedia link title and description should not be changeable
 
-Seperate the google maps link to the bottom with a clear icon
 
-o add a - that puts the whole filter to the side 
+Add a - that puts the whole filter on the left to the side 
 Implement a way to modify and delte entries 
+
+Think about a way to make tag selection more refined
+Tags should have more complex filtering algorithms for example when I enter greece all the things that ever concerned greece appear, so in essence it should have keywords to filter by
+
+Testing:
+Check if order is correct of dates before date 0
+
+FrontEnd:
+Seperate the google maps link to the bottom with a clear icon
+Make it dark mode

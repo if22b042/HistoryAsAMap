@@ -20,6 +20,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+def format_year(year):
+    if year is None or year == "":
+        return ""
+    try:
+        num_year = int(year)
+        if num_year < 0:
+            return f"{abs(num_year)} BC"
+        return str(num_year)
+    except (ValueError, TypeError):
+        return str(year) if year else ""
+
+app.jinja_env.filters['format_year'] = format_year
+
 db.init_app(app)
 with app.app_context():
     db.create_all()
@@ -39,6 +52,39 @@ def about():
 @app.route("/newEntry")
 def newEntry():
     return render_template("new_entry.html", entry={})
+
+
+@app.route("/edit/<int:entry_id>")
+def editEntry(entry_id):
+    entry = Entry.query.get(entry_id)
+    if not entry:
+        return redirect(url_for("index"))
+    
+    # Parse coordinates from location
+    lat, lon = 0, 0
+    if entry.location and entry.location.coordinates:
+        try:
+            coords = entry.location.coordinates.split(',')
+            lat = float(coords[0])
+            lon = float(coords[1])
+        except (ValueError, IndexError):
+            lat, lon = 0, 0
+    
+    # Format entry data for the preview/edit page
+    entry_data = {
+        "title": entry.title,
+        "date": entry.dateString,
+        "year": entry.year,
+        "first_paragraph": entry.firstParagraph,
+        "link": entry.wikiLink,
+        "category": entry.category.value if entry.category else "other",
+        "tags": entry.tags if entry.tags else [],
+        "coordinates": [lat, lon],
+        "lat": lat,
+        "lon": lon,
+    }
+    
+    return render_template("submit_entry.html", entry=entry_data, is_duplicate=True, existing_id=entry_id, is_edit=True)
 
 
 @app.route("/PreviewEntry", methods=["POST"])
@@ -75,6 +121,9 @@ def PreviewEntry():
 
     # Add category to entry data
     entry_data['category'] = category
+
+    # Initialize tags as empty array (will be selected in preview)
+    entry_data["tags"] = []
 
     # If it's a duplicate entry, pass the flag to the template
     is_duplicate = entry_data.get('is_duplicate', False)
@@ -124,24 +173,17 @@ def create_new_entry():
     
     # Handle tags
     tags_str = request.form.get("tags")
+    print(f"DEBUG - tags_str received: '{tags_str}'")
     if tags_str:
         import json
         try:
             entry_data["tags"] = json.loads(tags_str)
-        except json.JSONDecodeError:
+            print(f"DEBUG - Parsed tags: {entry_data['tags']}")
+        except json.JSONDecodeError as e:
+            print(f"DEBUG - JSON decode error: {e}")
             entry_data["tags"] = []
     else:
-        entry_data["tags"] = []
-    
-    # Handle tags
-    tags_str = request.form.get("tags")
-    if tags_str:
-        import json
-        try:
-            entry_data["tags"] = json.loads(tags_str)
-        except json.JSONDecodeError:
-            entry_data["tags"] = []
-    else:
+        print(f"DEBUG - No tags_str received")
         entry_data["tags"] = []
 
     # Fetch values dynamically

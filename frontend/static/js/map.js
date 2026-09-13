@@ -5,6 +5,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const entries = JSON.parse(dataDiv.dataset.entries);
 
+  function formatYear(year) {
+    if (year === null || year === undefined || year === "") return "";
+    const numYear = parseInt(year, 10);
+    if (isNaN(numYear)) return year;
+    if (numYear < 0) return `${Math.abs(numYear)} BC`;
+    return numYear.toString();
+  }
+
   const map = L.map('map').setView([50, 10], 4); // Center Europe
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -23,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (paragraph.length > 220) paragraph = paragraph.slice(0, 217) + '...';
 
     let popupHtml = `<strong>${entry.title || "Untitled"}</strong><br>`;
-    if (entry.year) popupHtml += `<em>${entry.year}</em><br>`;
+    if (entry.year) popupHtml += `<em>${formatYear(entry.year)}</em><br>`;
     popupHtml += `${paragraph}<br>`;
     if (entry.link) popupHtml += `<a href="${entry.link}" target="_blank" rel="noopener">Read more</a>`;
 

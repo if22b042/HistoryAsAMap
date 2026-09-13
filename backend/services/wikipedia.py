@@ -51,12 +51,23 @@ def get_wikipedia_data(url: str) -> dict | None:
             year = year_match.group(1) if year_match else None
             date = f"{date_range_match.group(1)} {year}" if year else date_range_match.group(1)
         else:
-            # Try to find single dates like "23 August 1942"
-            date_matches = re.findall(r"\b(\d{1,2}\s+\w+\s+\d{4})\b", extract)
-            date = date_matches[0] if date_matches else None
+            # Try to find single dates like "23 August 1942" or "42 BC"
+            date_matches = re.findall(r"\b(\d{1,2}\s+\w+\s+\d{4})\b|(\d{1,4}\s*(?:BC|BCE))\b", extract)
+            if date_matches:
+                # Flatten the list of tuples and filter out None values
+                date = next((d for match in date_matches for d in match if d), None)
+            else:
+                date = None
 
-        year_match = re.search(r"\b(1[0-9]\d{2}|20\d{2})\b", extract)
-        year = int(year_match.group(1)) if year_match else None
+        # Match AD years (1000-2099) or BC/BCE years (e.g., "42 BC", "42 BCE")
+        year_match = re.search(r"\b(\d{1,4})\s*(?:BC|BCE)\b|\b(1[0-9]\d{2}|20\d{2})\b", extract)
+        if year_match:
+            if year_match.group(1):  # BC/BCE year
+                year = -int(year_match.group(1))  # Convert to negative for BC
+            else:  # AD year
+                year = int(year_match.group(2))
+        else:
+            year = None
 
         google_maps_link = f"https://www.google.com/maps?q={lat},{lon}" if lat and lon else ""
         

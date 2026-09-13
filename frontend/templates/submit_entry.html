@@ -6,12 +6,12 @@
 <div class="preview-page">
   <div class="preview-container">
     <div class="preview-header">
-      <h1>Preview Historical Event</h1>
-      <p class="preview-subtitle">Review and edit the extracted information before adding it to the map</p>
+      <h1>{% if is_edit %}Edit Historical Event{% else %}Preview Historical Event{% endif %}</h1>
+      <p class="preview-subtitle">{% if is_edit %}Edit the event details below{% else %}Review and edit the extracted information before adding it to the map{% endif %}</p>
     </div>
 
     <div class="preview-content">
-      {% if is_duplicate %}
+      {% if is_duplicate and not is_edit %}
       <div class="duplicate-banner">
         <div class="duplicate-banner-icon">!</div>
         <div class="duplicate-banner-content">
@@ -49,19 +49,6 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label for="date" class="form-label">
-                <span class="label-icon">D</span>
-                Date
-              </label>
-              <div class="input-wrapper">
-                <input type="text" id="date" name="date" class="form-input" value="{{ entry['date'] }}" readonly>
-                <button type="button" class="edit-btn" onclick="enableEdit('date')">
-                  <span class="btn-icon">Edit</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="form-group">
               <label for="year" class="form-label">
                 <span class="label-icon">Y</span>
                 Year <span class="required">*</span>
@@ -70,6 +57,19 @@
               <div class="input-wrapper">
                 <input type="text" id="year" name="year" class="form-input" value="{{ entry['year'] }}" readonly required>
                 <button type="button" class="edit-btn" onclick="enableEdit('year')">
+                  <span class="btn-icon">Edit</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="date" class="form-label">
+                <span class="label-icon">D</span>
+                Date
+              </label>
+              <div class="input-wrapper">
+                <input type="text" id="date" name="date" class="form-input" value="{{ entry['date'] }}" readonly>
+                <button type="button" class="edit-btn" onclick="enableEdit('date')">
                   <span class="btn-icon">Edit</span>
                 </button>
               </div>
@@ -97,13 +97,22 @@
           </div>
 
           <div class="form-group">
-            <label for="tags" class="form-label">
+            <label class="form-label">
               <span class="label-icon">T</span>
-              Tag (optional)
+              Historical Tags
             </label>
-            <select id="tags" name="tags" class="form-select">
-              <option value="">Select a tag...</option>
-            </select>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="tags-search" 
+                class="form-input" 
+                placeholder="Search tags..."
+              >
+              <div id="tags-container" class="tags-container">
+                <div class="tags-loading">Loading tags...</div>
+              </div>
+              <input type="hidden" id="selected-tags" name="tags" value="">
+            </div>
           </div>
 
           <div class="form-row">
@@ -161,18 +170,18 @@
             </label>
             <div class="input-wrapper">
               {% if entry.get('lat') and entry.get('lon') %}
-                <a href="https://www.google.com/maps?q={{ entry['lat'] }},{{ entry['lon'] }}" target="_blank" rel="noopener" class="form-link">View on Google Maps →</a>
+                <a href="https://www.google.com/maps?q={{ entry['lat'] }},{{ entry['lon'] }}" target="_blank" rel="noopener" class="google-maps-link"><i class="fas fa-map-marker-alt"></i> View on Google Maps</a>
               {% elif entry.get('coordinates') %}
-                <a href="https://www.google.com/maps?q={{ entry['coordinates'][0] }},{{ entry['coordinates'][1] }}" target="_blank" rel="noopener" class="form-link">View on Google Maps →</a>
+                <a href="https://www.google.com/maps?q={{ entry['coordinates'][0] }},{{ entry['coordinates'][1] }}" target="_blank" rel="noopener" class="google-maps-link"><i class="fas fa-map-marker-alt"></i> View on Google Maps</a>
               {% else %}
-                <span class="form-link" style="pointer-events: none; color: #999;">No Google Maps link available</span>
+                <span class="google-maps-link" style="pointer-events: none; color: #999;"><i class="fas fa-map-marker-alt"></i> No Google Maps link available</span>
               {% endif %}
             </div>
           </div>
 
           <button type="submit" class="submit-btn">
             <span class="btn-icon">Confirm</span>
-            {% if is_duplicate %}Update Existing Entry{% else %}Add Entry to Map{% endif %}
+            {% if is_edit %}Update Entry{% elif is_duplicate %}Update Existing Entry{% else %}Add Entry to Map{% endif %}
           </button>
         </div>
       </form>
@@ -465,26 +474,68 @@
   box-shadow: 0 4px 12px rgba(43, 108, 176, 0.4);
 }
 
-.form-link {
+.google-maps-link {
   display: inline-flex;
   align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #f7fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
+  gap: 0.5rem;
   color: #4299e1;
   text-decoration: none;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  width: 100%;
-  justify-content: center;
+  font-weight: 500;
   font-size: 0.875rem;
+  transition: color 0.2s ease;
 }
 
-.form-link:hover {
-  background: #ebf8ff;
-  border-color: #4299e1;
+.google-maps-link:hover {
   color: #2b6cb0;
+}
+
+.google-maps-link i {
+  font-size: 1rem;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  min-height: 60px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tags-loading {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.tag-pill {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  background: #e2e8f0;
+  color: #4a5568;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  user-select: none;
+}
+
+.tag-pill:hover {
+  background: #cbd5e0;
+  transform: translateY(-1px);
+}
+
+.tag-pill.selected {
+  background: linear-gradient(135deg, #2b6cb0 0%, #2c5282 100%);
+  color: white;
+  border-color: #2b6cb0;
+}
+
+.tag-pill.selected:hover {
+  background: linear-gradient(135deg, #2c5282 0%, #2a4365 100%);
 }
 
 @media (max-width: 768px) {
@@ -586,6 +637,11 @@
 </style>
 
 <script>
+// @ts-nocheck
+
+let selectedTags = [];
+let allTags = [];
+
 function enableEdit(fieldId) {
     const field = document.getElementById(fieldId);
     if (field.tagName === 'SELECT') {
@@ -594,65 +650,119 @@ function enableEdit(fieldId) {
         field.removeAttribute("readonly");
         field.style.background = "white";
         field.style.color = "#2d3748";
+        
+        // Clear year field when editing to allow fresh input
+        if (fieldId === 'year') {
+            field.value = '';
+        }
+        
+        // Change date input to date picker when editing
+        if (fieldId === 'date') {
+            field.type = 'date';
+            // Auto-populate date with year's first 4 digits
+            const yearField = document.getElementById('year');
+            if (yearField && yearField.value) {
+                const yearValue = yearField.value.substring(0, 4);
+                if (yearValue && /^\d{4}$/.test(yearValue)) {
+                    field.value = yearValue + '-01-01';
+                }
+            }
+        }
     }
     field.focus();
     document.getElementById("modified").value = "true";
 }
 
-// Load tags from API
 async function loadTags() {
-    try {
-        const response = await fetch('/api/tags');
-        const tags = await response.json();
-        const select = document.getElementById('tags');
-        
-        tags.forEach(tag => {
-            const option = document.createElement('option');
-            option.value = tag.name;
-            option.textContent = `${tag.name} (${tag.display_date})`;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Failed to load tags:', error);
+  const container = document.getElementById('tags-container');
+  try {
+    const response = await fetch('/api/tags');
+    if (response.ok) {
+      allTags = await response.json();
+      
+      // Get pre-selected tags from entry data
+      const preSelectedTags = {{ entry.get('tags', [])|tojson }};
+      selectedTags = [...preSelectedTags];
+      
+      renderTags(allTags);
+      
+      // Update hidden input with pre-selected tags
+      document.getElementById('selected-tags').value = JSON.stringify(selectedTags);
+    } else {
+      container.innerHTML = '<div class="tags-loading">Failed to load tags</div>';
     }
+  } catch (error) {
+    console.error('Error loading tags:', error);
+    container.innerHTML = '<div class="tags-loading">Failed to load tags</div>';
+  }
 }
 
-// Enable category field before form submission and handle tags
+function renderTags(tags) {
+  const container = document.getElementById('tags-container');
+  container.innerHTML = '';
+  
+  tags.forEach(tag => {
+    const pill = document.createElement('div');
+    pill.className = 'tag-pill';
+    pill.textContent = `${tag.name} (${tag.display_date})`;
+    pill.dataset.tagName = tag.name;
+    
+    // Check if tag is selected
+    if (selectedTags.includes(tag.name)) {
+      pill.classList.add('selected');
+    }
+    
+    pill.addEventListener('click', () => toggleTag(tag.name, pill));
+    container.appendChild(pill);
+  });
+}
+
+function filterTags(searchTerm) {
+  const filtered = allTags.filter(tag => 
+    tag.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  renderTags(filtered);
+}
+
+function toggleTag(tagName, pillElement) {
+  const index = selectedTags.indexOf(tagName);
+  
+  if (index > -1) {
+    selectedTags.splice(index, 1);
+    pillElement.classList.remove('selected');
+  } else {
+    selectedTags.push(tagName);
+    pillElement.classList.add('selected');
+  }
+  
+  document.getElementById('selected-tags').value = JSON.stringify(selectedTags);
+  document.getElementById("modified").value = "true";
+}
+
+// Enable category field before form submission
 document.getElementById('previewForm').addEventListener('submit', function() {
     const categorySelect = document.getElementById('category');
     if (categorySelect) {
         categorySelect.disabled = false;
     }
-    
-    // Handle tags - single selection
-    const tagsSelect = document.getElementById('tags');
-    const selectedTag = tagsSelect.value;
-    
-    // Create a hidden input to store the selected tag as JSON array
-    let tagsInput = document.getElementById('tags-input');
-    if (!tagsInput) {
-        tagsInput = document.createElement('input');
-        tagsInput.type = 'hidden';
-        tagsInput.id = 'tags-input';
-        tagsInput.name = 'tags';
-        this.appendChild(tagsInput);
-    }
-    if (selectedTag) {
-        tagsInput.value = JSON.stringify([selectedTag]);
-    } else {
-        tagsInput.value = JSON.stringify([]);
-    }
 });
 
-// Initially disable category select if it has a value
+// Initially disable category select if it has a value and load tags
 document.addEventListener('DOMContentLoaded', function() {
     const categorySelect = document.getElementById('category');
     if (categorySelect && categorySelect.value) {
         categorySelect.disabled = true;
     }
     
-    // Load tags
     loadTags();
+    
+    // Add search functionality
+    const searchInput = document.getElementById('tags-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        filterTags(e.target.value);
+      });
+    }
 });
 </script>
 {% endblock %}

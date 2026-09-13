@@ -10,6 +10,14 @@ import { initNav, setActiveNav } from "./nav.js";
 
 const ADMIN_KEY_STORAGE = "haam_admin_key";
 
+function formatYear(year) {
+  if (year === null || year === undefined || year === "") return "";
+  const numYear = parseInt(year, 10);
+  if (isNaN(numYear)) return year;
+  if (numYear < 0) return `${Math.abs(numYear)} BC`;
+  return numYear.toString();
+}
+
 function getAdminKey() {
   return localStorage.getItem(ADMIN_KEY_STORAGE) || "";
 }
@@ -32,7 +40,7 @@ function renderPending(events) {
       <article class="admin-card" data-id="${event.id}">
         <h3>${event.title}</h3>
         <div class="admin-card-meta">
-          ${event.year} · ${event.category} ·
+          ${formatYear(event.year)} · ${event.category} ·
           ${event.location ? `${event.location.lat.toFixed(4)}, ${event.location.lon.toFixed(4)}` : "No location"}
         </div>
         <p>${event.first_paragraph}</p>

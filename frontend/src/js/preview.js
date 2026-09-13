@@ -11,6 +11,14 @@ const CATEGORIES = [
   "other",
 ];
 
+function formatYear(year) {
+  if (year === null || year === undefined || year === "") return "";
+  const numYear = parseInt(year, 10);
+  if (isNaN(numYear)) return year;
+  if (numYear < 0) return `${Math.abs(numYear)} BC`;
+  return numYear.toString();
+}
+
 function enableEdit(fieldId) {
   const field = document.getElementById(fieldId);
   if (field.tagName === "SELECT") {
@@ -109,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("title").value = data.title || "";
   document.getElementById("date").value = data.date || "";
-  document.getElementById("year").value = data.year || "";
+  document.getElementById("year").value = formatYear(data.year);
   document.getElementById("first_paragraph").value = data.first_paragraph || "";
   document.getElementById("link").value = data.link || "";
   document.getElementById("lat").value = data.lat ?? "";
@@ -119,10 +127,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const googleMapsLink = document.getElementById("google_maps_link");
   if (data.google_maps_link) {
     googleMapsLink.href = data.google_maps_link;
-    googleMapsLink.textContent = "View on Google Maps →";
+    googleMapsLink.innerHTML = '<i class="fas fa-map-marker-alt"></i> View on Google Maps';
   } else {
     googleMapsLink.href = "#";
-    googleMapsLink.textContent = "No Google Maps link available";
+    googleMapsLink.innerHTML = '<i class="fas fa-map-marker-alt"></i> No Google Maps link available';
     googleMapsLink.style.pointerEvents = "none";
     googleMapsLink.style.color = "#999";
   }
