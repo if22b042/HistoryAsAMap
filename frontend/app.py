@@ -1,32 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import re
-import traceback
 
-try:
-    from backend.controllers.CheckNewEntry import CheckEntry
-except Exception as e:
-    print(f"ERROR importing CheckNewEntry: {e}")
-    print(traceback.format_exc())
-
-try:
-    from backend.controllers.SaveEntry import SaveEntry
-except Exception as e:
-    print(f"ERROR importing SaveEntry: {e}")
-    print(traceback.format_exc())
-
-try:
-    from backend.models.model import db, Entry, Location
-except Exception as e:
-    print(f"ERROR importing models: {e}")
-    print(traceback.format_exc())
-
-try:
-    from backend.controllers.LocationInfoRetriever import reverse_geocode, check_on_water
-except Exception as e:
-    print(f"ERROR importing LocationInfoRetriever: {e}")
-    print(traceback.format_exc())
-
+from backend.controllers.CheckNewEntry import CheckEntry
+from backend.controllers.SaveEntry import SaveEntry
+from backend.models.model import db, Entry, Location
+from backend.controllers.LocationInfoRetriever import reverse_geocode, check_on_water
 WIKIPEDIA_REGEX = r"^https:\/\/([a-z]{2}\.)?wikipedia\.org\/wiki\/.*$"
 
 import os
@@ -54,13 +33,9 @@ def format_year(year):
 
 app.jinja_env.filters['format_year'] = format_year
 
-try:
-    db.init_app(app)
-    with app.app_context():
-        db.create_all()
-except Exception as e:
-    print(f"ERROR initializing database: {e}")
-    print(traceback.format_exc())
+db.init_app(app)
+with app.app_context():
+    db.create_all()
 
 @app.route("/")
 def index():
