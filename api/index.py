@@ -1,11 +1,13 @@
 import os
 import sys
 
-# Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from frontend.app import app as application
-
-# Vercel Python runtime expects a WSGI application named 'app'
-# This file serves as the entry point
-app = application
+try:
+    from frontend.app import app as application
+    app = application
+except Exception as e:
+    import traceback
+    print(f"ERROR importing app: {e}")
+    print(traceback.format_exc())
+    raise
