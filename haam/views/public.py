@@ -59,8 +59,8 @@ def preview():
         year=format_year(article.year),
         date_label=article.date_label,
         summary=article.summary,
-        lat=article.lat,
-        lon=article.lon,
+        lat=None if article.lat is None else round(article.lat, 6),
+        lon=None if article.lon is None else round(article.lon, 6),
         category=form.category.data or "other",
     )
     return _render_preview(event_form, article.year)
