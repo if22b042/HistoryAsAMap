@@ -6,14 +6,16 @@
 <div class="preview-page">
   <div class="preview-container">
     <div class="preview-header">
-      <h1>{% if is_edit %}Edit Historical Event{% else %}Preview Historical Event{% endif %}</h1>
+      <h1 class="bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent font-bold animate-fade-in">{% if is_edit %}Edit Historical Event{% else %}Preview Historical Event{% endif %}</h1>
       <p class="preview-subtitle">{% if is_edit %}Edit the event details below{% else %}Review and edit the extracted information before adding it to the map{% endif %}</p>
     </div>
 
     <div class="preview-content">
       {% if is_duplicate and not is_edit %}
-      <div class="duplicate-banner">
-        <div class="duplicate-banner-icon">!</div>
+      <div class="duplicate-banner animate-slide-up">
+        <div class="duplicate-banner-icon bg-gradient-to-br from-red-500 to-red-700">
+          <i class="fas fa-exclamation-triangle text-white"></i>
+        </div>
         <div class="duplicate-banner-content">
           <h3>This entry already exists</h3>
           <p>This Wikipedia article is already in the database. You can modify the existing entry below or cancel to go back.</p>
@@ -21,10 +23,12 @@
       </div>
       {% endif %}
 
-      <div class="info-card">
-        <div class="info-card-icon">i</div>
+      <div class="info-card group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+        <div class="info-card-icon bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg">
+          <i class="fas fa-edit text-white"></i>
+        </div>
         <div class="info-card-content">
-          <h3>Review & Edit</h3>
+          <h3 class="group-hover:text-blue-600 transition-colors">Review & Edit</h3>
           <p>The information below was automatically extracted from Wikipedia. You can edit any field by clicking the edit button. Make any necessary corrections before submitting.</p>
         </div>
       </div>
@@ -36,27 +40,34 @@
         <input type="hidden" name="existing_id" value="{{ existing_id }}">
         {% endif %}
 
-        <div class="form-card">
+        <div class="form-card hover:shadow-2xl transition-all duration-300">
           <div class="form-group">
             <label for="title" class="form-label">
-              <span class="label-icon">T</span>
+              <span class="label-icon bg-gradient-to-br from-blue-500 to-blue-700">
+                <i class="fas fa-heading text-white text-xs"></i>
+              </span>
               Event Title
             </label>
             <div class="input-wrapper">
-              <input type="text" id="title" name="title" class="form-input" value="{{ entry['title'] }}" readonly>
+              <input type="text" id="title" name="title" class="form-input focus:ring-2 focus:ring-blue-400" value="{{ entry['title'] }}" readonly>
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label for="year" class="form-label">
-                <span class="label-icon">Y</span>
+                <span class="label-icon bg-gradient-to-br from-green-500 to-green-700">
+                  <i class="fas fa-calendar text-white text-xs"></i>
+                </span>
                 Year <span class="required">*</span>
-                <span class="tooltip-icon" data-tooltip="If an event spans multiple years (e.g., '1914-1918'), enter the first year. This ensures correct timeline positioning.">?</span>
+                <span class="tooltip-icon bg-gradient-to-br from-orange-500 to-orange-700" data-tooltip="If an event spans multiple years (e.g., '1914-1918'), enter the first year. This ensures correct timeline positioning.">
+                  <i class="fas fa-question text-white text-xs"></i>
+                </span>
               </label>
               <div class="input-wrapper">
-                <input type="text" id="year" name="year" class="form-input" value="{{ entry['year'] }}" readonly required>
-                <button type="button" class="edit-btn" onclick="enableEdit('year')">
+                <input type="text" id="year" name="year" class="form-input focus:ring-2 focus:ring-green-400" value="{{ entry['year'] }}" readonly required>
+                <button type="button" class="edit-btn group" onclick="enableEdit('year')">
+                  <i class="fas fa-edit group-hover:scale-110 transition-transform"></i>
                   <span class="btn-icon">Edit</span>
                 </button>
               </div>
@@ -64,12 +75,15 @@
 
             <div class="form-group">
               <label for="date" class="form-label">
-                <span class="label-icon">D</span>
+                <span class="label-icon bg-gradient-to-br from-purple-500 to-purple-700">
+                  <i class="fas fa-calendar-alt text-white text-xs"></i>
+                </span>
                 Date
               </label>
               <div class="input-wrapper">
-                <input type="text" id="date" name="date" class="form-input" value="{{ entry['date'] }}" readonly>
-                <button type="button" class="edit-btn" onclick="enableEdit('date')">
+                <input type="text" id="date" name="date" class="form-input focus:ring-2 focus:ring-purple-400" value="{{ entry['date'] }}" readonly>
+                <button type="button" class="edit-btn group" onclick="enableEdit('date')">
+                  <i class="fas fa-edit group-hover:scale-110 transition-transform"></i>
                   <span class="btn-icon">Edit</span>
                 </button>
               </div>
@@ -78,11 +92,13 @@
 
           <div class="form-group">
             <label for="category" class="form-label">
-              <span class="label-icon">C</span>
+              <span class="label-icon bg-gradient-to-br from-pink-500 to-pink-700">
+                <i class="fas fa-tag text-white text-xs"></i>
+              </span>
               Event Category <span class="required">*</span>
             </label>
             <div class="input-wrapper">
-              <select id="category" name="category" class="form-select" required>
+              <select id="category" name="category" class="form-select focus:ring-2 focus:ring-pink-400" required>
                 <option value="">Select a category...</option>
                 <option value="military" {% if entry.get('category') == 'military' %}selected{% endif %}>Military</option>
                 <option value="diplomatic" {% if entry.get('category') == 'diplomatic' %}selected{% endif %}>Diplomatic</option>
@@ -90,7 +106,8 @@
                 <option value="scientific" {% if entry.get('category') == 'scientific' %}selected{% endif %}>Scientific</option>
                 <option value="other" {% if entry.get('category') == 'other' %}selected{% endif %}>Other</option>
               </select>
-              <button type="button" class="edit-btn" onclick="enableEdit('category')">
+              <button type="button" class="edit-btn group" onclick="enableEdit('category')">
+                <i class="fas fa-edit group-hover:scale-110 transition-transform"></i>
                 <span class="btn-icon">Edit</span>
               </button>
             </div>
@@ -98,18 +115,20 @@
 
           <div class="form-group">
             <label class="form-label">
-              <span class="label-icon">T</span>
+              <span class="label-icon bg-gradient-to-br from-indigo-500 to-indigo-700">
+                <i class="fas fa-tags text-white text-xs"></i>
+              </span>
               Historical Tags
             </label>
             <div class="input-wrapper">
               <input 
                 type="text" 
                 id="tags-search" 
-                class="form-input" 
+                class="form-input focus:ring-2 focus:ring-indigo-400" 
                 placeholder="Search tags..."
               >
               <div id="tags-container" class="tags-container">
-                <div class="tags-loading">Loading tags...</div>
+                <div class="tags-loading"><i class="fas fa-spinner fa-spin mr-2"></i>Loading tags...</div>
               </div>
               <input type="hidden" id="selected-tags" name="tags" value="">
             </div>
@@ -118,12 +137,15 @@
           <div class="form-row">
             <div class="form-group">
               <label for="lat" class="form-label">
-                <span class="label-icon">L</span>
+                <span class="label-icon bg-gradient-to-br from-cyan-500 to-cyan-700">
+                  <i class="fas fa-globe text-white text-xs"></i>
+                </span>
                 Latitude
               </label>
               <div class="input-wrapper">
-                <input type="text" id="lat" name="lat" class="form-input" value="{{ entry['coordinates'][0] }}" readonly>
-                <button type="button" class="edit-btn" onclick="enableEdit('lat')">
+                <input type="text" id="lat" name="lat" class="form-input focus:ring-2 focus:ring-cyan-400" value="{{ entry['coordinates'][0] }}" readonly>
+                <button type="button" class="edit-btn group" onclick="enableEdit('lat')">
+                  <i class="fas fa-edit group-hover:scale-110 transition-transform"></i>
                   <span class="btn-icon">Edit</span>
                 </button>
               </div>
@@ -131,12 +153,15 @@
 
             <div class="form-group">
               <label for="lon" class="form-label">
-                <span class="label-icon">G</span>
+                <span class="label-icon bg-gradient-to-br from-teal-500 to-teal-700">
+                  <i class="fas fa-globe-americas text-white text-xs"></i>
+                </span>
                 Longitude
               </label>
               <div class="input-wrapper">
-                <input type="text" id="lon" name="lon" class="form-input" value="{{ entry['coordinates'][1] }}" readonly>
-                <button type="button" class="edit-btn" onclick="enableEdit('lon')">
+                <input type="text" id="lon" name="lon" class="form-input focus:ring-2 focus:ring-teal-400" value="{{ entry['coordinates'][1] }}" readonly>
+                <button type="button" class="edit-btn group" onclick="enableEdit('lon')">
+                  <i class="fas fa-edit group-hover:scale-110 transition-transform"></i>
                   <span class="btn-icon">Edit</span>
                 </button>
               </div>
@@ -145,42 +170,57 @@
 
           <div class="form-group">
             <label for="first_paragraph" class="form-label">
-              <span class="label-icon">P</span>
+              <span class="label-icon bg-gradient-to-br from-gray-500 to-gray-700">
+                <i class="fas fa-align-left text-white text-xs"></i>
+              </span>
               Description
             </label>
             <div class="input-wrapper">
-              <textarea id="first_paragraph" name="first_paragraph" class="form-textarea" readonly>{{ entry['first_paragraph'] }}</textarea>
+              <textarea id="first_paragraph" name="first_paragraph" class="form-textarea focus:ring-2 focus:ring-gray-400" readonly>{{ entry['first_paragraph'] }}</textarea>
             </div>
           </div>
 
           <div class="form-group">
             <label for="link" class="form-label">
-              <span class="label-icon">W</span>
+              <span class="label-icon bg-gradient-to-br from-blue-500 to-blue-700">
+                <i class="fab fa-wikipedia-w text-white text-xs"></i>
+              </span>
               Wikipedia Link
             </label>
             <div class="input-wrapper">
-              <input type="url" id="link" name="link" class="form-input" value="{{ entry['link'] }}" readonly>
+              <input type="url" id="link" name="link" class="form-input focus:ring-2 focus:ring-blue-400" value="{{ entry['link'] }}" readonly>
             </div>
           </div>
 
           <div class="form-group" style="margin-top: 1rem;">
             <label class="form-label">
-              <span class="label-icon">G</span>
+              <span class="label-icon bg-gradient-to-br from-red-500 to-red-700">
+                <i class="fas fa-map-marker-alt text-white text-xs"></i>
+              </span>
               Google Maps Link
             </label>
             <div class="input-wrapper">
               {% if entry.get('lat') and entry.get('lon') %}
-                <a href="https://www.google.com/maps?q={{ entry['lat'] }},{{ entry['lon'] }}" target="_blank" rel="noopener" class="google-maps-link"><i class="fas fa-map-marker-alt"></i> View on Google Maps</a>
+                <a href="https://www.google.com/maps?q={{ entry['lat'] }},{{ entry['lon'] }}" target="_blank" rel="noopener" class="google-maps-link group">
+                  <i class="fas fa-map-marker-alt group-hover:scale-110 transition-transform"></i>
+                  View on Google Maps
+                </a>
               {% elif entry.get('coordinates') %}
-                <a href="https://www.google.com/maps?q={{ entry['coordinates'][0] }},{{ entry['coordinates'][1] }}" target="_blank" rel="noopener" class="google-maps-link"><i class="fas fa-map-marker-alt"></i> View on Google Maps</a>
+                <a href="https://www.google.com/maps?q={{ entry['coordinates'][0] }},{{ entry['coordinates'][1] }}" target="_blank" rel="noopener" class="google-maps-link group">
+                  <i class="fas fa-map-marker-alt group-hover:scale-110 transition-transform"></i>
+                  View on Google Maps
+                </a>
               {% else %}
-                <span class="google-maps-link" style="pointer-events: none; color: #999;"><i class="fas fa-map-marker-alt"></i> No Google Maps link available</span>
+                <span class="google-maps-link opacity-50 cursor-not-allowed">
+                  <i class="fas fa-map-marker-alt"></i>
+                  No Google Maps link available
+                </span>
               {% endif %}
             </div>
           </div>
 
-          <button type="submit" class="submit-btn">
-            <span class="btn-icon">Confirm</span>
+          <button type="submit" class="submit-btn group">
+            <i class="fas fa-check-circle group-hover:scale-110 transition-transform"></i>
             {% if is_edit %}Update Entry{% elif is_duplicate %}Update Existing Entry{% else %}Add Entry to Map{% endif %}
           </button>
         </div>
