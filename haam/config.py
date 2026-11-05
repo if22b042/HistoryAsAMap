@@ -38,6 +38,9 @@ class Config:
     # Reverse geocoding (country lookup) is optional and best-effort.
     GEOCODING_ENABLED = os.environ.get("GEOCODING_ENABLED", "true").lower() == "true"
 
+    # Create tables / load tags on startup if missing (see haam/__init__.py).
+    AUTO_SETUP_DATABASE = os.environ.get("AUTO_SETUP_DATABASE", "true").lower() == "true"
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
@@ -56,6 +59,7 @@ class TestingConfig(Config):
     WTF_CSRF_ENABLED = False
     SESSION_COOKIE_SECURE = False
     GEOCODING_ENABLED = False
+    AUTO_SETUP_DATABASE = False  # tests build their own schema
 
 
 CONFIGS = {
