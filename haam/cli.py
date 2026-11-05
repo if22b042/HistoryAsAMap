@@ -56,7 +56,7 @@ def import_region_command(lat_range, lon_range, step, radius, max_new, approve):
 @click.argument("path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--approve", is_flag=True, help="Publish immediately instead of queueing for review.")
 def import_csv_command(path, approve):
-    """Import a CSV with columns url,category,year,tags (see examples/events.csv)."""
+    """Import a CSV: url plus optional category,status,year,lat,lon,tags (see seed/events.csv)."""
     click.echo(f"Done: {importer.import_csv(path, approve=approve)}")
 
 
