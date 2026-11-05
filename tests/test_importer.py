@@ -71,12 +71,12 @@ def test_import_legacy(app):
     db.session.execute(text(
         "INSERT INTO entries VALUES"
         " (1, 1942, '23 August 1942', 'A battle.', 'Battle of Stalingrad',"
-        "  'https://en.wikipedia.org/wiki/Battle_of_Stalingrad', 'MILITARY', 0, 0, '[\"World War II\"]'),"
-        " (2, 1066, '', 'No location.', 'Orphan', 'https://en.wikipedia.org/wiki/Orphan', 'other', 0, 0, '[]')"))
+        "  'https://en.wikipedia.org/wiki/Battle_of_Stalingrad', 'MILITARY', FALSE, FALSE, '[\"World War II\"]'),"
+        " (2, 1066, '', 'No location.', 'Orphan', 'https://en.wikipedia.org/wiki/Orphan', 'other', FALSE, FALSE, '[]')"))
     # The old app stored two locations for many entries, some only as a string.
     db.session.execute(text(
-        "INSERT INTO locations VALUES (1, '48.7,44.5', 'Russia', 0, 1, NULL, NULL),"
-        " (2, '0,0', NULL, 0, 1, 0, 0)"))
+        "INSERT INTO locations VALUES (1, '48.7,44.5', 'Russia', FALSE, 1, NULL, NULL),"
+        " (2, '0,0', NULL, FALSE, 1, 0, 0)"))
     db.session.commit()
 
     stats = importer.import_legacy(report=quiet)
