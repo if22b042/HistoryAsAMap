@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import collection_badges %}
+{% block title %}Collections · Review{% endblock %}
+
+{% macro action(collection, name, label, icon, style) %}
+  <form method="post" action="{{ url_for('admin.moderate_collection', collection_id=collection.id, action=name) }}"
+        {% if name == 'delete' %}data-confirm="Delete “{{ collection.title }}” permanently?"{% endif %}>
+    {{ action_form.csrf_token }}
+    <button class="btn btn-small {{ style }}" type="submit"><i class="fas fa-{{ icon }}" aria-hidden="true"></i> {{ label }}</button>
+  </form>
+{% endmacro %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header">
+    <h1>Review collections</h1>
+    <p><a href="{{ url_for('admin.review') }}">← Events</a> · Reported collections are listed first.</p>
+  </header>
+
+  {% if not collections %}<p class="empty-state">No collections yet.</p>{% endif %}
+
+  <div class="review-list">
+    {% for collection in collections %}
+      <article class="card review-card">
+        <header>
+          {% if collection.reports %}<span class="badge badge-military">{{ collection.reports|length }} report{{ 's' if collection.reports|length != 1 }}</span>{% endif %}
+          {% if collection.is_hidden %}<span class="badge badge-warning">hidden</span>{% endif %}
+          <span class="badge {{ 'badge-diplomatic' if collection.is_public else 'badge-other' }}">{{ 'public' if collection.is_public else 'unlisted' }}</span>
+          {{ collection_badges(collection) }}
+          <h2><a href="{{ url_for('collections.view', view_token=collection.view_token) }}" target="_blank" rel="noopener">{{ collection.title }}</a></h2>
+        </header>
+        <p class="review-meta">{{ collection.entries|length }} entries · updated {{ collection.updated_at.strftime('%d %b %Y') }}</p>
+        {% if collection.description %}<p>{{ collection.description|truncate(300) }}</p>{% endif %}
+        {% if collection.reports %}
+          <ul class="report-list">
+            {% for report in collection.reports[:5] %}<li>“{{ report.reason }}” <span class="form-hint">{{ report.created_at.strftime('%d %b %Y') }}</span></li>{% endfor %}
+          </ul>
+        {% endif %}
+        <div class="button-row">
+          {% if collection.is_hidden %}{{ action(collection, 'unhide', 'Restore', 'eye', 'btn-success') }}
+          {% else %}{{ action(collection, 'hide', 'Hide', 'eye-slash', 'btn-secondary') }}{% endif %}
+          {{ action(collection, 'delete', 'Delete', 'trash', 'btn-danger') }}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
+{% endblock %}

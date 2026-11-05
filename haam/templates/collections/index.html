@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_macros.html" import collection_card %}
+{% block title %}Collections{% endblock %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header page-header-row">
+    <div>
+      <h1>Map collections</h1>
+      <p>Personal maps of history: pick events from the main map or add your own, write notes, and share the link.</p>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('collections.new') }}"><i class="fas fa-plus" aria-hidden="true"></i> New collection</a>
+  </header>
+
+  <p class="legend">
+    <span><span class="trust trust-wiki"><i class="fab fa-wikipedia-w" aria-hidden="true"></i></span> every entry has a Wikipedia article</span>
+    <span><span class="trust trust-confirmed"><i class="fas fa-certificate" aria-hidden="true"></i></span> every entry is a confirmed event from the main map</span>
+  </p>
+
+  {% if mine %}
+    <section class="collection-section">
+      <h2>Your collections</h2>
+      <p class="form-hint">Collections this browser can edit.</p>
+      <div class="collection-grid">
+        {% for collection in mine %}
+          {{ collection_card(collection, url_for('collections.view', view_token=collection.view_token)) }}
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="collection-section">
+    <h2>Public collections</h2>
+    {% if public %}
+      <div class="collection-grid">
+        {% for collection in public %}
+          {{ collection_card(collection, url_for('collections.view', view_token=collection.view_token)) }}
+        {% endfor %}
+      </div>
+      {% if pages > 1 %}
+        <nav class="pagination" aria-label="Pages">
+          {% if page > 1 %}<a class="btn btn-secondary btn-small" href="{{ url_for('collections.index', page=page - 1) }}">← Newer</a>{% endif %}
+          <span>Page {{ page }} of {{ pages }}</span>
+          {% if page < pages %}<a class="btn btn-secondary btn-small" href="{{ url_for('collections.index', page=page + 1) }}">Older →</a>{% endif %}
+        </nav>
+      {% endif %}
+    {% else %}
+      <p class="empty-state">No public collections yet. Be the first to <a href="{{ url_for('collections.new') }}">create one</a>.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

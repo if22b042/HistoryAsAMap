@@ -4,11 +4,12 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
-from haam import auth, events
+from haam import auth, collections_service, events
 from haam.dates import format_year
 from haam.events import EventData
 from haam.forms import ActionForm, EventForm, LoginForm
-from haam.models import Status
+from haam.extensions import db
+from haam.models import Collection, Status
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -112,3 +113,32 @@ def edit(event_id: int):
         suggested=events.suggested_tag_ids(event.year),
         action_form=ActionForm(),
     ), 400 if form.errors else 200
+
+
+# ------------------------------------------------------------ collections
+
+@bp.get("/collections")
+@auth.admin_required
+def collections():
+    items = collections_service.all_collections()
+    # Reported collections first, then most recently changed.
+    items.sort(key=lambda c: (not c.reports, not c.is_public), reverse=False)
+    return render_template("admin/collections.html", collections=items, action_form=ActionForm())
+
+
+@bp.post("/collections/<int:collection_id>/<any(hide, unhide, delete):action>")
+@auth.admin_required
+def moderate_collection(collection_id: int, action: str):
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    collection = db.session.get(Collection, collection_id)
+    if collection is None:
+        abort(404)
+    title = collection.title
+    if action == "delete":
+        collections_service.delete_collection(collection)
+        flash(f"Deleted collection “{title}”.", "success")
+    else:
+        collections_service.set_hidden(collection, action == "hide")
+        flash(f"{'Hid' if action == 'hide' else 'Restored'} collection “{title}”.", "success")
+    return redirect(url_for("admin.collections"))

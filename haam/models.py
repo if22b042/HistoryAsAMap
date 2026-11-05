@@ -120,6 +120,10 @@ class Event(db.Model):
     updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
 
     tags: Mapped[list[Tag]] = relationship(secondary=event_tags, order_by=Tag.start_year)
+    # Deleting an event also removes it from every collection that used it.
+    collection_entries: Mapped[list["CollectionEntry"]] = relationship(
+        back_populates="event", cascade="all, delete-orphan"
+    )
 
     @property
     def display_year(self) -> str:
@@ -144,3 +148,162 @@ class Event(db.Model):
             "category": self.category.value,
             "tags": [tag.id for tag in self.tags],
         }
+
+
+class Collection(db.Model):
+    """A personal map of entries, shared through secret links (no accounts).
+
+    ``view_token`` is part of the public share link. The edit link contains a
+    second, longer token of which only a SHA-256 hash is stored.
+    """
+
+    __tablename__ = "haam_collections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    view_token: Mapped[str] = mapped_column(String(40), unique=True)
+    edit_token_hash: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    is_public: Mapped[bool] = mapped_column(default=False)  # listed on the Collections page
+    is_hidden: Mapped[bool] = mapped_column(default=False)  # hidden by an editor after reports
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
+
+    entries: Mapped[list["CollectionEntry"]] = relationship(
+        back_populates="collection",
+        cascade="all, delete-orphan",
+        order_by="(CollectionEntry.position, CollectionEntry.id)",
+    )
+    reports: Mapped[list["CollectionReport"]] = relationship(
+        back_populates="collection", cascade="all, delete-orphan", order_by="CollectionReport.created_at.desc()"
+    )
+
+    @property
+    def all_wikipedia(self) -> bool:
+        """Every entry is backed by an English Wikipedia article."""
+        return bool(self.entries) and all(entry.has_wikipedia for entry in self.entries)
+
+    @property
+    def all_confirmed(self) -> bool:
+        """Every entry is an approved event from the main map."""
+        return bool(self.entries) and all(entry.is_confirmed for entry in self.entries)
+
+    @property
+    def year_span(self) -> str:
+        years = [entry.year for entry in self.entries]
+        if not years:
+            return ""
+        low, high = min(years), max(years)
+        return format_year(low) if low == high else f"{format_year(low)} – {format_year(high)}"
+
+
+class CollectionEntry(db.Model):
+    """One point in a collection: either a main-map event or a custom entry.
+
+    Custom entries live only inside their collection and are not reviewed.
+    For main-map events the event's own data is shown; only ``note`` is stored here.
+    """
+
+    __tablename__ = "haam_collection_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection_id: Mapped[int] = mapped_column(ForeignKey("haam_collections.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[int | None] = mapped_column(ForeignKey("haam_events.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(default=0)
+    note: Mapped[str] = mapped_column(Text, default="")
+
+    # Custom entries only:
+    custom_title: Mapped[str | None] = mapped_column(String(300))
+    custom_year: Mapped[int | None]
+    custom_date_label: Mapped[str | None] = mapped_column(String(120))
+    custom_summary: Mapped[str | None] = mapped_column(Text)
+    custom_lat: Mapped[float | None]
+    custom_lon: Mapped[float | None]
+    custom_category: Mapped[Category | None] = mapped_column(_enum_column(Category))
+    link: Mapped[str | None] = mapped_column(String(500))
+    # True when ``link`` points to an existing English Wikipedia article (checked on save).
+    wiki_verified: Mapped[bool] = mapped_column(default=False)
+
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+    collection: Mapped[Collection] = relationship(back_populates="entries")
+    event: Mapped[Event | None] = relationship(back_populates="collection_entries")
+
+    @property
+    def is_event(self) -> bool:
+        return self.event is not None
+
+    @property
+    def is_confirmed(self) -> bool:
+        return self.event is not None and self.event.status == Status.APPROVED
+
+    @property
+    def has_wikipedia(self) -> bool:
+        return self.event is not None or self.wiki_verified
+
+    @property
+    def title(self) -> str:
+        return self.event.title if self.event else (self.custom_title or "")
+
+    @property
+    def year(self) -> int:
+        return self.event.year if self.event else (self.custom_year or 0)
+
+    @property
+    def display_year(self) -> str:
+        return format_year(self.year)
+
+    @property
+    def date_label(self) -> str:
+        return self.event.date_label if self.event else (self.custom_date_label or "")
+
+    @property
+    def summary(self) -> str:
+        return self.event.summary if self.event else (self.custom_summary or "")
+
+    @property
+    def lat(self) -> float:
+        return self.event.lat if self.event else self.custom_lat
+
+    @property
+    def lon(self) -> float:
+        return self.event.lon if self.event else self.custom_lon
+
+    @property
+    def category(self) -> Category:
+        return self.event.category if self.event else (self.custom_category or Category.OTHER)
+
+    @property
+    def url(self) -> str | None:
+        return self.event.wiki_url if self.event else self.link
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "year": self.year,
+            "display_year": self.display_year,
+            "date": self.date_label,
+            "summary": self.summary,
+            "note": self.note,
+            "lat": self.lat,
+            "lon": self.lon,
+            "category": self.category.value,
+            "url": self.url,
+            "is_event": self.is_event,
+            "is_confirmed": self.is_confirmed,
+            "has_wikipedia": self.has_wikipedia,
+        }
+
+
+class CollectionReport(db.Model):
+    """A visitor's report about an inappropriate public collection."""
+
+    __tablename__ = "haam_collection_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection_id: Mapped[int] = mapped_column(ForeignKey("haam_collections.id", ondelete="CASCADE"), index=True)
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+    collection: Mapped[Collection] = relationship(back_populates="reports")

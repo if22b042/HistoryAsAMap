@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import text_field %}
+{% block title %}Edit entry{% endblock %}
+
+{% block head %}
+  <meta name="robots" content="noindex, nofollow">
+  {% if not entry.is_event %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page narrow">
+  <header class="page-header">
+    <p class="eyebrow"><a href="{{ url_for('collections.manage', view_token=collection.view_token, _anchor='entries') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ collection.title }}</a></p>
+    <h1>{{ entry.title }}</h1>
+    {% if entry.is_event %}
+      <p>This event comes from the main map, so its details can't be changed here – but you can write your own note about it.</p>
+    {% endif %}
+  </header>
+
+  <form class="card" method="post" novalidate>
+    {% if entry.is_event %}
+      {{ form.csrf_token }}
+      {{ text_field(form.note, icon='sticky-note', rows=5, autofocus=True) }}
+    {% else %}
+      {% include "collections/_custom_form.html" %}
+    {% endif %}
+    <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-save" aria-hidden="true"></i> Save</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {% if not entry.is_event %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script type="module" src="{{ url_for('static', filename='js/location-picker.js') }}"></script>
+  {% endif %}
+{% endblock %}

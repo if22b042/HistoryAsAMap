@@ -1,6 +1,7 @@
 """Application configuration, read from environment variables."""
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,10 +12,10 @@ DEFAULT_USER_AGENT = (
 )
 
 
-def _database_url() -> str:
-    url = os.environ.get("DATABASE_URL")
+def _database_url(env_var: str = "DATABASE_URL", default: str | None = None) -> str:
+    url = os.environ.get(env_var)
     if not url:
-        return f"sqlite:///{INSTANCE_DIR / 'haam.db'}"
+        return default or f"sqlite:///{INSTANCE_DIR / 'haam.db'}"
     # Heroku/Vercel/Neon style URLs: make SQLAlchemy use psycopg 3.
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
@@ -41,6 +42,8 @@ class Config:
     # Create tables / load tags on startup if missing (see haam/__init__.py).
     AUTO_SETUP_DATABASE = os.environ.get("AUTO_SETUP_DATABASE", "true").lower() == "true"
 
+    # Long-lived so browsers keep remembering the collections they can edit.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=365)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
@@ -54,7 +57,8 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     TESTING = True
     SECRET_KEY = "test-secret-key"
-    SQLALCHEMY_DATABASE_URI = "sqlite://"
+    # In-memory SQLite by default; CI also runs the suite on PostgreSQL.
+    SQLALCHEMY_DATABASE_URI = _database_url("TEST_DATABASE_URL", default="sqlite://")
     SQLALCHEMY_ENGINE_OPTIONS = {}
     WTF_CSRF_ENABLED = False
     SESSION_COOKIE_SECURE = False

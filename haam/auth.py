@@ -21,13 +21,14 @@ def check_credentials(username: str, password: str) -> bool:
 
 
 def log_in() -> None:
-    session.clear()
+    # Don't clear the whole session: it also remembers which collections this
+    # browser may edit (see haam.collections_service).
     session[SESSION_KEY] = True
     session.permanent = True
 
 
 def log_out() -> None:
-    session.clear()
+    session.pop(SESSION_KEY, None)
 
 
 def is_admin() -> bool:
