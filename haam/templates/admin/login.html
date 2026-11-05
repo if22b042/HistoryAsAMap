@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import text_field %}
+{% block title %}Log in{% endblock %}
+
+{% block content %}
+<div class="page narrow">
+  <header class="page-header"><h1>Editor login</h1></header>
+  <form class="card" method="post" novalidate>
+    {{ form.csrf_token }}
+    {{ text_field(form.username, icon='user', autocomplete='username', autofocus=True) }}
+    {{ text_field(form.password, icon='lock', autocomplete='current-password') }}
+    <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-sign-in-alt" aria-hidden="true"></i> Log in</button>
+  </form>
+</div>
+{% endblock %}

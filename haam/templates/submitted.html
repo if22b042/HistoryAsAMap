@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Thank you{% endblock %}
+
+{% block content %}
+<div class="page narrow">
+  <div class="card centered">
+    <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
+    <h1>Thank you!</h1>
+    <p><strong>{{ event.title }}</strong> ({{ event.year|year }}) has been submitted and will appear on the map once it has been reviewed.</p>
+    <div class="button-row">
+      <a class="btn btn-primary" href="{{ url_for('public.submit') }}"><i class="fas fa-plus" aria-hidden="true"></i> Add another event</a>
+      <a class="btn btn-secondary" href="{{ url_for('public.index') }}"><i class="fas fa-globe-europe" aria-hidden="true"></i> Back to the map</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
