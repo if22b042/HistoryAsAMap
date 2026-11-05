@@ -1,7 +1,5 @@
 Name: History As A Map (HAAM)
 
-REQ 1: Figure out how to handle multiple points on the map so it does not just become a massive cluster of all blue points
-
 FIX 1: why can it not read the year from https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest
 
 Mayor Expansions:
@@ -25,9 +23,3 @@ Think about a way to make tag selection more refined
 
 Testing:
 Check if order is correct of dates before date 0
-
-FrontEnd:
-Make it dark mode
-
-
-asdf
