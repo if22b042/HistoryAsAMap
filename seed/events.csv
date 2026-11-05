@@ -1,0 +1,75 @@
+url,category,status,year,lat,lon,tags
+https://en.wikipedia.org/wiki/Battle_of_Marathon,military,approved,,,,Greco-Persian Wars;Classical Greece
+https://en.wikipedia.org/wiki/Battle_of_Thermopylae,military,approved,,,,Greco-Persian Wars;Classical Greece
+https://en.wikipedia.org/wiki/Battle_of_Salamis,naval,approved,,,,Greco-Persian Wars;Classical Greece
+https://en.wikipedia.org/wiki/Battle_of_Gaugamela,military,approved,,,,Macedonian Empire;Hellenistic Period
+https://en.wikipedia.org/wiki/Battle_of_Cannae,military,approved,,,,Second Punic War;Roman Republic
+https://en.wikipedia.org/wiki/Battle_of_Zama,military,approved,,,,Second Punic War;Roman Republic
+https://en.wikipedia.org/wiki/Battle_of_Alesia,military,approved,,,,Late Roman Republic
+https://en.wikipedia.org/wiki/Battle_of_Actium,naval,approved,,,,Roman Civil Wars;Late Roman Republic
+https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest,military,approved,,,,Roman Empire;Pax Romana
+https://en.wikipedia.org/wiki/Eruption_of_Mount_Vesuvius_in_79_AD,other,approved,,,,Roman Empire;Pax Romana
+https://en.wikipedia.org/wiki/Battle_of_Red_Cliffs,military,approved,,,,Han Dynasty
+https://en.wikipedia.org/wiki/Battle_of_Adrianople,military,approved,,,,Roman Empire;Migration Period
+https://en.wikipedia.org/wiki/Battle_of_the_Catalaunian_Plains,military,approved,,,,Migration Period;Fall of the Western Roman Empire
+https://en.wikipedia.org/wiki/Battle_of_Tours,military,approved,,,,Umayyad Caliphate;Early Middle Ages
+https://en.wikipedia.org/wiki/Battle_of_Talas,military,pending,,,,Tang Dynasty;Abbasid Caliphate
+https://en.wikipedia.org/wiki/Battle_of_Hastings,military,approved,,,,Norman Conquest of England;High Middle Ages
+https://en.wikipedia.org/wiki/Battle_of_Manzikert,military,approved,,,,Byzantine Empire;High Middle Ages
+https://en.wikipedia.org/wiki/Siege_of_Jerusalem_(1099),military,approved,,,,First Crusade;Crusades
+https://en.wikipedia.org/wiki/Battle_of_Legnano,military,approved,,,,High Middle Ages
+https://en.wikipedia.org/wiki/Battle_of_Hattin,military,approved,,,,Third Crusade;Crusades
+https://en.wikipedia.org/wiki/Battle_of_Ain_Jalut,military,pending,,,,Mongol Empire;Mamluk Sultanate
+https://en.wikipedia.org/wiki/Battle_of_Bannockburn,military,approved,,,,Late Middle Ages
+https://en.wikipedia.org/wiki/Battle_of_Crécy,military,approved,,,,Hundred Years' War;Late Middle Ages
+https://en.wikipedia.org/wiki/Battle_of_Agincourt,military,approved,,,,Hundred Years' War;Late Middle Ages
+https://en.wikipedia.org/wiki/Fall_of_Constantinople,military,approved,,,,Ottoman Conquest of Constantinople;Byzantine Empire;Ottoman Expansion
+https://en.wikipedia.org/wiki/Treaty_of_Tordesillas,diplomatic,approved,,41.5003,-5.0002,Age of Discovery;Spanish Colonial Empire
+https://en.wikipedia.org/wiki/Peace_of_Augsburg,diplomatic,approved,,48.3705,10.8978,Protestant Reformation
+https://en.wikipedia.org/wiki/Battle_of_Lepanto,naval,approved,,,,Ottoman Empire;Counter-Reformation
+https://en.wikipedia.org/wiki/Spanish_Armada,naval,rejected,,,,Anglo-Spanish War
+https://en.wikipedia.org/wiki/Battle_of_White_Mountain,military,approved,,,,Thirty Years' War
+https://en.wikipedia.org/wiki/Great_Fire_of_London,other,approved,,,,
+https://en.wikipedia.org/wiki/Battle_of_Vienna,military,approved,,,,Great Turkish War;Ottoman Empire
+https://en.wikipedia.org/wiki/Battle_of_Blenheim,military,approved,,,,War of the Spanish Succession
+https://en.wikipedia.org/wiki/Battle_of_Poltava,military,approved,,,,Great Northern War
+https://en.wikipedia.org/wiki/1755_Lisbon_earthquake,other,approved,,,,Age of Enlightenment
+https://en.wikipedia.org/wiki/Battle_of_Plassey,military,approved,,,,Seven Years' War;British Empire Expansion
+https://en.wikipedia.org/wiki/Battle_of_the_Plains_of_Abraham,military,approved,,,,Seven Years' War
+https://en.wikipedia.org/wiki/Siege_of_Yorktown,military,approved,,,,American Revolutionary War;American Revolution
+https://en.wikipedia.org/wiki/Storming_of_the_Bastille,other,approved,,,,French Revolution
+https://en.wikipedia.org/wiki/Battle_of_Trafalgar,naval,approved,,,,Napoleonic Wars
+https://en.wikipedia.org/wiki/Battle_of_Austerlitz,military,approved,,,,Napoleonic Wars
+https://en.wikipedia.org/wiki/Battle_of_Borodino,military,approved,,,,Napoleonic Wars
+https://en.wikipedia.org/wiki/Battle_of_Waterloo,military,approved,,,,Napoleonic Wars
+https://en.wikipedia.org/wiki/Congress_of_Vienna,diplomatic,approved,,,,Napoleonic Era
+https://en.wikipedia.org/wiki/Battle_of_Navarino,naval,approved,,,,Greek War of Independence
+https://en.wikipedia.org/wiki/Battle_of_Solferino,military,approved,,,,Italian Unification
+https://en.wikipedia.org/wiki/Battle_of_Gettysburg,military,approved,,,,American Civil War
+https://en.wikipedia.org/wiki/Battle_of_Königgrätz,military,approved,,,,German Unification
+https://en.wikipedia.org/wiki/Battle_of_Sedan,military,approved,,,,Franco-Prussian War;German Unification
+https://en.wikipedia.org/wiki/Treaty_of_Frankfurt_(1871),diplomatic,approved,,50.1109,8.6821,Franco-Prussian War;German Unification
+https://en.wikipedia.org/wiki/Battle_of_Isandlwana,military,pending,,,,Zulu War;Scramble for Africa
+https://en.wikipedia.org/wiki/Battle_of_Adwa,military,approved,,,,Scramble for Africa
+https://en.wikipedia.org/wiki/Battle_of_Mukden,military,pending,,,,Russo-Japanese War
+https://en.wikipedia.org/wiki/Battle_of_Tsushima,naval,approved,,,,Russo-Japanese War
+https://en.wikipedia.org/wiki/Assassination_of_Archduke_Franz_Ferdinand,other,approved,,,,World War I
+https://en.wikipedia.org/wiki/Gallipoli_campaign,military,approved,,,,World War I
+https://en.wikipedia.org/wiki/Battle_of_Verdun,military,approved,,,,World War I;Western Front of World War I
+https://en.wikipedia.org/wiki/Battle_of_Jutland,naval,approved,,,,World War I
+https://en.wikipedia.org/wiki/Battle_of_the_Somme,military,approved,,,,World War I;Western Front of World War I
+https://en.wikipedia.org/wiki/Treaty_of_Versailles,diplomatic,approved,,48.8049,2.1204,World War I
+https://en.wikipedia.org/wiki/Battle_of_Britain,military,approved,,,,World War II
+https://en.wikipedia.org/wiki/Attack_on_Pearl_Harbor,naval,approved,,,,World War II;Pacific War
+https://en.wikipedia.org/wiki/Battle_of_Midway,naval,approved,,,,World War II;Pacific War
+https://en.wikipedia.org/wiki/Battle_of_Stalingrad,military,approved,,,,World War II;Eastern Front World War II
+https://en.wikipedia.org/wiki/Normandy_landings,military,approved,,,,World War II
+https://en.wikipedia.org/wiki/Yalta_Conference,diplomatic,approved,,,,World War II
+https://en.wikipedia.org/wiki/Trinity_(nuclear_test),scientific,approved,,,,World War II
+https://en.wikipedia.org/wiki/Potsdam_Conference,diplomatic,approved,,,,World War II;Cold War
+https://en.wikipedia.org/wiki/Treaty_of_Rome,diplomatic,approved,,41.8933,12.4829,Cold War
+https://en.wikipedia.org/wiki/Cuban_Missile_Crisis,diplomatic,approved,,,,Cold War
+https://en.wikipedia.org/wiki/Apollo_11,scientific,approved,,28.6083,-80.6041,Space Race;Cold War
+https://en.wikipedia.org/wiki/Chernobyl_disaster,scientific,approved,,,,Cold War
+https://en.wikipedia.org/wiki/Fall_of_the_Berlin_Wall,other,approved,,,,Cold War
+https://en.wikipedia.org/wiki/Search_for_the_Higgs_boson,scientific,rejected,2012,46.2338,6.0470,

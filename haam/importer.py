@@ -126,14 +126,25 @@ def region_titles(lat_min: float, lat_max: float, lon_min: float, lon_max: float
         lat += step
 
 
-def import_csv(path: str, *, approve: bool = False, report: Reporter = print) -> ImportStats:
-    """Import rows with columns: url, category (optional), year (optional), tags (optional, ``;``-separated).
+def _optional_float(value) -> float | None:
+    try:
+        return float(value) if str(value or "").strip() else None
+    except ValueError:
+        return None
 
-    Each row is looked up on Wikipedia; ``year`` overrides the extracted year.
+
+def import_csv(path: str, *, approve: bool = False, report: Reporter = print) -> ImportStats:
+    """Import rows with columns ``url`` and, all optional, ``category``, ``year``,
+    ``tags`` (``;``-separated), ``status`` (approved/pending/rejected) and ``lat``/``lon``.
+
+    Each row is looked up on Wikipedia. ``year`` and ``lat``/``lon`` override the
+    extracted values (useful for articles without coordinates, e.g. treaties).
+    Without a ``status`` column, rows are pending unless ``approve`` is set.
     """
     stats = ImportStats()
     tags_by_name = {t.name.lower(): t.id for t in db.session.scalars(select(Tag))}
     client = get_client()
+    default_status = Status.APPROVED if approve else Status.PENDING
     with open(path, newline="", encoding="utf-8") as handle:
         for line_no, row in enumerate(csv.DictReader(handle), start=2):
             title = title_from_url(row.get("url", ""))
@@ -142,12 +153,29 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
                 stats.rejected += 1
                 continue
             try:
+                status = Status((row.get("status") or default_status.value).strip().lower())
+            except ValueError:
+                report(f"line {line_no}: unknown status {row.get('status')!r}, skipped")
+                stats.rejected += 1
+                continue
+            if find_existing(canonical_url(title)):
+                stats.skipped += 1
+                continue
+            try:
                 article = client.fetch_article(title)
             except WikipediaError:
                 stats.failed += 1
                 continue
-            if article is None or article.lat is None or article.lon is None:
-                report(f"line {line_no}: article missing or without coordinates")
+            if article is None:
+                report(f"line {line_no}: article {title!r} does not exist")
+                stats.rejected += 1
+                continue
+            lat = _optional_float(row.get("lat"))
+            lon = _optional_float(row.get("lon"))
+            if lat is None or lon is None:
+                lat, lon = article.lat, article.lon
+            if lat is None or lon is None:
+                report(f"line {line_no}: {article.title} has no coordinates, add lat/lon columns")
                 stats.rejected += 1
                 continue
             if find_existing(article.url, article.page_id):
@@ -165,10 +193,10 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
             tag_ids = [tags_by_name[n.strip().lower()] for n in (row.get("tags") or "").split(";")
                        if n.strip().lower() in tags_by_name]
             data = EventData(article.title, year, article.date_label, article.summary or article.title,
-                             article.lat, article.lon, category, tag_ids)
-            create_event(article, data, status=Status.APPROVED if approve else Status.PENDING)
+                             lat, lon, category, tag_ids)
+            create_event(article, data, status=status)
             stats.added += 1
-            report(f"+ {article.title}")
+            report(f"+ {article.title} [{status.value}]")
     return stats
 
 

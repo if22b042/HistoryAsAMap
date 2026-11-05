@@ -1,0 +1,35 @@
+collection,type,url,title,year,date,category,lat,lon,description,note
+greece,event,https://en.wikipedia.org/wiki/Battle_of_Marathon,,,,,,,,The run to Athens that gave the marathon its name.
+greece,event,https://en.wikipedia.org/wiki/Battle_of_Thermopylae,,,,,,,,The 300 – and many more Greeks than the films show.
+greece,event,https://en.wikipedia.org/wiki/Battle_of_Salamis,,,,,,,,Themistocles lures the Persian fleet into the straits.
+greece,event,https://en.wikipedia.org/wiki/Battle_of_Gaugamela,,,,,,,,Alexander breaks the Persian Empire.
+rome,custom,https://en.wikipedia.org/wiki/Founding_of_Rome,Founding of Rome,753 BC,21 April 753 BC,other,41.8892,12.4875,"According to legend, Romulus founds Rome on the Palatine Hill.","Legend, not history – but every Roman knew the date."
+rome,event,https://en.wikipedia.org/wiki/Battle_of_Cannae,,,,,,,,Hannibal's masterpiece of encirclement.
+rome,event,https://en.wikipedia.org/wiki/Battle_of_Zama,,,,,,,,Scipio finally defeats Hannibal.
+rome,event,https://en.wikipedia.org/wiki/Battle_of_Actium,,,,,,,,Octavian wins; the Republic becomes an Empire.
+rome,custom,https://en.wikipedia.org/wiki/Colosseum,Colosseum opens,AD 80,,other,41.8902,12.4922,Emperor Titus inaugurates the Flavian Amphitheatre with 100 days of games.,Go early in the morning to avoid the queues.
+rome,event,https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest,,,,,,,,Three legions lost; Rome stops at the Rhine.
+rome,custom,https://en.wikipedia.org/wiki/Sack_of_Rome_(410),Sack of Rome,AD 410,24 August AD 410,military,41.9028,12.4964,The Visigoths under Alaric sack Rome for the first time in 800 years.,
+sea,event,https://en.wikipedia.org/wiki/Battle_of_Salamis,,,,,,,,
+sea,event,https://en.wikipedia.org/wiki/Battle_of_Lepanto,,,,,,,,The last great battle between galleys.
+sea,event,https://en.wikipedia.org/wiki/Battle_of_Trafalgar,,,,,,,,Nelson's victory – and death.
+sea,event,https://en.wikipedia.org/wiki/Battle_of_Tsushima,,,,,,,,
+sea,event,https://en.wikipedia.org/wiki/Battle_of_Midway,,,,,,,,Turning point of the Pacific War.
+sea,custom,https://www.rmg.co.uk/national-maritime-museum,National Maritime Museum,1934,,naval,51.4810,-0.0052,Britain's national museum of seafaring in Greenwich.,Has a whole gallery on Trafalgar.
+grandpa,custom,,Landing in Sicily,1943,10 July 1943,military,37.0755,14.2400,Grandpa landed near Gela with his unit.,From his first letter home.
+grandpa,custom,https://en.wikipedia.org/wiki/Battle_of_Monte_Cassino,Battle of Monte Cassino,1944,,military,41.4875,13.8133,Months of fighting around the abbey.,He wrote that he could see the abbey from his trench.
+grandpa,event,https://en.wikipedia.org/wiki/Normandy_landings,,,,,,,,"His brother, uncle Joe, was on Omaha Beach."
+grandpa,custom,,Crossing the Rhine at Remagen,1945,7 March 1945,military,50.5794,7.2311,The bridge was still standing when they arrived.,
+grandpa,custom,,Home again,1945,December 1945,other,45.4642,9.1900,Back in Milan for Christmas.,The last letter in the box.
+interrail,custom,https://en.wikipedia.org/wiki/Sagrada_Fam%C3%ADlia,Sagrada Família,1882,19 March 1882,other,41.4036,2.1744,Construction of Gaudí's basilica begins; it is still unfinished.,Book tickets online!
+interrail,custom,,Night train to Lyon,2024,2 July 2024,other,45.7640,4.8357,"Not historic, but unforgettable.",
+interrail,event,https://en.wikipedia.org/wiki/Storming_of_the_Bastille,,,,,,,,Saw the column at Place de la Bastille.
+interrail,custom,https://en.wikipedia.org/wiki/Charles_Bridge,Charles Bridge,1357,9 July 1357,other,50.0865,14.4114,Charles IV lays the foundation stone of the bridge in Prague.,Best at sunrise.
+interrail,custom,https://www.berlin.de/en/attractions-and-sights/3560266-3104052-brandenburg-gate.en.html,Brandenburg Gate,1791,,other,52.5163,13.3777,"Berlin's neoclassical gate, completed in 1791.",
+interrail,event,https://en.wikipedia.org/wiki/Fall_of_the_Berlin_Wall,,,,,,,,Walked along the East Side Gallery.
+disasters,event,https://en.wikipedia.org/wiki/Eruption_of_Mount_Vesuvius_in_79_AD,,,,,,,,Pompeii and Herculaneum were buried.
+disasters,event,https://en.wikipedia.org/wiki/Great_Fire_of_London,,,,,,,,London rebuilt in brick and stone.
+disasters,event,https://en.wikipedia.org/wiki/1755_Lisbon_earthquake,,,,,,,,Lisbon was rebuilt on a grid – the Pombaline style.
+disasters,event,https://en.wikipedia.org/wiki/Chernobyl_disaster,,,,,,,,
+spam,custom,https://example.com/deals,asdf,2024,,other,0,0,Amazing offer!!!,Click here
+spam,custom,https://example.com/buy,Buy now,2024,,other,10,10,Limited time only.,

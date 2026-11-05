@@ -102,6 +102,20 @@ PostgreSQL with `TEST_DATABASE_URL=postgresql://user:pass@host/db pytest`.
 The app applies pending migrations and loads the tags automatically when it starts
 (disable with `AUTO_SETUP_DATABASE=false`); `flask db upgrade` does the same by hand.
 
+## Demo data
+
+`seed/` contains CSV files with 74 real events (most approved, some pending or rejected,
+so the review queue has work in it) and 8 collections in different states: public,
+unlisted, reported, hidden by an editor, and empty. Load them all with:
+
+```bash
+python seed_demo.py
+```
+
+Events are looked up live on Wikipedia, so the first run takes a couple of minutes;
+running it again skips what already exists. Collection share and edit links are
+printed and saved to `instance/demo-links.txt`.
+
 ## Commands
 
 | Command | Purpose |
@@ -111,7 +125,7 @@ The app applies pending migrations and loads the tags automatically when it star
 | `flask --app haam haam hash-password` | Generate `ADMIN_PASSWORD_HASH` |
 | `flask --app haam haam import-titles "Battle of Hastings" "Peace of Westphalia"` | Import articles by title |
 | `flask --app haam haam import-region --lat 35 70 --lon -10 40 --max-new 100` | Find dated events by geosearch in a lat/lon box |
-| `flask --app haam haam import-csv examples/events.csv` | Import a CSV (`url,category,year,tags`) |
+| `flask --app haam haam import-csv seed/events.csv` | Import a CSV (`url`, optional `category,status,year,lat,lon,tags`) |
 | `flask --app haam haam import-legacy` | Copy data from the previous version's `entries`/`locations` tables |
 
 Imports go into the review queue as **pending**; add `--approve` to publish directly.

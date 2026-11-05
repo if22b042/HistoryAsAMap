@@ -88,3 +88,22 @@ def test_import_legacy(app):
     assert [t.name for t in event.tags] == ["World War II"]
 
     assert importer.import_legacy(report=quiet).skipped == 1
+
+
+def test_import_csv_status_and_coordinate_override(wiki, tmp_path):
+    wiki.add("Treaty of Versailles", year=1919, lat=None, lon=None)
+    wiki.add("Spanish Armada", year=1588)
+    path = tmp_path / "events.csv"
+    path.write_text(
+        "url,category,status,year,lat,lon,tags\n"
+        "https://en.wikipedia.org/wiki/Treaty_of_Versailles,diplomatic,approved,,48.8049,2.1204,\n"
+        "https://en.wikipedia.org/wiki/Spanish_Armada,naval,rejected,,,,\n"
+        "https://en.wikipedia.org/wiki/Spanish_Armada,naval,bogus,,,,\n",
+        encoding="utf-8",
+    )
+    stats = importer.import_csv(str(path), report=quiet)
+    assert (stats.added, stats.rejected) == (2, 1)
+    versailles = db.session.scalar(db.select(Event).filter_by(title="Treaty of Versailles"))
+    assert (versailles.status, versailles.lat, versailles.lon) == (Status.APPROVED, 48.8049, 2.1204)
+    armada = db.session.scalar(db.select(Event).filter_by(title="Spanish Armada"))
+    assert armada.status == Status.REJECTED
