@@ -5,65 +5,102 @@
 <div class="map-page">
   <div class="map-content">
     <!-- Filters Panel -->
-    <div class="filters-panel" id="filters-panel">
-      <button class="collapse-filters-btn" onclick="toggleFilters()" title="Collapse Filters">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
+    <div class="filters-panel group hover:shadow-2xl transition-all duration-300" id="filters-panel">
+      <button class="collapse-filters-btn group" onclick="toggleFilters()" title="Collapse Filters">
+        <i class="fas fa-chevron-left group-hover:scale-110 transition-transform"></i>
       </button>
       <!-- Year Filter -->
       <div class="year-filter">
-        <h3>Filter by Year</h3>
+        <h3 class="flex items-center gap-2">
+          <i class="fas fa-calendar text-blue-500"></i>
+          Filter by Year
+        </h3>
         <div class="year-slider">
           <div id="year-slider"></div>
           <div class="year-values">
-            <span id="year-from-display"></span> – <span id="year-to-display"></span>
+            <span id="year-from-display" class="font-semibold"></span> – <span id="year-to-display" class="font-semibold"></span>
           </div>
         </div>
       </div>
 
       <!-- Category Filter -->
       <div class="category-filter">
-        <h3>Filter by Category</h3>
+        <h3 class="flex items-center gap-2">
+          <i class="fas fa-filter text-blue-500"></i>
+          Filter by Category
+        </h3>
         <div class="category-buttons">
-          <button class="category-btn active" data-category="all">All</button>
-          <button class="category-btn" data-category="military">Military</button>
-          <button class="category-btn" data-category="diplomatic">Diplomatic</button>
-          <button class="category-btn" data-category="naval">Naval</button>
-          <button class="category-btn" data-category="scientific">Scientific</button>
-          <button class="category-btn" data-category="other">Other</button>
+          <button class="category-btn active group" data-category="all">
+            <i class="fas fa-globe mr-1"></i>All
+          </button>
+          <button class="category-btn group" data-category="military">
+            <i class="fas fa-crosshairs mr-1"></i>Military
+          </button>
+          <button class="category-btn group" data-category="diplomatic">
+            <i class="fas fa-handshake mr-1"></i>Diplomatic
+          </button>
+          <button class="category-btn group" data-category="naval">
+            <i class="fas fa-ship mr-1"></i>Naval
+          </button>
+          <button class="category-btn group" data-category="scientific">
+            <i class="fas fa-flask mr-1"></i>Scientific
+          </button>
+          <button class="category-btn group" data-category="other">
+            <i class="fas fa-ellipsis-h mr-1"></i>Other
+          </button>
         </div>
       </div>
     </div>
 
     <!-- Map -->
-    <div id="map"></div>
+    <div id="map" class="animate-fade-in"></div>
   </div>
 
   <!-- Mobile Filters Section -->
   <div class="mobile-filters-section">
-    <h3>Filter Events</h3>
+    <h3 class="flex items-center gap-2 text-blue-600 font-semibold">
+      <i class="fas fa-filter"></i>
+      Filter Events
+    </h3>
     <!-- Year Filter -->
     <div style="margin-bottom: 1.5rem;">
-      <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #2d3748;">Filter by Year</h4>
+      <h4 class="flex items-center gap-2 mb-3 text-gray-700 font-medium">
+        <i class="fas fa-calendar text-blue-500"></i>
+        Filter by Year
+      </h4>
       <div class="year-slider">
         <div id="year-slider-mobile"></div>
         <div class="year-values">
-          <span id="year-from-display-mobile"></span> – <span id="year-to-display-mobile"></span>
+          <span id="year-from-display-mobile" class="font-semibold"></span> – <span id="year-to-display-mobile" class="font-semibold"></span>
         </div>
       </div>
     </div>
 
     <!-- Category Filter -->
     <div>
-      <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #2d3748;">Filter by Category</h4>
+      <h4 class="flex items-center gap-2 mb-3 text-gray-700 font-medium">
+        <i class="fas fa-tags text-blue-500"></i>
+        Filter by Category
+      </h4>
       <div class="category-buttons">
-        <button class="category-btn active" data-category="all">All</button>
-        <button class="category-btn" data-category="military">Military</button>
-        <button class="category-btn" data-category="diplomatic">Diplomatic</button>
-        <button class="category-btn" data-category="naval">Naval</button>
-        <button class="category-btn" data-category="scientific">Scientific</button>
-        <button class="category-btn" data-category="other">Other</button>
+        <button class="category-btn active group" data-category="all">
+          <i class="fas fa-globe mr-1"></i>All
+        </button>
+        <button class="category-btn group" data-category="military">
+          <i class="fas fa-crosshairs mr-1"></i>Military
+        </button>
+        <button class="category-btn group" data-category="diplomatic">
+          <i class="fas fa-handshake mr-1"></i>Diplomatic
+        </button>
+        <button class="category-btn group" data-category="naval">
+          <i class="fas fa-ship mr-1"></i>Naval
+        </button>
+        <button class="category-btn group" data-category="scientific">
+          <i class="fas fa-flask mr-1"></i>Scientific
+        </button>
+        <button class="category-btn group" data-category="other">
+          <i class="fas fa-ellipsis-h mr-1"></i>Other
+        </button>
       </div>
     </div>
   </div>
@@ -71,38 +108,47 @@
   <!-- Events List Section -->
   <div class="events-list-section" id="events-section">
     <div class="events-header">
-      <h2>All Historical Events</h2>
-      <p>Browse through the complete timeline of historical events</p>
+      <h2 class="bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent font-bold">All Historical Events</h2>
+      <p class="text-gray-600">Browse through the complete timeline of historical events</p>
     </div>
     
     <!-- Search Bar -->
     <div class="search-container">
-      <input type="text" id="search-input" class="search-input" placeholder="Search events by title, description, or year...">
+      <div class="relative">
+        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        <input type="text" id="search-input" class="search-input pl-12" placeholder="Search events by title, description, or year...">
+      </div>
     </div>
     
     <!-- Tag Filter -->
     <div class="tag-filter-container">
-      <select id="tag-filter" class="tag-filter-select">
-        <option value="">All Tags</option>
-      </select>
+      <div class="relative">
+        <i class="fas fa-tag absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        <select id="tag-filter" class="tag-filter-select pl-12">
+          <option value="">All Tags</option>
+        </select>
+      </div>
     </div>
     
     <div class="events-grid" id="events-grid">
       {% for entry in entries %}
-        <div class="event-card" data-year="{{ entry.year }}" data-category="{{ entry.category or 'other' }}" data-tags="{{ entry.tags|join(',') if entry.tags else '' }}" onclick="showEventFromList({{ loop.index0 }})">
-          <div class="event-card-year">{{ entry.year|format_year }}</div>
-          <div class="event-card-category">{{ entry.category|title or 'Other' }}</div>
-          <div class="event-card-title">{{ entry.title or "Untitled" }}</div>
+        <div class="event-card group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1" data-year="{{ entry.year }}" data-category="{{ entry.category or 'other' }}" data-tags="{{ entry.tags|join(',') if entry.tags else '' }}" onclick="showEventFromList({{ loop.index0 }})">
+          <div class="event-card-year bg-gradient-to-r from-blue-500 to-blue-700">{{ entry.year|format_year }}</div>
+          <div class="event-card-category bg-gradient-to-r from-purple-500 to-purple-700">{{ entry.category|title or 'Other' }}</div>
+          <div class="event-card-title group-hover:text-blue-600 transition-colors">{{ entry.title or "Untitled" }}</div>
           <div class="event-card-description">{{ entry.first_paragraph }}</div>
           {% if entry.tags %}
             <div class="event-card-tags">
               {% for tag in entry.tags %}
-                <span class="tag-badge">{{ tag }}</span>
+                <span class="tag-badge bg-gradient-to-r from-gray-200 to-gray-300 group-hover:from-blue-200 group-hover:to-blue-300 transition-all">{{ tag }}</span>
               {% endfor %}
             </div>
           {% endif %}
           {% if entry.link %}
-            <a href="{{ entry.link }}" target="_blank" rel="noopener" class="event-card-link" onclick="event.stopPropagation()">Read more →</a>
+            <a href="{{ entry.link }}" target="_blank" rel="noopener" class="event-card-link group" onclick="event.stopPropagation()">
+              <i class="fas fa-external-link-alt mr-1 group-hover:scale-110 transition-transform"></i>
+              Read more →
+            </a>
           {% endif %}
         </div>
       {% endfor %}
@@ -111,25 +157,34 @@
 </div>
 
 <!-- Sidebar -->
-<div class="sidebar" id="sidebar">
+<div class="sidebar group hover:shadow-2xl transition-all duration-300" id="sidebar">
   <div class="sidebar-header">
-    <h2>Event Details</h2>
-    <button class="close-btn" onclick="closeSidebar()">×</button>
+    <h2 class="flex items-center gap-2">
+      <i class="fas fa-info-circle"></i>
+      Event Details
+    </h2>
+    <button class="close-btn group" onclick="closeSidebar()">
+      <i class="fas fa-times group-hover:scale-110 transition-transform"></i>
+    </button>
   </div>
   <div class="sidebar-content" id="sidebar-content"></div>
 </div>
 
 <!-- Scroll to Events Button -->
-<button class="scroll-to-events-btn" onclick="scrollToEvents()">View All Events</button>
+<button class="scroll-to-events-btn group" onclick="scrollToEvents()">
+  <i class="fas fa-list mr-2 group-hover:scale-110 transition-transform"></i>
+  View All Events
+</button>
 
 <!-- Heatmap Toggle Button -->
-<button class="heatmap-toggle-btn" id="heatmap-toggle" onclick="toggleHeatmap()">Heatmap</button>
+<button class="heatmap-toggle-btn group" id="heatmap-toggle" onclick="toggleHeatmap()">
+  <i class="fas fa-fire mr-2 group-hover:scale-110 transition-transform"></i>
+  Heatmap
+</button>
 
 <!-- Toggle Filters Button -->
-<button class="toggle-filters-btn" id="toggle-filters-btn" onclick="toggleFilters()" title="Show Filters">
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="9 18 15 12 9 6"></polyline>
-  </svg>
+<button class="toggle-filters-btn group" id="toggle-filters-btn" onclick="toggleFilters()" title="Show Filters">
+  <i class="fas fa-chevron-right group-hover:scale-110 transition-transform"></i>
 </button>
 
 <!-- Dependencies -->
