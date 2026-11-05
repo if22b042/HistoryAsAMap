@@ -51,9 +51,10 @@ def create_app(config_name: str | None = None) -> Flask:
     csrf.init_app(app)
 
     from haam import cli
-    from haam.views import admin, api, public
+    from haam.views import admin, api, collections, public
 
     app.register_blueprint(public.bp)
+    app.register_blueprint(collections.bp)
     app.register_blueprint(api.bp)
     app.register_blueprint(admin.bp)
     cli.register(app)
@@ -74,23 +75,29 @@ def create_app(config_name: str | None = None) -> Flask:
 
 
 def _ensure_database(app: Flask) -> None:
-    """Create the schema and load the tags the first time the app starts.
+    """Apply pending migrations and load the tags when the app starts.
 
-    Without this a fresh database (local or on Vercel) has no tables and every
-    page that reads events fails. Cheap when already set up: one inspection query.
+    Without this a fresh or outdated database (local or on Vercel) lacks tables
+    and pages fail. Cheap when up to date: one query for the current revision.
     """
+    from alembic.migration import MigrationContext
+    from alembic.script import ScriptDirectory
     from flask_migrate import upgrade
-    from sqlalchemy import inspect, select
+    from sqlalchemy import select
     from sqlalchemy.exc import SQLAlchemyError
 
-    from haam.extensions import db
+    from haam.extensions import db, migrate
     from haam.importer import seed_tags
     from haam.models import Tag
 
     with app.app_context():
         try:
-            if "haam_events" not in inspect(db.engine).get_table_names():
-                logger.info("Database has no HAAM tables yet; running migrations.")
+            config = migrate.get_config(str(MIGRATIONS_DIR))
+            newest = set(ScriptDirectory.from_config(config).get_heads())
+            with db.engine.connect() as connection:
+                current = set(MigrationContext.configure(connection).get_current_heads())
+            if current != newest:
+                logger.info("Database schema is out of date; running migrations.")
                 upgrade(directory=str(MIGRATIONS_DIR))
             if db.session.scalar(select(Tag.id).limit(1)) is None:
                 logger.info("Loaded %d tags.", seed_tags())

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_badges, collection_badges, category_badge, copy_field %}
+{% block title %}{{ collection.title }}{% endblock %}
+
+{% block head %}
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+{% endblock %}
+
+{% block content %}
+<div class="page">
+  {% if collection.is_hidden %}
+    <div class="alert alert-warning" role="status">An editor has hidden this collection from other visitors.</div>
+  {% endif %}
+
+  <header class="page-header page-header-row">
+    <div>
+      <p class="eyebrow"><a href="{{ url_for('collections.index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Collections</a></p>
+      <h1>{{ collection.title }} {{ collection_badges(collection) }}</h1>
+      <p class="collection-meta">
+        {{ collection.entries|length }} {{ 'entry' if collection.entries|length == 1 else 'entries' }}{% if collection.year_span %} · {{ collection.year_span }}{% endif %}
+        · {% if collection.is_public %}<i class="fas fa-globe" aria-hidden="true"></i> public{% else %}<i class="fas fa-lock" aria-hidden="true"></i> unlisted{% endif %}
+      </p>
+    </div>
+    {% if editable %}
+      <a class="btn btn-primary" href="{{ url_for('collections.manage', view_token=collection.view_token) }}"><i class="fas fa-edit" aria-hidden="true"></i> Edit collection</a>
+    {% endif %}
+  </header>
+
+  {% if collection.description %}<div class="card collection-description">{{ collection.description }}</div>{% endif %}
+
+  {% if collection.entries %}
+    <div class="collection-layout">
+      <div id="collection-map" class="collection-map" role="region" aria-label="Map of this collection"></div>
+      <ol class="entry-list" id="entry-list">
+        {% for entry in collection.entries %}
+          <li class="card entry-card" id="entry-{{ entry.id }}">
+            <button type="button" class="entry-card-main" data-entry-id="{{ entry.id }}">
+              <span class="entry-card-meta">
+                <span class="year-pill">{{ entry.date_label or entry.display_year }}</span>
+                {{ category_badge(entry.category) }}
+                {{ entry_badges(entry) }}
+              </span>
+              <span class="entry-card-title">{{ entry.title }}</span>
+            </button>
+            {% if entry.summary %}<p class="entry-card-summary">{{ entry.summary }}</p>{% endif %}
+            {% if entry.note %}<blockquote class="entry-note"><i class="fas fa-sticky-note" aria-hidden="true"></i> {{ entry.note }}</blockquote>{% endif %}
+            {% if entry.url %}
+              <a class="entry-link" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer nofollow ugc">
+                {% if entry.has_wikipedia %}Read on Wikipedia{% else %}Source{% endif %} <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+              </a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    </div>
+  {% else %}
+    <p class="empty-state">This collection has no entries yet.
+      {% if editable %}<a href="{{ url_for('collections.manage', view_token=collection.view_token) }}">Add some</a>.{% endif %}</p>
+  {% endif %}
+
+  <section class="card share-card">
+    <h2><i class="fas fa-share-alt" aria-hidden="true"></i> Share</h2>
+    {{ copy_field('share-url', 'Share link (view only)', share_url) }}
+  </section>
+
+  {% if collection.is_public and not editable %}
+    <details class="card report-card">
+      <summary><i class="fas fa-flag" aria-hidden="true"></i> Report this collection</summary>
+      <form method="post" action="{{ url_for('collections.report', view_token=collection.view_token) }}">
+        {{ report_form.csrf_token }}
+        <label class="form-label" for="{{ report_form.reason.id }}">{{ report_form.reason.label.text }}</label>
+        {{ report_form.reason(class_='form-input', rows=3, maxlength=500) }}
+        <button class="btn btn-danger btn-small" type="submit">Send report</button>
+      </form>
+    </details>
+  {% endif %}
+
+  {% if editable %}
+    <form class="forget-form" method="post" action="{{ url_for('collections.forget', view_token=collection.view_token) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="link-button" type="submit">Stop remembering edit access in this browser</button>
+    </form>
+  {% endif %}
+</div>
+
+{# Data for the map; tojson escapes <, > and & so this cannot break out of the tag. #}
+<script type="application/json" id="collection-data">{{ entries_data|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="{{ url_for('static', filename='js/copy.js') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='js/collection-map.js') }}"></script>
+{% endblock %}

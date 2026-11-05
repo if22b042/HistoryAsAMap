@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% from "_macros.html" import text_field, field_errors, entry_badges, collection_badges, copy_field %}
+{% block title %}Edit {{ collection.title }}{% endblock %}
+
+{% block head %}
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+{% endblock %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header page-header-row">
+    <div>
+      <h1>{{ collection.title }} {{ collection_badges(collection) }}</h1>
+      <p>Editing. Changes are saved as you submit each form.</p>
+    </div>
+    <a class="btn btn-secondary" href="{{ url_for('collections.view', view_token=collection.view_token) }}"><i class="fas fa-eye" aria-hidden="true"></i> View collection</a>
+  </header>
+
+  <section class="card links-card">
+    <h2><i class="fas fa-link" aria-hidden="true"></i> Your links</h2>
+    {{ copy_field('share-url', 'Share link (view only)', share_url, 'Give this to anyone you want to show the collection to.') }}
+    {% if edit_url %}
+      {{ copy_field('edit-url', 'Edit link – keep it private', edit_url,
+                    'Anyone with this link can change or delete the collection. It is remembered in this browser, but save it (e.g. as a bookmark) to edit from elsewhere. We cannot recover it.') }}
+    {% endif %}
+  </section>
+
+  <div class="manage-grid">
+    <div class="manage-main">
+      <section class="card" id="entries">
+        <h2><i class="fas fa-list" aria-hidden="true"></i> Entries ({{ collection.entries|length }})</h2>
+        {% if not collection.entries %}<p class="empty-state">No entries yet. Add some on the right.</p>{% endif %}
+        <ol class="manage-entries">
+          {% for entry in collection.entries %}
+            <li class="manage-entry">
+              <div>
+                <span class="year-pill">{{ entry.display_year }}</span>
+                <strong>{{ entry.title }}</strong> {{ entry_badges(entry) }}
+                {% if entry.note %}<p class="form-hint"><i class="fas fa-sticky-note" aria-hidden="true"></i> {{ entry.note|truncate(120) }}</p>{% endif %}
+              </div>
+              <div class="button-row">
+                <a class="btn btn-small btn-secondary" href="{{ url_for('collections.edit_entry', view_token=collection.view_token, entry_id=entry.id) }}">
+                  <i class="fas fa-edit" aria-hidden="true"></i> {{ 'Note' if entry.is_event else 'Edit' }}
+                </a>
+                <form method="post" action="{{ url_for('collections.delete_entry', view_token=collection.view_token, entry_id=entry.id) }}"
+                      data-confirm="Remove “{{ entry.title }}” from this collection?">
+                  {{ action_form.csrf_token }}
+                  <button class="btn btn-small btn-danger" type="submit"><i class="fas fa-trash" aria-hidden="true"></i> Remove</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2><i class="fas fa-cog" aria-hidden="true"></i> Settings</h2>
+        <form method="post" action="{{ url_for('collections.settings', view_token=collection.view_token) }}" novalidate>
+          {{ settings_form.csrf_token }}
+          {{ text_field(settings_form.title, icon='heading') }}
+          {{ text_field(settings_form.description, icon='align-left', rows=4) }}
+          <div class="form-group checkbox-group">
+            {{ settings_form.is_public() }} {{ settings_form.is_public.label }}
+          </div>
+          <button class="btn btn-primary" type="submit">Save settings</button>
+        </form>
+      </section>
+
+      <section class="card danger-card">
+        <h2><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Delete</h2>
+        <form method="post" action="{{ url_for('collections.delete', view_token=collection.view_token) }}"
+              data-confirm="Delete “{{ collection.title }}” and all its entries permanently?">
+          {{ action_form.csrf_token }}
+          <button class="btn btn-danger" type="submit"><i class="fas fa-trash" aria-hidden="true"></i> Delete this collection</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="manage-side">
+      <section class="card" id="add-event">
+        <h2><i class="fas fa-globe-europe" aria-hidden="true"></i> Add an event from the main map</h2>
+        <form method="post" action="{{ url_for('collections.add_event', view_token=collection.view_token) }}" novalidate data-event-picker>
+          {{ event_form.csrf_token }}
+          <div class="form-group {{ 'has-error' if event_form.event_id.errors }}">
+            <label class="form-label" for="event-search">Search confirmed events</label>
+            <input id="event-search" class="form-input" type="search" placeholder="e.g. Hastings, 1815, Rome…" autocomplete="off">
+            <div class="event-results" aria-live="polite"></div>
+            {{ event_form.event_id(type='hidden') }}
+            <p class="form-hint chosen-event">No event chosen.</p>
+            {{ field_errors(event_form.event_id) }}
+          </div>
+          {{ text_field(event_form.note, icon='sticky-note', rows=2, placeholder='Optional note') }}
+          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-plus" aria-hidden="true"></i> Add event</button>
+        </form>
+      </section>
+
+      <section class="card" id="add-custom">
+        <h2><i class="fas fa-pen" aria-hidden="true"></i> Add your own entry</h2>
+        <p class="form-hint">Anything you like – it only appears in this collection and is not reviewed.</p>
+        <form method="post" action="{{ url_for('collections.add_custom', view_token=collection.view_token) }}#add-custom" novalidate>
+          {% with form = custom_form %}{% include "collections/_custom_form.html" %}{% endwith %}
+          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-plus" aria-hidden="true"></i> Add entry</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="{{ url_for('static', filename='js/copy.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='js/location-picker.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/event-picker.js') }}"></script>
+{% endblock %}

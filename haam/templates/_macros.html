@@ -84,3 +84,41 @@
 {% macro category_badge(category) %}
   <span class="badge badge-{{ category.value }}">{{ category.label }}</span>
 {% endmacro %}
+
+{# ★ = backed by an English Wikipedia article; ✔ = approved event from the main map. #}
+{% macro entry_badges(entry) %}
+  {% if entry.has_wikipedia %}<span class="trust trust-wiki" title="Backed by a Wikipedia article"><i class="fas fa-star" aria-hidden="true"></i><span class="sr-only">Wikipedia article</span></span>{% endif %}
+  {% if entry.is_confirmed %}<span class="trust trust-confirmed" title="Confirmed event from the main map"><i class="fas fa-check-circle" aria-hidden="true"></i><span class="sr-only">Confirmed event</span></span>
+  {% elif not entry.is_event %}<span class="badge badge-custom" title="Added by the collection's author, not reviewed">custom</span>{% endif %}
+{% endmacro %}
+
+{% macro collection_badges(collection) %}
+  {% if collection.all_wikipedia %}<span class="trust trust-wiki" title="Every entry has a Wikipedia article"><i class="fab fa-wikipedia-w" aria-hidden="true"></i><span class="sr-only">All entries from Wikipedia</span></span>{% endif %}
+  {% if collection.all_confirmed %}<span class="trust trust-confirmed" title="Every entry is a confirmed event from the main map"><i class="fas fa-certificate" aria-hidden="true"></i><span class="sr-only">All entries confirmed</span></span>{% endif %}
+{% endmacro %}
+
+{% macro collection_card(collection, href) %}
+  <a class="card collection-card" href="{{ href }}">
+    <span class="collection-card-head">
+      <span class="collection-card-title">{{ collection.title }}</span>
+      <span class="collection-card-badges">{{ collection_badges(collection) }}</span>
+    </span>
+    <span class="collection-card-meta">
+      {{ collection.entries|length }} {{ 'entry' if collection.entries|length == 1 else 'entries' }}{% if collection.year_span %} · {{ collection.year_span }}{% endif %}
+      {% if not collection.is_public %} · <i class="fas fa-lock" aria-hidden="true"></i> unlisted{% endif %}
+      {% if collection.is_hidden %} · <span class="badge badge-warning">hidden by an editor</span>{% endif %}
+    </span>
+    {% if collection.description %}<span class="collection-card-desc">{{ collection.description|truncate(180) }}</span>{% endif %}
+  </a>
+{% endmacro %}
+
+{% macro copy_field(id, label, value, hint=None) %}
+  <div class="form-group">
+    <label class="form-label" for="{{ id }}">{{ label }}</label>
+    <div class="copy-row">
+      <input id="{{ id }}" class="form-input" type="text" value="{{ value }}" readonly>
+      <button class="btn btn-secondary" type="button" data-copy="#{{ id }}"><i class="fas fa-copy" aria-hidden="true"></i> Copy</button>
+    </div>
+    {% if hint %}<p class="form-hint">{{ hint }}</p>{% endif %}
+  </div>
+{% endmacro %}

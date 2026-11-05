@@ -16,13 +16,32 @@ Anyone can suggest an event; an editor reviews it before it appears on the map.
 
 The site never creates events on its own. Bulk imports are manual commands (see below).
 
+## Map collections
+
+Anyone can build a personal map at **Collections** (`/collections`), without an account:
+
+- Add **confirmed events** from the main map, or **your own entries** (title, year,
+  place picked on a map, description, category, optional link). Own entries are not
+  reviewed and only appear inside that collection.
+- Write a description for the collection and a note on every entry.
+- Creating a collection gives two links: a **share link** (view only) and a secret
+  **edit link**. The edit link is remembered in the browser that opened it; only a
+  hash of it is stored, so it cannot be recovered if lost.
+- Collections marked public are listed on the Collections page right away. Visitors
+  can report them; editors hide or delete them under **Review → Review collections**.
+
+Trust marks: ★ on an entry means it is backed by an English Wikipedia article (always
+true for main-map events; checked against Wikipedia when an own entry's link is saved).
+✔ marks confirmed main-map events. A collection shows the Wikipedia badge when every
+entry has an article, and the certificate badge when every entry is a confirmed event.
+
 ## Project layout
 
 ```
 haam/
   __init__.py       create_app(): config, extensions, blueprints, security headers
   config.py         settings from environment variables
-  models.py         Event, Tag (tables prefixed haam_)
+  models.py         Event, Tag, Collection, CollectionEntry (tables prefixed haam_)
   events.py         business logic: preview, submit, update, moderate
   wikipedia.py      Wikipedia + Wikidata client, URL canonicalisation
   dates.py          year/date parsing and formatting (negative years = BC)
@@ -32,7 +51,8 @@ haam/
   forms.py          WTForms forms (CSRF-protected)
   cli.py            `flask haam ...` commands
   data/tags.py      curated list of ~340 historical periods/conflicts
-  views/            public pages, admin pages, JSON API
+  collections_service.py  map collections: secret links, entries, reports
+  views/            public pages, collections, admin pages, JSON API
   templates/        Jinja templates
   static/           CSS and JavaScript (no build step)
 migrations/         Alembic database migrations
@@ -74,6 +94,14 @@ Run the tests:
 pytest
 ```
 
+GitHub Actions (`.github/workflows/tests.yml`) runs pyflakes and the test suite on every
+push and pull request, on SQLite (Python 3.11 and 3.12) and on PostgreSQL 16, and checks
+that the migrations apply, downgrade and match the models. Run the suite against your own
+PostgreSQL with `TEST_DATABASE_URL=postgresql://user:pass@host/db pytest`.
+
+The app applies pending migrations and loads the tags automatically when it starts
+(disable with `AUTO_SETUP_DATABASE=false`); `flask db upgrade` does the same by hand.
+
 ## Commands
 
 | Command | Purpose |
@@ -102,19 +130,19 @@ start time, which filters out towns, buildings and other places.
 | `HAAM_USER_AGENT` | project URL | Sent to Wikipedia and Nominatim, as their policies require |
 | `GEOCODING_ENABLED` | `true` | Look up each event's country |
 | `SESSION_COOKIE_SECURE` | `true` | Set `false` only for plain-HTTP setups |
+| `AUTO_SETUP_DATABASE` | `true` | Apply migrations and load tags on startup |
 
 ## Deploying to Vercel
 
 1. In Vercel → Settings → Environment Variables set `SECRET_KEY`, `DATABASE_URL`
    and `ADMIN_PASSWORD_HASH` (never commit `.env` files).
-2. Run the migrations against the production database from your machine:
+2. Push. Vercel serves `api/index.py`; on its first start the app creates its tables
+   and loads the tags.
+3. Once, to keep the events of the old version, run from your machine:
    ```bash
    set DATABASE_URL=postgresql://...   # macOS/Linux: export DATABASE_URL=...
-   flask --app haam db upgrade
-   flask --app haam haam seed-tags
-   flask --app haam haam import-legacy   # once, to keep the events of the old version
+   flask --app haam haam import-legacy
    ```
-3. Push. Vercel serves `api/index.py`.
 
 The old tables (`entries`, `locations`, `tags`, `entry_tags`) are only read by
 `import-legacy`; drop them by hand once you're happy with the migrated data.

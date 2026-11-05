@@ -1,9 +1,13 @@
 """HTML forms (Flask-WTF handles CSRF protection for all of them)."""
 
+from urllib.parse import urlparse
+
 from flask_wtf import FlaskForm
 from wtforms import (
+    BooleanField,
     FloatField,
     HiddenField,
+    IntegerField,
     PasswordField,
     SelectField,
     SelectMultipleField,
@@ -48,6 +52,52 @@ class EventForm(FlaskForm):
     lon = FloatField("Longitude", validators=[InputRequired(), NumberRange(-180, 180)])
     category = SelectField("Category", choices=CATEGORY_CHOICES, validators=[DataRequired()])
     tags = SelectMultipleField("Tags", coerce=int, validate_choice=False)
+
+
+def _web_link(form, field):
+    value = (field.data or "").strip()
+    if not value:
+        return
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc or any(c.isspace() for c in value):
+        raise ValidationError("Enter a full web address starting with http:// or https://.")
+
+
+class CollectionForm(FlaskForm):
+    title = StringField("Title", validators=[DataRequired(), Length(max=200)])
+    description = TextAreaField("Description", validators=[Length(max=5000)])
+    is_public = BooleanField("List this collection on the public Collections page")
+
+
+class CustomEntryForm(FlaskForm):
+    """An entry that exists only inside one collection (not reviewed)."""
+
+    title = StringField("Title", validators=[DataRequired(), Length(max=300)])
+    year = YearField("Year")
+    date_label = StringField("Date", validators=[Length(max=120)])
+    category = SelectField("Category", choices=CATEGORY_CHOICES, default="other")
+    lat = FloatField("Latitude", validators=[InputRequired(message="Click the map to choose a place."),
+                                             NumberRange(-90, 90)])
+    lon = FloatField("Longitude", validators=[InputRequired(message="Click the map to choose a place."),
+                                              NumberRange(-180, 180)])
+    summary = TextAreaField("Description", validators=[Length(max=5000)])
+    link = StringField("Source link", validators=[Length(max=500), _web_link])
+    note = TextAreaField("Your note", validators=[Length(max=2000)])
+
+
+class EventEntryForm(FlaskForm):
+    """Add an approved event from the main map to a collection."""
+
+    event_id = IntegerField(validators=[InputRequired(message="Choose an event from the list.")])
+    note = TextAreaField("Your note", validators=[Length(max=2000)])
+
+
+class NoteForm(FlaskForm):
+    note = TextAreaField("Your note", validators=[Length(max=2000)])
+
+
+class ReportForm(FlaskForm):
+    reason = TextAreaField("What is wrong with this collection?", validators=[DataRequired(), Length(max=500)])
 
 
 class LoginForm(FlaskForm):
