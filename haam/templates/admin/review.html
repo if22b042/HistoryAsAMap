@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import category_badge %}
+{% block title %}Review{% endblock %}
+
+{% macro action_button(event, action, label, icon, style) %}
+  <form method="post" action="{{ url_for('admin.moderate', event_id=event.id, action=action) }}"
+        {% if action == 'delete' %}data-confirm="Delete “{{ event.title }}” permanently?"{% endif %}>
+    {{ action_form.csrf_token }}
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <button class="btn btn-small {{ style }}" type="submit"><i class="fas fa-{{ icon }}" aria-hidden="true"></i> {{ label }}</button>
+  </form>
+{% endmacro %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header">
+    <h1>Review events</h1>
+  </header>
+
+  <nav class="tabs" aria-label="Event status">
+    {% for s in counts %}
+      <a class="tab {{ 'active' if s == status }}" href="{{ url_for('admin.review', status=s.value) }}"
+         {% if s == status %}aria-current="page"{% endif %}>
+        {{ s.value|capitalize }} <span class="tab-count">{{ counts[s] }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+
+  {% if not events %}
+    <p class="empty-state">No {{ status.value }} events.</p>
+  {% endif %}
+
+  <div class="review-list">
+    {% for event in events %}
+      <article class="card review-card">
+        <header>
+          <span class="year-pill">{{ event.year|year }}</span>
+          {{ category_badge(event.category) }}
+          {% if event.modified %}<span class="badge badge-warning" title="The submitter changed data extracted from Wikipedia">edited</span>{% endif %}
+          <h2>{{ event.title }}</h2>
+        </header>
+        <p class="review-meta">
+          {% if event.date_label %}{{ event.date_label }} · {% endif %}
+          {{ '%.4f'|format(event.lat) }}, {{ '%.4f'|format(event.lon) }}{% if event.country %} · {{ event.country }}{% endif %}
+          · submitted {{ event.created_at.strftime('%d %b %Y') }}
+        </p>
+        <p>{{ event.summary }}</p>
+        {% if event.tags %}
+          <p class="tag-list">{% for tag in event.tags %}<span class="tag">{{ tag.name }}</span>{% endfor %}</p>
+        {% endif %}
+        <p class="review-links">
+          <a href="{{ event.wiki_url }}" target="_blank" rel="noopener"><i class="fab fa-wikipedia-w" aria-hidden="true"></i> Wikipedia</a>
+          <a href="{{ event.google_maps_url }}" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Google Maps</a>
+        </p>
+        <div class="button-row">
+          {% if event.status.value != 'approved' %}{{ action_button(event, 'approve', 'Approve', 'check', 'btn-success') }}{% endif %}
+          {% if event.status.value != 'rejected' %}{{ action_button(event, 'reject', 'Reject', 'ban', 'btn-secondary') }}{% endif %}
+          <a class="btn btn-small btn-secondary" href="{{ url_for('admin.edit', event_id=event.id) }}"><i class="fas fa-edit" aria-hidden="true"></i> Edit</a>
+          {{ action_button(event, 'delete', 'Delete', 'trash', 'btn-danger') }}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
+{% endblock %}

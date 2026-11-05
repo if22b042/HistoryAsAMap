@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}About{% endblock %}
+
+{% block content %}
+<div class="page narrow">
+  <header class="page-header"><h1>About</h1></header>
+
+  <article class="card info-card">
+    <i class="fas fa-lightbulb info-icon" aria-hidden="true"></i>
+    <div>
+      <h2>The idea</h2>
+      <p>I wanted to display historical data in a different way. Instead of reading through long articles or scrolling through timelines, you can see history on a map. This lets you explore how events connect across geography and time, making history feel more tangible and easier to understand.</p>
+    </div>
+  </article>
+
+  <article class="card info-card">
+    <i class="fas fa-cogs info-icon" aria-hidden="true"></i>
+    <div>
+      <h2>How it works</h2>
+      <p>Events come from English Wikipedia articles. Anyone can suggest one: the site reads the article's date, location and introduction, the contributor checks them, and an editor reviews the event before it is published. The goal is a growing, reliable map of history that anyone can explore.</p>
+    </div>
+  </article>
+
+  <article class="card info-card">
+    <i class="fas fa-user info-icon" aria-hidden="true"></i>
+    <div>
+      <h2>About me</h2>
+      <p>Hi, I'm Alessandro Vilucchi, a computer science student who has always been massively interested in history. This project combines my passion for technology with my love for history, and I hope others will find it as interesting as I do.</p>
+    </div>
+  </article>
+
+  <article class="card info-card">
+    <i class="fas fa-envelope info-icon" aria-hidden="true"></i>
+    <div>
+      <h2>Contact</h2>
+      <p><a href="mailto:alessandrovilucchiprojects@gmail.com">alessandrovilucchiprojects@gmail.com</a></p>
+    </div>
+  </article>
+</div>
+{% endblock %}

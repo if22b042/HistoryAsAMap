@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Map{% endblock %}
+{% block body_class %}page-map{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" crossorigin="anonymous">
+{% endblock %}
+
+{% block content %}
+<section class="map-layout">
+  <aside class="filters" id="filters" aria-label="Filters">
+    <div class="filters-header">
+      <h2><i class="fas fa-filter" aria-hidden="true"></i> Filters</h2>
+      <button class="icon-btn filters-close" type="button" aria-label="Hide filters" data-toggle-filters>
+        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <div class="filter-group">
+      <h3>Years</h3>
+      <div id="year-slider" class="year-slider"></div>
+      <p class="year-values"><span id="year-from"></span> – <span id="year-to"></span></p>
+    </div>
+
+    <div class="filter-group">
+      <h3>Category</h3>
+      <div class="category-buttons" role="group" aria-label="Category">
+        <button type="button" class="category-btn active" data-category="all" aria-pressed="true">
+          <i class="fas fa-globe" aria-hidden="true"></i> All
+        </button>
+        {% set icons = {'military': 'crosshairs', 'diplomatic': 'handshake', 'naval': 'ship', 'scientific': 'flask', 'other': 'ellipsis-h'} %}
+        {% for category in categories %}
+          <button type="button" class="category-btn" data-category="{{ category.value }}" aria-pressed="false">
+            <span class="dot dot-{{ category.value }}" aria-hidden="true"></span>
+            <i class="fas fa-{{ icons[category.value] }}" aria-hidden="true"></i> {{ category.label }}
+          </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <h3><label for="tag-filter">Tag</label></h3>
+      <select id="tag-filter" class="form-input"><option value="">All tags</option></select>
+    </div>
+
+    <div class="filter-group">
+      <h3><label for="search">Search</label></h3>
+      <input id="search" class="form-input" type="search" placeholder="Title, description or year…" autocomplete="off">
+    </div>
+
+    <div class="filter-group filter-actions">
+      <button type="button" id="heatmap-toggle" class="btn btn-secondary" aria-pressed="false">
+        <i class="fas fa-fire" aria-hidden="true"></i> <span>Heatmap</span>
+      </button>
+      <p class="result-count" id="result-count" aria-live="polite"></p>
+    </div>
+  </aside>
+
+  <button class="show-filters-btn" type="button" aria-label="Show filters" data-toggle-filters>
+    <i class="fas fa-sliders-h" aria-hidden="true"></i>
+  </button>
+
+  <div id="map" class="map" role="region" aria-label="Map of historical events"></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="Event details" hidden>
+    <div class="sidebar-header">
+      <h2><i class="fas fa-info-circle" aria-hidden="true"></i> Event details</h2>
+      <button class="icon-btn" type="button" id="sidebar-close" aria-label="Close details">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="sidebar-content" id="sidebar-content"></div>
+  </aside>
+
+  <a class="scroll-to-list btn btn-primary" href="#events"><i class="fas fa-list" aria-hidden="true"></i> All events</a>
+</section>
+
+<section class="events-section" id="events">
+  <header class="section-header">
+    <h1>All historical events</h1>
+    <p>Browse the timeline; the filters above apply here too.</p>
+  </header>
+  <div class="events-grid" id="events-grid" aria-live="polite">
+    <p class="empty-state">Loading events…</p>
+  </div>
+</section>
+
+<template id="event-card-template">
+  <article class="event-card">
+    <button type="button" class="event-card-main">
+      <span class="event-card-meta"><span class="year-pill"></span><span class="badge"></span></span>
+      <span class="event-card-title"></span>
+      <span class="event-card-summary"></span>
+      <span class="event-card-tags"></span>
+    </button>
+    <a class="event-card-link" target="_blank" rel="noopener">Read on Wikipedia <i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+  </article>
+</template>
+{% endblock %}
+
+
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js" crossorigin="anonymous"></script>
+  <script type="module" src="{{ url_for('static', filename='js/map.js') }}"></script>
+{% endblock %}

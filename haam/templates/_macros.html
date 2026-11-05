@@ -1,0 +1,86 @@
+{% macro field_errors(field) %}
+  {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+{% endmacro %}
+
+{% macro text_field(field, hint=None, icon=None) %}
+  <div class="form-group {{ 'has-error' if field.errors }}">
+    <label class="form-label" for="{{ field.id }}">
+      {% if icon %}<i class="fas fa-{{ icon }}" aria-hidden="true"></i>{% endif %}
+      {{ field.label.text }}{% if field.flags.required %} <span class="required">*</span>{% endif %}
+    </label>
+    {{ field(class_='form-input', **kwargs) }}
+    {% if hint %}<p class="form-hint">{{ hint }}</p>{% endif %}
+    {{ field_errors(field) }}
+  </div>
+{% endmacro %}
+
+{#
+  The event form used both for submissions (preview) and for admin edits.
+  `tags` is the full tag list, `suggested` the ids of tags covering the event's year.
+#}
+{% macro event_form(form, action, submit_label, tags, suggested) %}
+<form class="card event-form" method="post" action="{{ action }}" novalidate>
+  {{ form.csrf_token }}
+  {{ form.url }}
+
+  {{ text_field(form.title, icon='heading', required=True) }}
+
+  <div class="form-row">
+    {{ text_field(form.year, hint='For example 1066, 44 BC or AD 9. For multi-year events, use the first year.', icon='calendar', required=True) }}
+    {{ text_field(form.date_label, hint='Shown as written, e.g. "14 October 1066".', icon='calendar-alt') }}
+  </div>
+
+  <div class="form-group {{ 'has-error' if form.category.errors }}">
+    <label class="form-label" for="{{ form.category.id }}"><i class="fas fa-tag" aria-hidden="true"></i> Category <span class="required">*</span></label>
+    {{ form.category(class_='form-input') }}
+    {{ field_errors(form.category) }}
+  </div>
+
+  <div class="form-row">
+    {{ text_field(form.lat, icon='globe', inputmode='decimal', required=True) }}
+    {{ text_field(form.lon, icon='globe-americas', inputmode='decimal', required=True) }}
+  </div>
+  {% if form.lat.data is not none and form.lon.data is not none %}
+    <p class="form-hint">
+      <a href="https://www.google.com/maps?q={{ form.lat.data }},{{ form.lon.data }}" target="_blank" rel="noopener">
+        <i class="fas fa-map-marker-alt" aria-hidden="true"></i> Check this location on Google Maps
+      </a>
+    </p>
+  {% endif %}
+
+  {{ text_field(form.summary, icon='align-left', rows=6, required=True) }}
+
+  <div class="form-group">
+    <label class="form-label" for="{{ form.tags.id }}"><i class="fas fa-tags" aria-hidden="true"></i> Historical tags</label>
+    {% set selected = form.tags.data or [] %}
+    <select id="{{ form.tags.id }}" name="{{ form.tags.name }}" class="form-input tag-select" multiple size="8" data-tag-picker>
+      {% if suggested %}
+        <optgroup label="Matching the year">
+          {% for tag in tags if tag.id in suggested %}
+            <option value="{{ tag.id }}" {{ 'selected' if tag.id in selected }} data-suggested>{{ tag.name }} ({{ tag.display_range }})</option>
+          {% endfor %}
+        </optgroup>
+      {% endif %}
+      <optgroup label="All tags">
+        {% for tag in tags if tag.id not in suggested %}
+          <option value="{{ tag.id }}" {{ 'selected' if tag.id in selected }}>{{ tag.name }} ({{ tag.display_range }})</option>
+        {% endfor %}
+      </optgroup>
+    </select>
+    <p class="form-hint">Hold Ctrl (⌘ on Mac) to select several.</p>
+  </div>
+
+  <p class="form-hint">
+    <i class="fab fa-wikipedia-w" aria-hidden="true"></i>
+    Source: <a href="{{ form.url.data }}" target="_blank" rel="noopener">{{ form.url.data }}</a>
+  </p>
+
+  <button class="btn btn-primary btn-block" type="submit">
+    <i class="fas fa-check-circle" aria-hidden="true"></i> {{ submit_label }}
+  </button>
+</form>
+{% endmacro %}
+
+{% macro category_badge(category) %}
+  <span class="badge badge-{{ category.value }}">{{ category.label }}</span>
+{% endmacro %}

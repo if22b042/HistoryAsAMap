@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import text_field, field_errors %}
+{% block title %}Add an event{% endblock %}
+
+{% block content %}
+<div class="page narrow">
+  <header class="page-header">
+    <h1>Add a historical event</h1>
+    <p>Suggest an event from English Wikipedia. We extract the details, you check them, and an editor reviews the event before it appears on the map.</p>
+  </header>
+
+  <div class="card info-card">
+    <i class="fas fa-info-circle info-icon" aria-hidden="true"></i>
+    <ol class="steps">
+      <li>Paste the link of an English Wikipedia article about an event.</li>
+      <li>Check the extracted year, place and description, and correct them if needed.</li>
+      <li>Submit. The event is published after review.</li>
+    </ol>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-error" role="alert">
+      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> {{ error }}
+      {% if existing %}<a href="{{ url_for('public.index', event=existing.id) }}">See it on the map</a>.{% endif %}
+    </div>
+  {% endif %}
+
+  <form class="card" method="post" action="{{ url_for('public.preview') }}" novalidate>
+    {{ form.csrf_token }}
+    {{ text_field(form.url, icon='link', type='url', placeholder='https://en.wikipedia.org/wiki/Battle_of_Hastings', required=True, autofocus=True) }}
+    <div class="form-group">
+      <label class="form-label" for="{{ form.category.id }}"><i class="fas fa-tag" aria-hidden="true"></i> Category</label>
+      {{ form.category(class_='form-input') }}
+      <p class="form-hint">You can still change it on the next step.</p>
+      {{ field_errors(form.category) }}
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">
+      <i class="fas fa-search" aria-hidden="true"></i> Preview the event
+    </button>
+  </form>
+</div>
+{% endblock %}

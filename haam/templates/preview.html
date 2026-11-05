@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import event_form %}
+{% block title %}Check the event{% endblock %}
+
+{% block content %}
+<div class="page narrow">
+  <header class="page-header">
+    <h1>Check the event</h1>
+    <p>These details were extracted from Wikipedia. Correct anything that is wrong, then submit it for review.</p>
+  </header>
+
+  {% if form.errors %}
+    <div class="alert alert-error" role="alert">Please fix the highlighted fields.</div>
+  {% endif %}
+  {% if not form.year.data %}
+    <div class="alert alert-warning" role="status">We could not find a year in the article. Please enter it.</div>
+  {% endif %}
+  {% if form.lat.data is none or form.lon.data is none %}
+    <div class="alert alert-warning" role="status">This article has no coordinates. Please enter where the event took place.</div>
+  {% endif %}
+
+  {{ event_form(form, url_for('public.confirm'), 'Submit for review', tags, suggested) }}
+  <p class="form-footer"><a href="{{ url_for('public.submit') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Use a different article</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module" src="{{ url_for('static', filename='js/tag-picker.js') }}"></script>
+{% endblock %}
