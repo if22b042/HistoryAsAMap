@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import text
 from werkzeug.security import generate_password_hash
 
 from haam import create_app
@@ -54,6 +55,10 @@ def app():
         yield app
         _db.session.remove()
         _db.drop_all()
+        # Tables some tests create by hand (legacy schema); matters on PostgreSQL.
+        with _db.engine.begin() as conn:
+            for table in ("locations", "entries"):
+                conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
 
 
 @pytest.fixture
