@@ -231,3 +231,25 @@ def test_event_list_is_gzipped(client, make_event):
     assert response.headers["Content-Encoding"] == "gzip"
     assert len(json.loads(gzip.decompress(response.data))) == 30
     assert "Content-Encoding" not in client.get("/api/events").headers
+
+
+def test_pick_introduction_skips_template_leftovers():
+    from haam.wikidata import pick_introduction
+    extract = "|campaignbox = campaignbox =\n> 600 killed, 3,000 captured\nEdit\n" \
+              "This page is partially a translation of the French version\n" \
+              "The Battle of Thouars was fought in 1793 during the War in the Vendée.\nMore."
+    assert pick_introduction(extract) == "The Battle of Thouars was fought in 1793 during the War in the Vendée."
+    assert pick_introduction("Edit\n") == ""
+
+
+@pytest.mark.parametrize("title, summary, problem", [
+    ("Timeline of terrorism in Egypt (2013–present)", "This is a timeline.", "list or timeline"),
+    ("List of battles", "Battles.", "list or timeline"),
+    ("Battle of Cellorigo", "Battle of Cellorigo may refer to either of two battles that took place at Cellorigo:",
+     "disambiguation"),
+    ("Battle of Hastings", "The Battle of Hastings was fought on 14 October 1066.", None),
+])
+def test_article_problem(title, summary, problem):
+    from haam.wikidata import article_problem
+    result = article_problem(title, summary)
+    assert (result is None) if problem is None else (problem in result)

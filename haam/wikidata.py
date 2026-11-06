@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import re
 import time
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
@@ -117,9 +118,10 @@ def validate(candidate: Candidate, *, today: date | None = None,
     5. it has Earth coordinates – its own (P625) or those of its location /
        place of creation / place of formation.
 
-    A sixth rule needs the Wikipedia API and is applied in the export: the
-    article the Wikipedia link leads to (after redirects) must belong to the
-    same Wikidata item.
+    Two more rules need the Wikipedia article and are applied in the export:
+    the article the link leads to (after redirects) must belong to the same
+    Wikidata item (6), and must not be a list, timeline or disambiguation
+    page (7).
     """
     today = today or date.today()
     if not candidate.title:
@@ -270,11 +272,37 @@ class WikidataClient:
                 final = renamed.get(renamed.get(title, title), renamed.get(title, title))
                 page = pages.get(final)
                 if page:
-                    extract = page.get("extract") or ""
-                    summary = next((p.strip() for p in extract.split("\n") if p.strip()), "")
+                    summary = pick_introduction(page.get("extract") or "")
                     result[title] = (page["pageid"], page["title"], summary,
                                      page.get("pageprops", {}).get("wikibase_item"))
         return result
+
+
+_JUNK_LINE = re.compile(
+    r"^\s*([|>=*{}#\[\]（(]|edit$)|page is partially a translation|campaignbox", re.IGNORECASE)
+_NOT_AN_ARTICLE_TITLE = re.compile(r"^(list|lists|timeline|outline|index) of\b", re.IGNORECASE)
+
+
+def pick_introduction(extract: str) -> str:
+    """First paragraph of an intro extract that reads like prose.
+
+    Plain-text extracts sometimes start with infobox or template leftovers
+    ("|campaignbox = ...", "> 600 killed", "Edit"), which must be skipped.
+    """
+    paragraphs = [p.strip() for p in extract.split("\n") if p.strip()]
+    for paragraph in paragraphs:
+        if len(paragraph) >= 40 and not _JUNK_LINE.search(paragraph):
+            return paragraph
+    return ""
+
+
+def article_problem(title: str, summary: str) -> str | None:
+    """Reasons an article is not about a single event, judged from its text."""
+    if _NOT_AN_ARTICLE_TITLE.search(title):
+        return "Wikipedia article is a list or timeline"
+    if re.search(r"\bmay (also )?refer to\b", summary[:200], re.IGNORECASE):
+        return "Wikipedia article is a disambiguation page"
+    return None
 
 
 def chunks(items: list, size: int) -> Iterator[list]:
@@ -388,6 +416,9 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
         elif verdict.ok and intro[3] and intro[3] != candidate.qid:
             # Rule 6: the article we end up on must be about this very item.
             verdict = Verdict(False, f"Wikipedia link leads to another topic: {intro[1]} ({intro[3]})")
+        elif verdict.ok and article_problem(intro[1], intro[2]):
+            # Rule 7: and it must be a normal article, not a list or disambiguation page.
+            verdict = Verdict(False, article_problem(intro[1], intro[2]))
         if not verdict.ok:
             stats.reject(verdict.reason)
             rejected_csv.writerow({"wikidata_id": candidate.qid, "title": candidate.title or "",
