@@ -25,7 +25,9 @@ const state = {
   yearFrom: -Infinity,
   yearTo: Infinity,
   category: "all",
-  tagId: null,
+  tagIds: [], // selected tags (see "tags" below)
+  tagMode: "any", // an event needs "any" or "all" of them
+  tagCounts: new Map(), // tag id -> events matching the other filters
   query: "",
   heatmap: false,
   colorByYear: false,
@@ -327,7 +329,7 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
     const tags = el("p", "tag-list");
     event.tags.forEach((tagId) => {
       const tag = state.tagsById.get(tagId);
-      if (tag) tags.append(el("span", "tag", tag.name));
+      if (tag) tags.append(tagButton(tag));
     });
     parts.push(tags);
   }
@@ -472,27 +474,182 @@ function searchScore(event) {
   return score;
 }
 
-function matches(event) {
+// ------------------------------------------------------------------- tags
+// Several tags can be selected (shown as chips); an event needs any or all of
+// them. The selection lives in the page address (?tag=12&tag=34&tagmode=all),
+// so a filtered map can be shared and the browser's Back button undoes a change.
+
+const hasTags = () => state.tagIds.length > 0;
+
+function tagMatch(event) {
+  if (!state.tagIds.length) return true;
+  return state.tagMode === "all"
+    ? state.tagIds.every((id) => event.tags.includes(id))
+    : state.tagIds.some((id) => event.tags.includes(id));
+}
+
+/** "Napoleonic Wars", "Seven Years' War / American Revolutionary War" or "3 tags". */
+function tagNames() {
+  const names = state.tagIds.map((id) => state.tagsById.get(id)?.name).filter(Boolean);
+  if (names.length > 2) return `${names.length} tags`;
+  return names.join(state.tagMode === "all" ? " & " : " / ");
+}
+
+function tagsFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    ids: params.getAll("tag").map(Number).filter((id) => state.tagsById.has(id)),
+    mode: params.get("tagmode") === "all" ? "all" : "any",
+  };
+}
+
+function syncTagUrl(push) {
+  const url = new URL(window.location);
+  url.searchParams.delete("tag");
+  url.searchParams.delete("tagmode");
+  state.tagIds.forEach((id) => url.searchParams.append("tag", id));
+  if (state.tagMode === "all" && state.tagIds.length > 1) url.searchParams.set("tagmode", "all");
+  if (url.href === window.location.href) return;
+  history[push ? "pushState" : "replaceState"]({ tags: state.tagIds, mode: state.tagMode }, "", url);
+}
+
+function setTags(ids, { push = true } = {}) {
+  state.tagIds = [...new Set(ids)].filter((id) => state.tagsById.has(id));
+  renderTagChips();
+  syncTagUrl(push);
+  refilter();
+}
+
+const addTag = (id) => setTags([...state.tagIds, id]);
+const removeTag = (id) => setTags(state.tagIds.filter((t) => t !== id));
+const onlyTag = (id) => setTags([id]);
+
+function setTagMode(mode) {
+  if (mode === state.tagMode) return;
+  state.tagMode = mode;
+  renderTagChips();
+  syncTagUrl(true);
+  refilter();
+}
+
+window.addEventListener("popstate", () => {
+  const { ids, mode } = tagsFromUrl();
+  state.tagMode = mode;
+  setTags(ids, { push: false });
+});
+
+/** A tag as a button: click shows only that tag, Ctrl/Shift-click adds it to the selection. */
+function tagButton(tag) {
+  const button = el("button", "tag tag-btn", tag.name);
+  button.type = "button";
+  const selected = state.tagIds.includes(tag.id);
+  button.classList.toggle("tag-selected", selected);
+  button.setAttribute("aria-pressed", String(selected));
+  button.title = `Show only events tagged “${tag.name}” (Ctrl- or Shift-click to add it to the selected tags)`;
+  button.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (e.ctrlKey || e.metaKey || e.shiftKey) addTag(tag.id);
+    else onlyTag(tag.id);
+  });
+  return button;
+}
+
+/** The selected tags as chips (in the filter panel and above the event list). */
+function renderTagChips() {
+  syncTagSearch();
+  document.querySelectorAll("[data-tag-chips]").forEach((box) => {
+    box.hidden = !hasTags();
+    if (!hasTags()) {
+      box.replaceChildren();
+      return;
+    }
+    const chips = state.tagIds.map((id) => {
+      const tag = state.tagsById.get(id);
+      const chip = el("span", "tag-chip");
+      chip.append(el("span", "tag-chip-name", tag.name), el("span", "tag-chip-years", tag.display_range));
+      const remove = el("button", "tag-chip-remove", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Remove the tag ${tag.name}`);
+      remove.addEventListener("click", () => removeTag(id));
+      chip.append(remove);
+      return chip;
+    });
+    const tools = el("div", "tag-chip-tools");
+    if (state.tagIds.length > 1) {
+      const mode = el("div", "tag-mode");
+      mode.setAttribute("role", "group");
+      mode.setAttribute("aria-label", "How several tags combine");
+      [["any", "Any of them"], ["all", "All of them"]].forEach(([value, label]) => {
+        const b = el("button", "tag-mode-btn", label);
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(state.tagMode === value));
+        b.classList.toggle("active", state.tagMode === value);
+        b.title = value === "any" ? "Events with at least one of the tags" : "Only events that have every tag";
+        b.addEventListener("click", () => setTagMode(value));
+        mode.append(b);
+      });
+      tools.append(mode);
+    }
+    const clear = el("button", "tag-chip-clear", state.tagIds.length > 1 ? "Clear tags" : "Clear tag");
+    clear.type = "button";
+    clear.addEventListener("click", () => setTags([]));
+    tools.append(clear);
+    box.replaceChildren(el("div", "tag-chips", null), tools);
+    box.firstChild.append(...chips);
+  });
+}
+
+/** The tag menu: counts that follow the other filters; empty and selected tags hidden. */
+function updateTagOptions() {
+  const select = document.getElementById("tag-filter");
+  if (!select) return;
+  [...select.options].forEach((option, index) => {
+    if (index === 0) {
+      option.textContent = hasTags() ? "Add another tag…" : "All tags – choose one…";
+      return;
+    }
+    const id = Number(option.value);
+    const tag = state.tagsById.get(id);
+    const count = state.tagCounts.get(id) || 0;
+    const hide = count === 0 || state.tagIds.includes(id);
+    option.hidden = hide;
+    option.disabled = hide; // Safari ignores "hidden" on options
+    option.textContent = `${tag.name} (${tag.display_range}) – ${count.toLocaleString()}`;
+  });
+}
+
+/** Every filter except the tags (their counts are taken from these events). */
+function matchesBase(event) {
   if (event.year < state.yearFrom || event.year > state.yearTo) return false;
   if (state.category !== "all" && event.category !== state.category) return false;
-  if (state.tagId !== null && !event.tags.includes(state.tagId)) return false;
   return searchScore(event) > 0;
 }
 
-/** With a tag selected the timeline spans the tag's years (within the year slider). */
+const matches = (event) => matchesBase(event) && tagMatch(event);
+
+/** With tags selected the timeline spans their years (within the year slider). */
 function timelineRange() {
-  const tag = state.tagId !== null ? state.tagsById.get(state.tagId) : null;
-  if (!tag || tag.start_year === null || tag.start_year === undefined) return null;
-  const end = tag.end_year ?? new Date().getFullYear();
+  const tags = state.tagIds.map((id) => state.tagsById.get(id))
+    .filter((tag) => tag && tag.start_year !== null && tag.start_year !== undefined);
+  if (!tags.length) return null;
+  const now = new Date().getFullYear();
   return {
-    from: Math.max(tag.start_year, state.yearFrom),
-    to: Math.min(end, state.yearTo),
-    label: tag.name,
+    from: Math.max(Math.min(...tags.map((t) => t.start_year)), state.yearFrom),
+    to: Math.min(Math.max(...tags.map((t) => t.end_year ?? now)), state.yearTo),
+    label: tagNames(),
   };
 }
 
 function applyFilters() {
-  state.filtered = state.events.filter(matches);
+  // One pass: the events shown, and per tag how many events match the other filters.
+  state.tagCounts = new Map();
+  state.filtered = [];
+  state.events.forEach((event) => {
+    if (!matchesBase(event)) return;
+    event.tags.forEach((id) => state.tagCounts.set(id, (state.tagCounts.get(id) || 0) + 1));
+    if (tagMatch(event)) state.filtered.push(event);
+  });
+  updateTagOptions();
 
   clusters.clearLayers();
   if (heatLayer) {
@@ -553,7 +710,7 @@ function renderList() {
     const tags = card.querySelector(".event-card-tags");
     event.tags.forEach((tagId) => {
       const tag = state.tagsById.get(tagId);
-      if (tag) tags.append(el("span", "tag", tag.name));
+      if (tag) tags.append(tagButton(tag));
     });
     card.querySelector(".event-card-main").addEventListener("click", () => {
       showEvent(event.id);
@@ -605,7 +762,7 @@ function sliderRange(min, max) {
 /** Events that match everything except the year filter. */
 function matchesIgnoringYears(event) {
   if (state.category !== "all" && event.category !== state.category) return false;
-  if (state.tagId !== null && !event.tags.includes(state.tagId)) return false;
+  if (!tagMatch(event)) return false;
   return searchScore(event) > 0;
 }
 
@@ -620,11 +777,12 @@ let yearsNarrowed = false;
 function rescaleYears() {
   const slider = document.getElementById("year-slider").noUiSlider;
   if (!slider) return;
-  const key = JSON.stringify([state.tagId, state.query, state.category, search.in, search.match, search.whole]);
+  const key = JSON.stringify([state.tagIds, state.tagMode, state.query, state.category, search.in, search.match,
+    search.whole]);
   if (key === yearScopeKey) return;
   yearScopeKey = key;
   const scope = document.getElementById("year-scope");
-  const narrowed = state.tagId !== null || search.terms.length > 0;
+  const narrowed = hasTags() || search.terms.length > 0;
   const wasNarrowed = yearsNarrowed;
   yearsNarrowed = narrowed;
   // Only the category changed, with no tag or search: keep the years someone set by hand.
@@ -635,7 +793,7 @@ function rescaleYears() {
   if (years.length) {
     min = Math.min(...years);
     max = Math.max(...years);
-    const what = [state.tagId !== null ? state.tagsById.get(state.tagId)?.name : null,
+    const what = [hasTags() ? tagNames() : null,
       search.terms.length ? `“${search.terms.join(" ")}”` : null].filter(Boolean).join(" + ");
     scope.textContent = `Slider fitted to ${what}: ${years.length.toLocaleString()} event${years.length === 1 ? "" : "s"}`;
   } else {
@@ -729,9 +887,8 @@ function setupTagFilter(tags) {
     select.append(option);
   });
   select.addEventListener("change", () => {
-    state.tagId = select.value ? Number(select.value) : null;
-    syncTagSearch();
-    refilter();
+    if (select.value) addTag(Number(select.value));
+    select.value = "";
   });
   setupTagSearch(tags.filter((t) => used.has(t.id)));
 }
@@ -749,18 +906,16 @@ function setupTagSearch(tags) {
   const list = document.getElementById("tag-search-list");
   const clear = document.getElementById("tag-search-clear");
   const select = document.getElementById("tag-filter");
-  const counts = new Map();
-  state.events.forEach((e) => e.tags.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)));
-  const entries = tags.map((tag) => ({ tag, key: foldText(tag.name), count: counts.get(tag.id) || 0 }));
+  const entries = tags.map((tag) => ({ tag, key: foldText(tag.name) }));
+  const countOf = (tag) => state.tagCounts.get(tag.id) || 0;
   let options = [];
   let active = -1;
 
   function choose(tag) {
-    state.tagId = tag ? tag.id : null;
-    select.value = tag ? String(tag.id) : "";
-    syncTagSearch();
+    input.value = "";
     close();
-    refilter();
+    if (tag) addTag(tag.id);
+    else setTags([]);
   }
 
   function close() {
@@ -773,8 +928,8 @@ function setupTagSearch(tags) {
     const query = foldText(input.value.trim());
     const words = query.split(/\s+/).filter(Boolean);
     options = entries
-      .filter((e) => words.every((w) => e.key.includes(w)))
-      .sort((a, b) => (b.key.startsWith(query) - a.key.startsWith(query)) || b.count - a.count
+      .filter((e) => words.every((w) => e.key.includes(w)) && countOf(e.tag) > 0 && !state.tagIds.includes(e.tag.id))
+      .sort((a, b) => (b.key.startsWith(query) - a.key.startsWith(query)) || countOf(b.tag) - countOf(a.tag)
         || a.tag.name.localeCompare(b.tag.name))
       .slice(0, TAG_SUGGESTIONS);
     active = -1;
@@ -783,11 +938,14 @@ function setupTagSearch(tags) {
       li.id = `tag-option-${i}`;
       li.setAttribute("role", "option");
       li.append(el("span", "tag-search-name", entry.tag.name),
-        el("span", "tag-search-meta", `${entry.tag.display_range} · ${entry.count.toLocaleString()} events`));
+        el("span", "tag-search-meta", `${entry.tag.display_range} · ${countOf(entry.tag).toLocaleString()} events`));
       li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(entry.tag); });
       return li;
     });
-    if (!items.length) items.push(el("li", "tag-search-empty", "No tag matches – try a shorter word."));
+    if (!items.length) {
+      items.push(el("li", "tag-search-empty",
+        "No tag with matching events – try a shorter word, or widen the years, category or search."));
+    }
     list.replaceChildren(...items);
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
@@ -803,17 +961,15 @@ function setupTagSearch(tags) {
   }
 
   syncTagSearch = () => {
-    const tag = state.tagId !== null ? state.tagsById.get(state.tagId) : null;
-    input.value = tag ? tag.name : "";
-    clear.hidden = !tag;
+    clear.hidden = !hasTags();
+    input.placeholder = hasTags()
+      ? "Add another tag – e.g. Seven Years' War…"
+      : "Type a war, era or period – e.g. Napoleonic, Cold War, Crusades…";
   };
 
   input.addEventListener("input", show);
   input.addEventListener("focus", () => { input.select(); show(); });
-  input.addEventListener("blur", () => setTimeout(() => {
-    close();
-    syncTagSearch(); // typed text that was not chosen goes back to the selected tag
-  }, 120));
+  input.addEventListener("blur", () => setTimeout(close, 120));
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
@@ -877,7 +1033,7 @@ function renderSearchResults() {
   const status = document.getElementById("search-status");
   const results = sortedResults();
   const total = state.events.length;
-  const filtersOn = state.category !== "all" || state.tagId !== null || state.filtered.length < total && !search.terms.length;
+  const filtersOn = state.category !== "all" || hasTags() || state.filtered.length < total && !search.terms.length;
   status.textContent = !search.terms.length
     ? `Type to search ${total.toLocaleString()} events${filtersOn ? " (filters apply)" : ""}.`
     : results.length
@@ -1078,7 +1234,12 @@ async function init() {
   } else {
     document.getElementById("year-slider").replaceChildren(el("p", "form-hint", "No events yet."));
   }
-  applyFilters();
+  // Tags from the page address (?tag=…), e.g. a shared link.
+  const fromUrl = tagsFromUrl();
+  state.tagIds = fromUrl.ids;
+  state.tagMode = fromUrl.mode;
+  renderTagChips();
+  refilter();
 
   const requested = Number(new URLSearchParams(window.location.search).get("event"));
   if (requested && state.eventsById.has(requested)) showEvent(requested);

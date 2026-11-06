@@ -1,0 +1,55 @@
+/* Tag selection on the map page: chips, any/all, clickable tags (loaded by map.html). */
+
+.tag-btn { border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 0.75rem; }
+.tag-btn:hover, .tag-btn:focus-visible { border-color: var(--accent); color: var(--link); }
+.tag-btn.tag-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.event-card-tags { padding: 0 1rem 0.25rem; }
+.event-card-tags:empty { display: none; }
+
+.tag-selection { margin-top: 0.5rem; }
+.tag-selection[hidden] { display: none; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.2rem 0.25rem 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.tag-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-chip-years { font-weight: 400; opacity: 0.85; white-space: nowrap; }
+.tag-chip-remove {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tag-chip-remove:hover, .tag-chip-remove:focus-visible { background: rgba(255, 255, 255, 0.4); }
+.tag-chip-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem; margin-top: 0.4rem; }
+.tag-mode { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.tag-mode-btn {
+  padding: 0.2rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.tag-mode-btn.active { background: var(--accent-soft); color: var(--link); font-weight: 700; }
+.tag-chip-clear { border: 0; background: none; color: var(--link); font: inherit; font-size: 0.78rem; cursor: pointer; text-decoration: underline; }
+
+.tag-selection-wide { margin-top: 0.6rem; }
+.tag-search-hint { margin: 0.4rem 0 0; font-size: 0.78rem; color: var(--text-muted); }

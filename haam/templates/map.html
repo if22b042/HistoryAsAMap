@@ -5,6 +5,7 @@
 {% block head %}
   {% if collection %}<meta name="robots" content="noindex, nofollow">{% endif %}
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tags.css') }}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" crossorigin="anonymous">
@@ -61,8 +62,9 @@
     </div>
 
     <div class="filter-group">
-      <h3><label for="tag-filter">Tag</label></h3>
-      <select id="tag-filter" class="form-input"><option value="">All tags</option></select>
+      <h3><label for="tag-filter">Tags</label></h3>
+      <select id="tag-filter" class="form-input"><option value="">All tags – choose one…</option></select>
+      <div class="tag-selection" data-tag-chips hidden aria-live="polite"></div>
     </div>
 
     <div class="filter-group">
@@ -171,6 +173,8 @@
       </button>
     </div>
     <ul class="tag-search-list" id="tag-search-list" role="listbox" aria-label="Matching tags" hidden></ul>
+    <div class="tag-selection tag-selection-wide" data-tag-chips hidden aria-live="polite"></div>
+    <p class="tag-search-hint">Click a tag on an event to show only that tag; Ctrl- or Shift-click adds it.</p>
   </div>
   <div class="events-grid" id="events-grid" aria-live="polite">
     <p class="empty-state">Loading events…</p>
@@ -183,8 +187,8 @@
       <span class="event-card-meta"><span class="year-pill"></span><span class="badge"></span></span>
       <span class="event-card-title"></span>
       <span class="event-card-summary"></span>
-      <span class="event-card-tags"></span>
     </button>
+    <div class="event-card-tags"></div>
     <a class="event-card-link" target="_blank" rel="noopener">Read on Wikipedia <i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
   </article>
 </template>
