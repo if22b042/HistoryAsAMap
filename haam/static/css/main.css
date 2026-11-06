@@ -1117,3 +1117,98 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .year-input-invalid { border-color: var(--cat-military) !important; box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.2); }
 .year-scope { margin: 0.35rem 0 0; text-align: center; font-size: 0.75rem; color: var(--text-muted); }
 .year-scope:empty { display: none; }
+
+/* -------------------------------------------------------------- game */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  height: calc(100vh - var(--nav-height));
+  min-height: 480px;
+}
+.game-panel {
+  overflow-y: auto;
+  padding: 1.25rem;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.game-map-wrap { position: relative; min-height: 300px; }
+.game-map { position: absolute; inset: 0; z-index: 1; background: var(--surface-alt); cursor: crosshair; }
+.game-map-confirm { display: none; }
+.game-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.game-header h1 { margin: 0; font-size: 1.2rem; color: var(--text-strong); }
+.game-meta { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--text-muted); }
+.game-days { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+.game-days a[hidden] { display: none; }
+.game-note {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+.game-progress { display: flex; gap: 0.4rem; margin: 1rem 0; padding: 0; list-style: none; }
+.game-step {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  height: 2.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.game-step.current { border-color: var(--accent); color: var(--link); background: var(--accent-soft); }
+.game-step.done { font-size: 1.1rem; }
+.game-message:empty { display: none; }
+.game-message { margin-bottom: 0.75rem; color: var(--error); font-size: 0.9rem; }
+.game-round-num { margin: 0; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.game-round h2 { margin: 0.25rem 0 0.4rem; font-size: 1.25rem; color: var(--text-strong); overflow-wrap: anywhere; }
+.game-round-date { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.75rem; margin: 0 0 0.75rem; font-weight: 600; color: var(--text); }
+.game-category { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 400; font-size: 0.85rem; color: var(--text-muted); }
+.game-round-excerpt { margin: 0 0 1rem; font-size: 0.92rem; line-height: 1.5; color: var(--text); }
+.game-hint { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+.game-result { padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.game-points { margin: 0; font-size: 1rem; color: var(--text-muted); }
+.game-points strong { font-size: 1.8rem; color: var(--text-strong); }
+.game-distance, .game-answer { margin: 0.3rem 0; }
+.game-links { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0.5rem 0 1rem; font-size: 0.9rem; }
+.game-links a[hidden] { display: none; }
+.game-summary h2 { margin: 0; font-size: 1.1rem; color: var(--text-strong); }
+.game-total { margin: 0.25rem 0 0.75rem; color: var(--text-muted); }
+.game-total strong { font-size: 2.2rem; color: var(--text-strong); }
+.game-summary-list { margin: 0 0 1rem; padding: 0; list-style: none; }
+.game-summary-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.game-summary-emoji { grid-row: span 2; }
+.game-summary-title { color: var(--text-strong); overflow-wrap: anywhere; }
+.game-summary-points { font-size: 0.8rem; color: var(--text-muted); }
+.game-share { width: 100%; margin-bottom: 0.5rem; resize: none; font-family: inherit; font-size: 0.9rem; }
+.game-streak { margin: 1rem 0 0.25rem; font-weight: 600; }
+.game-countdown { margin: 0; font-size: 0.9rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 768px) {
+  .game-layout { display: flex; flex-direction: column; height: auto; min-height: 0; }
+  .game-panel { border-right: 0; border-bottom: 1px solid var(--border); padding: 1rem; overflow: visible; }
+  .game-map-wrap { height: 65vh; flex: none; }
+  .game-map-confirm:not([hidden]) {
+    display: inline-flex;
+    position: absolute;
+    left: 50%;
+    bottom: 1.5rem;
+    z-index: 1000;
+    transform: translateX(-50%);
+    box-shadow: var(--shadow-lg);
+  }
+}
+/* The game's tiles come in a dark version already: no darkening filter. */
+:root[data-theme="dark"] .page-game .leaflet-tile-pane { filter: none; }

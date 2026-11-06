@@ -16,7 +16,9 @@ CSP = "; ".join([
     "script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com",
     "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com",
     "font-src 'self' https://cdnjs.cloudflare.com",
-    "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com",
+    # server.arcgisonline.com: the game's map tiles without place names.
+    "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com"
+    " https://server.arcgisonline.com",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
@@ -51,11 +53,12 @@ def create_app(config_name: str | None = None) -> Flask:
     csrf.init_app(app)
 
     from haam import cli
-    from haam.views import admin, api, collections, public
+    from haam.views import admin, api, collections, game, public
 
     app.register_blueprint(public.bp)
     app.register_blueprint(collections.bp)
     app.register_blueprint(api.bp)
+    app.register_blueprint(game.bp)
     app.register_blueprint(admin.bp)
     cli.register(app)
 
