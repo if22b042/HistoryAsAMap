@@ -269,3 +269,30 @@ def test_practice_check_rejects_bad_input(client, events, body):
 
 def test_practice_route_is_not_a_day(client, events):
     assert "seed" in client.get("/api/game/practice").json
+
+
+# ---------------------------------------------------------------- titles
+
+@pytest.mark.parametrize("title, country, expected", [
+    ("Siege of Malta (1429)", None, True),
+    ("Battle of the Gulf of Oman", None, True),
+    ("Ottoman Empire–Persia treaty", None, True),
+    ("Siege of Mons", "Kingdom of the Netherlands", False),
+    ("Battle of Saint-Denis", "Kingdom of France", False),
+    ("Battle of Spain Hill", "Kingdom of Spain", True),
+    ("German bombardment of Monrovia", "Liberia", False),
+    ("Ottoman conquest of Lesbos", None, False),
+    ("Battle of Hastings", "United Kingdom", False),
+    ("Siege of Hastings", "Hastings Republic", False),
+])
+def test_names_a_country(title, country, expected):
+    assert game.names_a_country(title, country) is expected
+
+
+def test_titles_naming_a_country_are_never_picked(app, events, make_event):
+    for title, lat, lon in [("Siege of Malta", 35.9, 14.5), ("1755 Portugal earthquake", 38.7, -9.1)]:
+        make_event(title, year=1500, lat=lat, lon=lon, summary=LONG)
+    days = [date(2026, 11, 1) + timedelta(days=d) for d in range(15)]
+    titles = {e.title for day in days for e in game.daily_events(day)}
+    titles |= {e.title for _ in range(10) for e in game.practice_events(game.new_practice_seed(), era=2)}
+    assert "Siege of Malta" not in titles and "1755 Portugal earthquake" not in titles

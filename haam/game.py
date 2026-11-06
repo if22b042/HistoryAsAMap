@@ -138,7 +138,8 @@ def _era(year: int) -> int:
 def _candidates(rank: Callable[[int], int], era: int | None = None,
                 category: Category | None = None) -> list[_Candidate]:
     tagged = exists().where(event_tags.c.event_id == Event.id).label("tagged")
-    stmt = select(Event.id, Event.year, Event.lat, Event.lon, Event.category, tagged).where(
+    stmt = select(Event.id, Event.title, Event.country, Event.year, Event.lat, Event.lon,
+                  Event.category, tagged).where(
         Event.status == Status.APPROVED,
         func.length(Event.summary) >= MIN_SUMMARY_LENGTH,
     )
@@ -154,10 +155,28 @@ def _candidates(rank: Callable[[int], int], era: int | None = None,
     candidates = [
         _Candidate(r.id, r.year, r.lat, r.lon, r.category.value, bool(r.tagged), rank(r.id))
         for r in rows
+        if not names_a_country(r.title, r.country)
     ]
     # Events with a tag (part of a known war or period) come first.
     candidates.sort(key=lambda c: (not c.tagged, c.rank))
     return candidates
+
+
+_COUNTRY_WORDS = re.compile(
+    r"(?<!\w)(?:" + "|".join(re.escape(w) for w in sorted(set(COUNTRIES), key=len, reverse=True)) + r")(?!\w)"
+)
+
+
+def names_a_country(title: str, country: str | None = None) -> bool:
+    """True when the title gives the answer away by naming a country.
+
+    "Siege of Malta" is excluded. Only country names (and historical states)
+    count, not nationalities, so "German bombardment of Monrovia" stays
+    playable. The event's own country (e.g. "Kingdom of Spain") counts too.
+    """
+    if _COUNTRY_WORDS.search(title or ""):
+        return True
+    return bool(country) and re.search(rf"(?<!\w){re.escape(country)}(?!\w)", title or "", re.IGNORECASE) is not None
 
 
 def _pick(candidates: list[_Candidate], seed: str) -> list[int]:
