@@ -2,6 +2,9 @@
 /* global L */
 import { createTimeline } from "./timeline.js";
 
+// Map zoom when an event is picked on the timeline (9 = about a city).
+const CLICK_ZOOM = 9;
+
 const dataTag = document.getElementById("collection-data");
 const mapElement = document.getElementById("collection-map");
 
@@ -21,7 +24,7 @@ if (dataTag && mapElement) {
   }).addTo(map);
 
   const markers = new Map();
-  const timeline = createTimeline({ map, limit: 500, onSelect: (id) => focusEntry(id, { zoom: 8, scrollToMap: false }) });
+  const timeline = createTimeline({ map, limit: 500, onSelect: (id) => focusEntry(id, { zoom: CLICK_ZOOM, scrollToMap: false }) });
   entries.forEach((entry, index) => {
     const icon = L.divIcon({
       className: `marker marker-${entry.category}${entry.is_event ? "" : " marker-custom"}`,
@@ -67,7 +70,17 @@ if (dataTag && mapElement) {
     highlight(id, false);
     timeline.setActive(id);
     map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), zoom), { duration: 0.7 });
-    map.once("moveend", () => marker.openPopup());
+    // Open the popup when the flight ends – or after a moment, in case the browser
+    // paused the animation (a tab in the background).
+    let opened = false;
+    const openPopup = () => {
+      if (!opened) {
+        opened = true;
+        marker.openPopup();
+      }
+    };
+    map.once("moveend", openPopup);
+    setTimeout(openPopup, 1200);
     if (scrollToMap) mapElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 

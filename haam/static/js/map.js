@@ -3,6 +3,10 @@
 /* global L, noUiSlider */
 import { createTimeline } from "./timeline.js";
 
+// Map zoom when an event is picked in the search or on the timeline: 9 is twice
+// the scale of the earlier 8 (each zoom level doubles it), about a city.
+const CLICK_ZOOM = 9;
+
 const CATEGORY_LABELS = {
   military: "Military",
   diplomatic: "Diplomatic",
@@ -137,8 +141,8 @@ let heatLayer = null;
 // Pop-out timeline of the events shown (only while there are few of them).
 const timeline = createTimeline({
   map,
-  limit: 150,
-  onSelect: (id) => showEvent(id, { zoom: 8 }),
+  limit: 1000, // crowded labels turn into dots, so the timeline stays readable
+  onSelect: (id) => showEvent(id, { zoom: CLICK_ZOOM }),
   colorFor: (item) => (state.colorByYear ? yearColor(item.year) : null),
 });
 
@@ -396,6 +400,18 @@ function matches(event) {
   return searchScore(event) > 0;
 }
 
+/** With a tag selected the timeline spans the tag's years (within the year slider). */
+function timelineRange() {
+  const tag = state.tagId !== null ? state.tagsById.get(state.tagId) : null;
+  if (!tag || tag.start_year === null || tag.start_year === undefined) return null;
+  const end = tag.end_year ?? new Date().getFullYear();
+  return {
+    from: Math.max(tag.start_year, state.yearFrom),
+    to: Math.min(end, state.yearTo),
+    label: tag.name,
+  };
+}
+
 function applyFilters() {
   state.filtered = state.events.filter(matches);
 
@@ -423,7 +439,7 @@ function applyFilters() {
 
   timeline.update(state.filtered.map((e) => ({
     id: e.id, year: e.year, title: e.title, label: e.date || e.display_year, category: e.category,
-  })));
+  })), timelineRange());
 
   const total = state.events.length;
   document.getElementById("result-count").textContent =
@@ -482,6 +498,27 @@ function renderList() {
 const refilter = () => { listLimit = LIST_PAGE; applyFilters(); };
 
 // ---------------------------------------------------------------- controls
+
+/**
+ * Move the year slider to the selected tag's years – widened to its events' years,
+ * since an event may be dated a year before its war officially starts – or back to
+ * all years when no tag is selected.
+ */
+function fitYearsToTag() {
+  const slider = document.getElementById("year-slider").noUiSlider;
+  if (!slider) return;
+  const { min, max } = slider.options.range;
+  const tag = state.tagId !== null ? state.tagsById.get(state.tagId) : null;
+  if (!tag) {
+    slider.set([min, max]);
+    return;
+  }
+  const years = state.events.filter((e) => e.tags.includes(tag.id)).map((e) => e.year);
+  const from = Math.min(tag.start_year ?? Infinity, ...years);
+  const to = Math.max(tag.end_year ?? Math.max(...years, tag.start_year ?? -Infinity), ...years);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+  slider.set([Math.max(from, min), Math.min(to, max)]);
+}
 
 function setupYearSlider(years) {
   const slider = document.getElementById("year-slider");
@@ -542,8 +579,104 @@ function setupTagFilter(tags) {
   });
   select.addEventListener("change", () => {
     state.tagId = select.value ? Number(select.value) : null;
+    syncTagSearch();
+    fitYearsToTag();
     refilter();
   });
+  setupTagSearch(tags.filter((t) => used.has(t.id)));
+}
+
+// ------------------------------------------------------------- tag search
+
+const TAG_SUGGESTIONS = 12;
+let syncTagSearch = () => {};
+
+const foldText = (text) => text.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/** The large "Filter by tag" box above the event list (kept in sync with the tag menu). */
+function setupTagSearch(tags) {
+  const input = document.getElementById("tag-search");
+  const list = document.getElementById("tag-search-list");
+  const clear = document.getElementById("tag-search-clear");
+  const select = document.getElementById("tag-filter");
+  const counts = new Map();
+  state.events.forEach((e) => e.tags.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)));
+  const entries = tags.map((tag) => ({ tag, key: foldText(tag.name), count: counts.get(tag.id) || 0 }));
+  let options = [];
+  let active = -1;
+
+  function choose(tag) {
+    state.tagId = tag ? tag.id : null;
+    select.value = tag ? String(tag.id) : "";
+    syncTagSearch();
+    close();
+    fitYearsToTag();
+    refilter();
+  }
+
+  function close() {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    active = -1;
+  }
+
+  function show() {
+    const query = foldText(input.value.trim());
+    const words = query.split(/\s+/).filter(Boolean);
+    options = entries
+      .filter((e) => words.every((w) => e.key.includes(w)))
+      .sort((a, b) => (b.key.startsWith(query) - a.key.startsWith(query)) || b.count - a.count
+        || a.tag.name.localeCompare(b.tag.name))
+      .slice(0, TAG_SUGGESTIONS);
+    active = -1;
+    const items = options.map((entry, i) => {
+      const li = el("li", "tag-search-option");
+      li.id = `tag-option-${i}`;
+      li.setAttribute("role", "option");
+      li.append(el("span", "tag-search-name", entry.tag.name),
+        el("span", "tag-search-meta", `${entry.tag.display_range} · ${entry.count.toLocaleString()} events`));
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(entry.tag); });
+      return li;
+    });
+    if (!items.length) items.push(el("li", "tag-search-empty", "No tag matches – try a shorter word."));
+    list.replaceChildren(...items);
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function move(step) {
+    if (list.hidden) show();
+    if (!options.length) return;
+    active = (active + step + options.length) % options.length;
+    list.querySelectorAll(".tag-search-option").forEach((li, i) => li.classList.toggle("active", i === active));
+    input.setAttribute("aria-activedescendant", `tag-option-${active}`);
+    list.children[active].scrollIntoView({ block: "nearest" });
+  }
+
+  syncTagSearch = () => {
+    const tag = state.tagId !== null ? state.tagsById.get(state.tagId) : null;
+    input.value = tag ? tag.name : "";
+    clear.hidden = !tag;
+  };
+
+  input.addEventListener("input", show);
+  input.addEventListener("focus", () => { input.select(); show(); });
+  input.addEventListener("blur", () => setTimeout(() => {
+    close();
+    syncTagSearch(); // typed text that was not chosen goes back to the selected tag
+  }, 120));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (options.length) choose(options[Math.max(active, 0)].tag);
+    } else if (e.key === "Escape") {
+      close();
+      input.blur();
+    }
+  });
+  clear.addEventListener("click", () => choose(null));
 }
 
 const RESULTS_PAGE = 100;
@@ -639,7 +772,7 @@ function renderSearchResults() {
 
 function openResult(id) {
   closeSearchPanel();
-  showEvent(id, { zoom: 8 });
+  showEvent(id, { zoom: CLICK_ZOOM });
 }
 
 function openSearchPanel() {
