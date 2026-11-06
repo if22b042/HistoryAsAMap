@@ -9,6 +9,7 @@ from haam import importer
 from haam.data.event_types import AREA_ROOTS, EVENT_TYPES, PLACE_ROOTS
 from haam.extensions import db
 from haam.models import Category, Event, Status
+from haam.dates import ParsedDate
 from haam.wikidata import Candidate, Location, export, is_specific_place, validate
 
 BATTLE, TREATY = "Q178561", "Q131569"
@@ -74,7 +75,7 @@ def test_fictional_subclasses_are_rejected():
 
 
 def test_date_rules():
-    assert validate(battle(P585=[]), today=TODAY).reason == "no usable date (P585/P580)"
+    assert validate(battle(P585=[]), today=TODAY).reason == "no usable date on Wikidata or Wikipedia"
     vague = battle(P585=[claim(time("+1000-00-00T00:00:00Z", precision=7))])
     assert validate(vague, today=TODAY).reason == "date less precise than a year"
     future = battle(P585=[claim(time("+2030-01-01T00:00:00Z"))])
@@ -88,6 +89,30 @@ def test_start_time_and_bc_dates():
     candidate = battle(P585=[], P580=[claim(time("-0480-08-11T00:00:00Z"))])
     verdict = validate(candidate, today=TODAY)
     assert (verdict.year, verdict.date_label, verdict.date_source) == (-480, "11 August 480 BC", "P580")
+
+
+def test_date_fallbacks():
+    end_only = battle(P585=[], P582=[claim(time("+1658-12-16T00:00:00Z"))])
+    assert (validate(end_only, today=TODAY).year, validate(end_only, today=TODAY).date_source) == (1658, "P582")
+
+    from_text = battle(P585=[])
+    from_text.text_date, from_text.text_date_source = ParsedDate(1658, "1658"), "Wikipedia intro"
+    verdict = validate(from_text, today=TODAY)
+    assert (verdict.ok, verdict.year, verdict.date_source) == (True, 1658, "Wikipedia intro")
+
+    wikidata_wins = battle()
+    wikidata_wins.text_date = ParsedDate(1500, "1500")
+    assert validate(wikidata_wins, today=TODAY).year != 1500
+
+
+def test_undated_organisations_are_not_events():
+    army = battle(P585=[], P31=[claim(item(BATTLE)), claim(item("Q43229"))], P571=[claim(time("+1941-02-12T00:00:00Z"))])
+    assert validate(army, today=TODAY).reason == "an organisation or state, not an event: organization"
+    unit = battle(P585=[], P31=[claim(item(BATTLE)), claim(item("Q999"))], P571=[claim(time("+1941-02-12T00:00:00Z"))])
+    assert validate(unit, today=TODAY, organisation_types={"Q999": "military unit"}).reason.endswith("military unit")
+    # With a date of its own it is an event, whatever else it is typed as (the Paris Commune).
+    commune = battle(P31=[claim(item(BATTLE)), claim(item("Q43229"))])
+    assert validate(commune, today=TODAY).ok
 
 
 def test_preferred_rank_wins():
@@ -136,8 +161,8 @@ def test_event_types_are_unique():
 # ----------------------------------------------------------------- export
 
 class FakeWikidata:
-    def __init__(self, found, entities, locations=None, labels=None):
-        self.found, self._entities = found, entities
+    def __init__(self, found, entities, locations=None, labels=None, texts=None):
+        self.found, self._entities, self.texts = found, entities, texts or {}
         self._locations, self._labels = locations or {}, labels or {}
 
     def subclasses(self, root):
@@ -147,7 +172,7 @@ class FakeWikidata:
             return {COUNTRY, OCEAN}
         return {"Q15707521"}
 
-    def discover(self, type_qid):
+    def discover(self, type_qid, undated=False):
         return self.found.get(type_qid, [])
 
     def entities(self, ids, props="claims"):
@@ -161,7 +186,7 @@ class FakeWikidata:
 
     def introductions(self, titles):
         qids = {"Battle of Trafalgar": "Q10", "Battle of Hastings": "Q11", "Redirected": "Q999"}
-        return {t: (1000 + n, t if t != "Redirected" else "Domenico Tintoretto", f"The {t} was an event.",
+        return {t: (1000 + n, t if t != "Redirected" else "Domenico Tintoretto", self.texts.get(t, f"The {t} was an event."),
                     qids.get(t)) for n, t in enumerate(titles) if t != "Gone"}
 
 
@@ -211,6 +236,32 @@ def test_export_uses_town_locations_but_not_seas(tmp_path):
     assert [(r["title"], r["lat"], r["coord_source"]) for r in rows] == [("Battle of Trafalgar", "48.8567", "P276:Q90")]
     rejected = {r["title"]: r["reason"] for r in csv.DictReader(rejected_path.open(encoding="utf-8"))}
     assert rejected == {"Battle of Hastings": "location is a country or region, not a specific place: Atlantic Ocean"}
+
+
+def test_undated_export_reads_the_date_from_wikipedia(tmp_path):
+    undated = {k: v for k, v in battle().claims.items() if k != "P585"}
+    client = FakeWikidata(
+        found={BATTLE: [("Q10", "Battle of Trafalgar"), ("Q11", "Battle of Hastings")]},
+        entities={"Q10": {"claims": undated}, "Q11": {"claims": undated}},
+        texts={"Battle of Trafalgar": "The Battle of Trafalgar was fought from 1 to 21 October 1805 off Spain."},
+    )
+    events_path, rejected_path = tmp_path / "events.csv", tmp_path / "rejected.csv"
+    export(client, str(events_path), str(rejected_path), undated=True, report=lambda m: None)
+
+    rows = list(csv.DictReader(events_path.open(encoding="utf-8")))
+    assert [(r["title"], r["year"], r["date"], r["date_source"]) for r in rows] == [
+        ("Battle of Trafalgar", "1805", "1805", "Wikipedia intro")]
+    rejected = {r["title"]: r["reason"] for r in csv.DictReader(rejected_path.open(encoding="utf-8"))}
+    assert rejected == {"Battle of Hastings": "no usable date on Wikidata or Wikipedia"}
+
+
+def test_inception_dated_events_wait_for_review(tmp_path):
+    founded = {k: v for k, v in battle().claims.items() if k != "P585"} | {"P571": [claim(time("+1951-08-20T00:00:00Z"))]}
+    client = FakeWikidata(found={BATTLE: [("Q10", "Battle of Trafalgar")]}, entities={"Q10": {"claims": founded}})
+    events_path, rejected_path = tmp_path / "events.csv", tmp_path / "rejected.csv"
+    export(client, str(events_path), str(rejected_path), undated=True, report=lambda m: None)
+    [row] = csv.DictReader(events_path.open(encoding="utf-8"))
+    assert (row["year"], row["date_source"], row["status"]) == ("1951", "P571", "pending")
 
 
 # ----------------------------------------------------------------- import

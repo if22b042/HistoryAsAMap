@@ -61,18 +61,25 @@ def import_csv_command(path, approve):
 
 
 @haam_cli.command("export-wikidata")
-@click.option("--out", default="seed/wikidata_events_places.csv", show_default=True, help="CSV of accepted events.")
-@click.option("--rejected", default="seed/wikidata_rejected_places.csv", show_default=True,
-              help="CSV of rejected candidates with the reason.")
+@click.option("--out", default=None, help="CSV of accepted events.  [default: seed/wikidata_events_places.csv, "
+                                           "or seed/wikidata_events_undated.csv with --undated]")
+@click.option("--rejected", default=None, help="CSV of rejected candidates with the reason.  "
+                                               "[default: seed/wikidata_rejected_places.csv, or …_undated.csv]")
 @click.option("--type", "type_ids", multiple=True, help="Only these Wikidata types (e.g. --type Q178561).")
 @click.option("--limit", type=int, default=None, help="At most this many candidates per type (for trial runs).")
 @click.option("--status", type=click.Choice(["approved", "pending"]), default="approved", show_default=True,
               help="Status written into the CSV for every accepted event.")
-def export_wikidata_command(out, rejected, type_ids, limit, status):
+@click.option("--undated", is_flag=True,
+              help="Only items without a point in time / start time on Wikidata; their date comes from "
+                   "their end time, inception, or the year in their Wikipedia title or first paragraph.")
+def export_wikidata_command(out, rejected, type_ids, limit, status, undated):
     """Export validated historical events from Wikidata to a CSV (no database changes).
 
     Load the result with: flask --app haam haam import-csv seed/wikidata_events_places.csv
     """
+    suffix = "undated" if undated else "places"
+    out = out or f"seed/wikidata_events_{suffix}.csv"
+    rejected = rejected or f"seed/wikidata_rejected_{suffix}.csv"
     from flask import current_app
     from sqlalchemy import select
 
@@ -84,7 +91,7 @@ def export_wikidata_command(out, rejected, type_ids, limit, status):
     tag_names = db.session.scalars(select(Tag.name)).all()
     click.echo("Discovering candidates on Wikidata…")
     stats = export(client, out, rejected, type_ids=list(type_ids) or None, limit_per_type=limit,
-                   status=status, tag_names=tag_names, report=click.echo)
+                   status=status, tag_names=tag_names, undated=undated, report=click.echo)
     click.echo()
     click.echo(f"Accepted {stats.accepted} of {stats.candidates} candidates -> {out}")
     click.echo(f"Rejected {stats.rejected} -> {rejected}")
