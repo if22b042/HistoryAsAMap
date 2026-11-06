@@ -180,6 +180,31 @@ flask --app haam haam import-csv seed/wikidata_events_places.csv
 flask --app haam haam import-csv seed/wikidata_events_undated.csv
 ```
 
+### Tags
+
+An event gets every tag from `haam/data/tags.py` that it is *part of* (P361) on
+Wikidata, directly or up to five steps up the chain: Battle of Freeman's Farm →
+Battles of Saratoga → American Revolutionary War → American Revolution gives both
+"American Revolutionary War" and "American Revolution" (`haam/tagging.py`).
+Names are compared loosely (case, accents, dashes, apostrophes, a leading "The")
+against each item's label and aliases, `TAG_PARENTS` adds broader tags Wikidata
+does not link, and a tag is only given if the event's year is within the tag's
+years (one year early is allowed, none late). A hand check of 660 assignments
+found Wikidata links that join conflicts historians treat as separate (the wars
+in Afghanistan → "War against the Islamic State" → Syrian Civil War, Lebanon →
+Arab Cold War → Cold War, Finnish Civil War → Russian Civil War, ...): the chain
+is not followed above those items (`NO_CLIMB`), and three direct links are
+excluded (`EXCLUDED_TAGS`). To apply the rules to existing data without a full
+export:
+
+```bash
+flask --app haam haam retag-csv seed/wikidata_events_places.csv seed/wikidata_events_undated.csv
+flask --app haam haam retag-events --replace --dry-run   # then without --dry-run
+```
+
+`retag-events` only adds tags; `--replace` also removes the tags the rules no
+longer give. Both leave events submitted on the website alone.
+
 ## Commands
 
 | Command | Purpose |

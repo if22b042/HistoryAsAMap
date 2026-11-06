@@ -121,6 +121,42 @@ def remove_events_command(path, reason, dry_run):
         click.echo("Kept because they are used in a collection: " + "; ".join(stats.kept_in_collections))
 
 
+@haam_cli.command("retag-csv")
+@click.argument("paths", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
+def retag_csv_command(paths):
+    """Recompute the tags column of exported CSVs from Wikidata's "part of" chains (in place)."""
+    from flask import current_app
+
+    from haam.tagging import retag_csv
+    from haam.wikidata import WikidataClient
+
+    client = WikidataClient(current_app.config["HAAM_USER_AGENT"])
+    for path in paths:
+        click.echo(f"{path}:")
+        stats = retag_csv(client, path, report=click.echo)
+        click.echo(f"  tagged {stats['tagged_before']} -> {stats['tagged_after']} of {stats['rows']} rows "
+                   f"({stats['changed']} changed)")
+
+
+@haam_cli.command("retag-events")
+@click.option("--dry-run", is_flag=True, help="Only count what would change.")
+@click.option("--replace", is_flag=True,
+              help="Also remove tags the rules no longer give (imported events only; website submissions untouched).")
+def retag_events_command(dry_run, replace):
+    """Re-apply the tag rules to imported events with a Wikidata id (adds missing tags; --replace also removes)."""
+    from flask import current_app
+
+    from haam.tagging import retag_database
+    from haam.wikidata import WikidataClient
+
+    client = WikidataClient(current_app.config["HAAM_USER_AGENT"])
+    stats = retag_database(client, dry_run=dry_run, replace=replace, report=click.echo)
+    prefix = "Would change" if dry_run else "Changed"
+    click.echo(f"{prefix} {stats['events_changed']} events: +{stats['links_added']} tags, "
+               f"-{stats['links_removed']} tags; events with a tag: "
+               f"{stats['tagged_before']} -> {stats['tagged_after']} of {stats['events']}")
+
+
 @haam_cli.command("import-legacy")
 def import_legacy_command():
     """Copy events from the previous version's tables (entries/locations)."""

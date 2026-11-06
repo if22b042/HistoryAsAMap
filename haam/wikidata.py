@@ -30,6 +30,7 @@ from urllib3.util.retry import Retry
 from haam.data.event_types import (AREA_ROOTS, EARTH, EVENT_TYPES, NOT_EVENT_ROOTS, NOT_EVENTS,
                                    ORGANISATION_ROOTS, ORGANISATION_TYPES, PLACE_ROOTS)
 from haam.dates import ParsedDate, article_date, parse_wikidata_time
+from haam.tagging import Tagger
 from haam.wikipedia import canonical_url
 
 logger = logging.getLogger(__name__)
@@ -404,7 +405,7 @@ def export(
     """
     stats = ExportStats()
     types = [t for t in EVENT_TYPES if not type_ids or t[0] in type_ids]
-    tag_lookup = {name.lower(): name for name in tag_names}
+    tagger = Tagger(client, tag_names)
 
     blocked_types: dict[str, str] = {}
     for root, label in NOT_EVENT_ROOTS.items():
@@ -452,7 +453,7 @@ def export(
         ids = list(candidates)
         for number, batch in enumerate(chunks(ids, batch_size), start=1):
             _process_batch(client, [candidates[i] for i in batch], events_csv, rejected_csv, stats,
-                           categories, labels_by_type, tag_lookup, status, blocked_types,
+                           categories, labels_by_type, tagger, status, blocked_types,
                            place_classes, area_classes, organisation_types)
             events_file.flush()
             rejected_file.flush()
@@ -467,7 +468,7 @@ def _has_wikidata_date(claims: dict) -> bool:
 
 
 def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, labels_by_type,
-                   tag_lookup, status, blocked_types, place_classes, area_classes, organisation_types):
+                   tagger, status, blocked_types, place_classes, area_classes, organisation_types):
     entities = client.entities([c.qid for c in batch])
     for candidate in batch:
         candidate.claims = entities.get(candidate.qid, {}).get("claims", {})
@@ -501,8 +502,11 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
     missing = [c.title for c in accepted if c.title not in intros]
     if missing:
         intros.update(client.introductions(missing))
-    label_ids = {i for c in accepted for prop in (P_COUNTRY, P_PART_OF) for i in item_ids(c.claims, prop)}
+    label_ids = {i for c in accepted for i in item_ids(c.claims, P_COUNTRY)}
     labels = client.labels(label_ids) if label_ids else {}
+    # Tags from the whole "part of" chain (battle → campaign → war → ...), see haam.tagging.
+    tags_by_qid = tagger.tags({c.qid: item_ids(c.claims, P_PART_OF) for c in accepted},
+                              {c.qid: verdicts[c.qid].year for c in accepted})
 
     for candidate in batch:
         verdict = verdicts[candidate.qid]
@@ -524,8 +528,7 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
 
         page_id, title, summary, _ = intro
         countries = [labels.get(i, "") for i in item_ids(candidate.claims, P_COUNTRY)]
-        part_of = [labels.get(i, "").lower() for i in item_ids(candidate.claims, P_PART_OF)]
-        tags = sorted({tag_lookup[name] for name in part_of if name in tag_lookup})
+        tags = tags_by_qid.get(candidate.qid, [])
         events_csv.writerow({
             "wikidata_id": candidate.qid,
             "wiki_page_id": page_id,

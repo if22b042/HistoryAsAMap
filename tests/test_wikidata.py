@@ -191,7 +191,8 @@ class FakeWikidata:
 
 
 def test_export_writes_accepted_and_rejected(tmp_path):
-    good = battle().claims | {"P17": [claim(item("Q145"))], "P361": [claim(item("Q8"))]}
+    good = battle(P585=[claim(time("+1805-10-21T00:00:00Z"))]).claims | {
+        "P17": [claim(item("Q145"))], "P361": [claim(item("Q8"))]}
     naval = dict(good, P31=[claim(item("Q1261499"))])
     client = FakeWikidata(
         found={"Q1261499": [("Q10", "Battle of Trafalgar")],
@@ -199,8 +200,10 @@ def test_export_writes_accepted_and_rejected(tmp_path):
                         ("Q12", "Hastings Pier"), ("Q13", "Gone"), ("Q14", "Redirected")]},
         entities={"Q10": {"claims": naval}, "Q11": {"claims": good},
                   "Q12": {"claims": {**good, "P31": [claim(item("Q41176"))]}}, "Q13": {"claims": good},
-                  "Q14": {"claims": good}},
-        labels={"Q145": "United Kingdom", "Q8": "Napoleonic Wars"},
+                  "Q14": {"claims": good},
+                  # the "part of" item, fetched by the tagger
+                  "Q8": {"labels": {"en": {"value": "Napoleonic Wars"}}, "claims": {}}},
+        labels={"Q145": "United Kingdom"},
     )
     events_path, rejected_path = tmp_path / "events.csv", tmp_path / "rejected.csv"
     stats = export(client, str(events_path), str(rejected_path), tag_names=["Napoleonic Wars"], report=lambda m: None)
