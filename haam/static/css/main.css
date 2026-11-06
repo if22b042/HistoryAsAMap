@@ -11,7 +11,7 @@
   --blue-700: #2c5282;
 
   --cat-military: #e53e3e;
-  --cat-diplomatic: #3182ce;
+  --cat-diplomatic: #805ad5;
   --cat-naval: #1a4e8a;
   --cat-scientific: #38a169;
   --cat-natural: #dd6b20;
@@ -493,9 +493,18 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
   border: 3px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-.cluster-small { background: var(--blue-400); }
-.cluster-medium { background: var(--blue-600); }
-.cluster-large { background: var(--blue-700); }
+/* Default (mixed-category) clusters: a blue-to-teal ramp that matches no category
+   colour; the large step is teal so it is never mistaken for naval navy. */
+.cluster-small { background: #4299e1; }
+.cluster-medium { background: #3182ce; }
+.cluster-large { background: #0b7285; }
+/* A cluster whose events all share one category takes that category's colour. */
+.cluster-cat { background: var(--cat-other); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+.cluster-cat-military { background: var(--cat-military); }
+.cluster-cat-diplomatic { background: var(--cat-diplomatic); }
+.cluster-cat-naval { background: var(--cat-naval); }
+.cluster-cat-scientific { background: var(--cat-scientific); }
+.cluster-cat-natural { background: var(--cat-natural); }
 
 /* Leaflet popups follow the theme */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--text); }
