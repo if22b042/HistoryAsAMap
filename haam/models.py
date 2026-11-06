@@ -10,7 +10,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Enum, ForeignKey, Index, String, Text
+from sqlalchemy import Enum, ForeignKey, Index, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from haam.extensions import db
@@ -116,6 +116,8 @@ class Event(db.Model):
     status: Mapped[Status] = mapped_column(_enum_column(Status), default=Status.PENDING)
     # True when the submitter changed data extracted from Wikipedia.
     modified: Mapped[bool] = mapped_column(default=False)
+    # True for events submitted through "Add event"; False for imports (CLI, CSV, Wikidata).
+    from_website: Mapped[bool] = mapped_column(default=False, server_default=false())
 
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)

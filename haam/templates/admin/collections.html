@@ -14,7 +14,7 @@
 <div class="page">
   <header class="page-header">
     <h1>Review collections</h1>
-    <p><a href="{{ url_for('admin.review') }}">← Events</a> · Reported collections are listed first.</p>
+    <p><a href="{{ url_for('admin.review') }}">← Events</a> · <a href="{{ url_for('admin.recent') }}">Recent activity</a> · Reported collections are listed first.</p>
   </header>
 
   {% if not collections %}<p class="empty-state">No collections yet.</p>{% endif %}

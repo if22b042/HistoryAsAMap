@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
-from haam import auth, collections_service, events
+from haam import activity, auth, collections_service, events
 from haam.dates import format_year
 from haam.events import EventData
 from haam.forms import ActionForm, EventForm, LoginForm
@@ -12,6 +12,8 @@ from haam.extensions import db
 from haam.models import Collection, Status
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+REVIEW_PER_PAGE = 50
 
 
 def _safe_next(target: str | None) -> str:
@@ -53,13 +55,31 @@ def review():
         status = Status(request.args.get("status", Status.PENDING.value))
     except ValueError:
         abort(404)
-    counts = {s: len(events.events_with_status(s)) for s in Status}
+    counts = events.status_counts()
+    pages = max(1, -(-counts[status] // REVIEW_PER_PAGE))
+    page = min(request.args.get("page", 1, type=int) or 1, pages)
     return render_template(
         "admin/review.html",
-        events=events.events_with_status(status),
+        events=events.events_page(status, page, REVIEW_PER_PAGE),
         status=status,
         counts=counts,
+        page=max(page, 1),
+        pages=pages,
         action_form=ActionForm(),
+    )
+
+
+@bp.get("/recent")
+@auth.admin_required
+def recent():
+    days = request.args.get("days", 7, type=int)
+    if days not in activity.PERIODS:
+        days = 7
+    return render_template(
+        "admin/recent.html",
+        activity=activity.recent_activity(days),
+        days=days,
+        periods=activity.PERIODS,
     )
 
 
