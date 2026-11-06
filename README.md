@@ -134,6 +134,13 @@ Two exports are in `seed/`:
 | `wikidata_events_places.csv` (+ `wikidata_rejected_places.csv`) | 18,078 | only specific places (towns, buildings); the current rules |
 | `wikidata_events.csv` (+ `wikidata_rejected.csv`) | 21,680 | older export that also placed 3,602 events at the centre of a country, region or sea |
 
+A database loaded from the older file can drop those 3,602 events with
+(`--dry-run` only counts; events used in a collection are kept and listed):
+
+```bash
+flask --app haam haam remove-events seed/wikidata_rejected_places.csv --reason "location is a country"
+```
+
 An item becomes an event only if it passes all of these checks
 (`haam/wikidata.py: validate`, tested in `tests/test_wikidata.py`):
 
