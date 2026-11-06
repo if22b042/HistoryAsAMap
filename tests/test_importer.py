@@ -107,3 +107,39 @@ def test_import_csv_status_and_coordinate_override(wiki, tmp_path):
     assert (versailles.status, versailles.lat, versailles.lon) == (Status.APPROVED, 48.8049, 2.1204)
     armada = db.session.scalar(db.select(Event).filter_by(title="Spanish Armada"))
     assert armada.status == Status.REJECTED
+
+
+def test_remove_listed_events(app, make_event, tmp_path):
+    from haam import collections_service
+    from haam.models import Tag
+
+    atlantic = make_event(title="Battle of the Atlantic", wikidata_id="Q157627")
+    atlantic.tags = [db.session.scalars(db.select(Tag)).first()]
+    in_collection = make_event(title="Tyrolean Rebellion", wikidata_id="Q664364")
+    keeps_other_reason = make_event(title="Battle of Salvore", wikidata_id="Q3")
+    submitted = make_event(title="Siege of Somewhere", wikidata_id="Q4", from_website=True)
+    db.session.commit()
+    collection, _ = collections_service.create_collection("Mine", "", is_public=False)
+    collections_service.add_event(collection, in_collection.id, "")
+
+    rejected = tmp_path / "rejected.csv"
+    rejected.write_text(
+        "wikidata_id,title,event_type,reason\n"
+        "Q157627,Battle of the Atlantic,battle,location is a country or region, not a specific place: Atlantic Ocean\n"
+        "Q664364,Tyrolean Rebellion,rebellion,location is a country or region, not a specific place: County of Tyrol\n"
+        "Q4,Siege of Somewhere,siege,location is a country or region, not a specific place: X\n"
+        "Q999,Never imported,battle,location is a country or region, not a specific place: Y\n"
+        "Q3,Battle of Salvore,battle,Wikipedia link leads to another topic: Domenico Tintoretto (Q999)\n",
+        encoding="utf-8")
+
+    dry = importer.remove_listed(str(rejected), reason="location is a country", dry_run=True, report=lambda m: None)
+    assert (dry.listed, dry.removed) == (4, 0)
+    assert db.session.get(Event, atlantic.id) is not None
+
+    stats = importer.remove_listed(str(rejected), reason="location is a country", report=lambda m: None)
+    assert (stats.listed, stats.removed, stats.not_found) == (4, 1, 2)
+    assert stats.kept_in_collections == ["Tyrolean Rebellion"]
+    titles = set(db.session.scalars(db.select(Event.title)))
+    assert titles == {"Tyrolean Rebellion", "Battle of Salvore", "Siege of Somewhere"}
+    assert db.session.execute(db.text("SELECT COUNT(*) FROM haam_event_tags")).scalar() == 0
+    assert keeps_other_reason.id and submitted.id

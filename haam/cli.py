@@ -105,6 +105,22 @@ def export_wikidata_command(out, rejected, type_ids, limit, status, undated):
         raise SystemExit(1)
 
 
+@haam_cli.command("remove-events")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--reason", default="", help="Only rows whose reason column starts with this text.")
+@click.option("--dry-run", is_flag=True, help="Only count what would be removed.")
+def remove_events_command(path, reason, dry_run):
+    """Delete the events whose wikidata_id is listed in a CSV (e.g. a rejected file).
+
+    Example – the events placed at a country or region:
+    flask --app haam haam remove-events seed/wikidata_rejected_places.csv --reason "location is a country"
+    """
+    stats = importer.remove_listed(path, reason=reason, dry_run=dry_run, report=click.echo)
+    click.echo(f"Done: {stats}")
+    if stats.kept_in_collections:
+        click.echo("Kept because they are used in a collection: " + "; ".join(stats.kept_in_collections))
+
+
 @haam_cli.command("import-legacy")
 def import_legacy_command():
     """Copy events from the previous version's tables (entries/locations)."""

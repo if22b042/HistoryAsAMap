@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import inspect, select, text
 
@@ -379,3 +379,66 @@ def _legacy_tag_names(value) -> list[str]:
         except ValueError:
             return []
     return [str(v) for v in value] if isinstance(value, list) else []
+
+
+# ------------------------------------------------------------------ removal
+
+@dataclass
+class RemoveStats:
+    listed: int = 0  # rows in the file that match
+    removed: int = 0
+    not_found: int = 0  # not in the database (never imported, or already removed)
+    kept_in_collections: list[str] = field(default_factory=list)  # titles
+
+    def __str__(self) -> str:
+        return (f"listed={self.listed} removed={self.removed} not_found={self.not_found} "
+                f"kept_in_collections={len(self.kept_in_collections)}")
+
+
+def remove_listed(path: str, *, reason: str = "", dry_run: bool = False,
+                  report: Reporter = print, chunk: int = 500) -> RemoveStats:
+    """Delete the events whose ``wikidata_id`` is listed in a CSV, e.g. a rejected file.
+
+    ``reason`` keeps only rows whose ``reason`` column starts with it. Events that
+    people put on the website, and events used in a collection, are never deleted;
+    the latter are reported so they can be handled by hand.
+    """
+    from haam.models import CollectionEntry, event_tags  # local: avoids a wider import cycle
+
+    stats = RemoveStats()
+    with open(path, newline="", encoding="utf-8") as handle:
+        rows = [r for r in csv.DictReader(handle)
+                if r.get("wikidata_id") and (r.get("reason") or "").startswith(reason)]
+    qids = sorted({r["wikidata_id"].strip() for r in rows})
+    stats.listed = len(qids)
+
+    found: list[tuple[int, str]] = []
+    for part in _chunks(qids, chunk):
+        found += db.session.execute(
+            select(Event.id, Event.title).where(Event.wikidata_id.in_(part), Event.from_website.is_(False))).all()
+    stats.not_found = stats.listed - len(found)
+
+    ids = [event_id for event_id, _ in found]
+    used = set()
+    for part in _chunks(ids, chunk):
+        used |= set(db.session.scalars(select(CollectionEntry.event_id).where(CollectionEntry.event_id.in_(part))))
+    stats.kept_in_collections = sorted(title for event_id, title in found if event_id in used)
+    doomed = [event_id for event_id in ids if event_id not in used]
+
+    if not dry_run:
+        for part in _chunks(doomed, chunk):
+            # Tag links first: SQLite does not enforce ON DELETE CASCADE by default.
+            db.session.execute(event_tags.delete().where(event_tags.c.event_id.in_(part)))
+            db.session.execute(Event.__table__.delete().where(Event.id.in_(part)))
+            db.session.commit()
+            report(f"  {min(len(doomed), stats.removed + len(part))}/{len(doomed)} removed")
+            stats.removed += len(part)
+    else:
+        stats.removed = 0
+        report(f"  dry run: would remove {len(doomed)}")
+    return stats
+
+
+def _chunks(items: list, size: int):
+    for start in range(0, len(items), size):
+        yield items[start:start + size]
