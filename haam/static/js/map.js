@@ -22,8 +22,33 @@ const state = {
   tagId: null,
   query: "",
   heatmap: false,
+  colorByYear: false,
+  // Years the colour scale spans: the earliest and latest event currently shown.
+  colorFrom: 0,
+  colorTo: 0,
   openId: null,
 };
+
+// ------------------------------------------------------------ year colours
+
+// The scale runs once through the spectrum: red (earliest) → violet (latest).
+const HUE_SPAN = 280;
+
+function hueForYear(year) {
+  const span = state.colorTo - state.colorFrom;
+  if (span <= 0) return 0;
+  const t = Math.min(1, Math.max(0, (year - state.colorFrom) / span));
+  return Math.round(t * HUE_SPAN);
+}
+
+const yearColor = (year) => `hsl(${hueForYear(year)} 85% 45%)`;
+const hueColor = (hue) => `hsl(${hue} 85% 45%)`;
+
+/** In colour mode a year label gets its year's colour, so the list matches the map. */
+function paintYearPill(pill, year) {
+  pill.classList.toggle("year-pill-colored", state.colorByYear);
+  pill.style.background = state.colorByYear ? yearColor(year) : "";
+}
 
 // ------------------------------------------------------------------ helpers
 
@@ -87,6 +112,17 @@ const clusters = L.markerClusterGroup({
   iconCreateFunction(cluster) {
     const count = cluster.getChildCount();
     const size = count < 10 ? "small" : count < 100 ? "medium" : "large";
+    if (state.colorByYear) {
+      // A cluster takes the colour of the average year of the events in it.
+      const markers = cluster.getAllChildMarkers();
+      const mean = markers.reduce((sum, m) => sum + m.options.year, 0) / markers.length;
+      return L.divIcon({
+        // Only numbers we computed go into this HTML – safe.
+        html: `<span class="cluster-year-fill" style="background:${yearColor(mean)}">${count}</span>`,
+        className: `cluster cluster-year cluster-${size}`,
+        iconSize: L.point(40, 40),
+      });
+    }
     return L.divIcon({
       html: `<span>${count}</span>`, // a number we computed – safe
       className: `cluster cluster-${size}`,
@@ -97,13 +133,75 @@ const clusters = L.markerClusterGroup({
 
 let heatLayer = null;
 
+const MARKER_ICON = { iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -9] };
+const categoryIcons = new Map();
+const hueIcons = new Map(); // at most HUE_SPAN + 1 icons, shared by all markers
+
 function markerIcon(category) {
-  return L.divIcon({
-    className: `marker marker-${category}`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    popupAnchor: [0, -9],
+  if (!categoryIcons.has(category)) {
+    categoryIcons.set(category, L.divIcon({ className: `marker marker-${category}`, ...MARKER_ICON }));
+  }
+  return categoryIcons.get(category);
+}
+
+function yearIcon(year) {
+  const hue = hueForYear(year);
+  if (!hueIcons.has(hue)) {
+    hueIcons.set(hue, L.divIcon({
+      className: "marker marker-year",
+      html: `<span class="marker-year-fill" style="background:${hueColor(hue)}"></span>`,
+      ...MARKER_ICON,
+    }));
+  }
+  return hueIcons.get(hue);
+}
+
+// ------------------------------------------------------------ year legend
+
+// Bottom right, above the zoom buttons: the filter panel covers the left side.
+const legend = L.control({ position: "bottomright" });
+legend.onAdd = () => {
+  const box = el("div", "year-legend");
+  box.append(el("span", "year-legend-title", "Colour = year"));
+  const bar = el("div", "year-legend-bar");
+  const stops = Array.from({ length: 8 }, (_, i) => hueColor(Math.round((i / 7) * HUE_SPAN)));
+  bar.style.background = `linear-gradient(to right, ${stops.join(", ")})`;
+  box.append(bar, el("div", "year-legend-ticks"), el("span", "year-legend-span"));
+  L.DomEvent.disableClickPropagation(box);
+  return box;
+};
+
+function updateLegend() {
+  const box = legend.getContainer();
+  if (!box) return;
+  const { colorFrom: from, colorTo: to } = state;
+  const ticks = box.querySelector(".year-legend-ticks");
+  const span = box.querySelector(".year-legend-span");
+  if (!state.filtered.length) {
+    ticks.replaceChildren(el("span", null, "No events"));
+    span.textContent = "";
+    return;
+  }
+  const count = to - from >= 4 ? 5 : to > from ? 2 : 1;
+  const values = count === 1 ? [from] : Array.from({ length: count }, (_, i) => Math.round(from + ((to - from) * i) / (count - 1)));
+  ticks.replaceChildren(...values.map((year) => {
+    const tick = el("span", "year-legend-tick", formatYear(year));
+    tick.style.color = yearColor(year);
+    return tick;
+  }));
+  const years = to - from;
+  span.textContent = years > 0 ? `${years.toLocaleString()} years, earliest → latest shown` : "All in one year";
+}
+
+function updateColorRange() {
+  let from = Infinity;
+  let to = -Infinity;
+  state.filtered.forEach((e) => {
+    if (e.year < from) from = e.year;
+    if (e.year > to) to = e.year;
   });
+  state.colorFrom = Number.isFinite(from) ? from : 0;
+  state.colorTo = Number.isFinite(to) ? to : 0;
 }
 
 function popupContent(event) {
@@ -119,7 +217,7 @@ function popupContent(event) {
 }
 
 function createMarker(event) {
-  return L.marker([event.lat, event.lon], { icon: markerIcon(event.category), title: event.title })
+  return L.marker([event.lat, event.lon], { icon: markerIcon(event.category), title: event.title, year: event.year })
     .bindPopup(() => popupContent(event), { maxWidth: 300 });
 }
 
@@ -146,7 +244,9 @@ function showEvent(id, { fly = true } = {}) {
   if (!event) return;
 
   const parts = [];
-  parts.push(el("span", "year-pill", event.date || event.display_year));
+  const pill = el("span", "year-pill", event.date || event.display_year);
+  paintYearPill(pill, event.year);
+  parts.push(pill);
   parts.push(el("h3", "detail-title", event.title));
 
   const meta = el("p", "detail-meta");
@@ -237,12 +337,22 @@ function applyFilters() {
     map.removeLayer(heatLayer);
     heatLayer = null;
   }
+  updateColorRange();
   if (state.heatmap) {
     heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10 });
     heatLayer.addTo(map);
   } else {
+    // Markers off the map only store their new icon, so this is cheap.
+    state.filtered.forEach((e) => {
+      state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
+    });
     clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)));
   }
+
+  const showLegend = state.colorByYear && !state.heatmap;
+  if (showLegend && !legend.getContainer()?.parentNode) legend.addTo(map);
+  if (!showLegend && legend.getContainer()?.parentNode) legend.remove();
+  if (showLegend) updateLegend();
 
   const total = state.events.length;
   document.getElementById("result-count").textContent =
@@ -265,7 +375,9 @@ function renderList() {
   const fragment = document.createDocumentFragment();
   state.filtered.slice(0, listLimit).forEach((event) => {
     const card = template.content.firstElementChild.cloneNode(true);
-    card.querySelector(".year-pill").textContent = event.display_year;
+    const pill = card.querySelector(".year-pill");
+    pill.textContent = event.display_year;
+    paintYearPill(pill, event.year);
     const badge = card.querySelector(".badge");
     badge.classList.add(`badge-${event.category}`);
     badge.textContent = CATEGORY_LABELS[event.category];
@@ -381,6 +493,30 @@ function setupHeatmapToggle() {
   });
 }
 
+const COLOR_PREF = "haam.colorByYear";
+
+function setupColorToggle() {
+  const button = document.getElementById("color-toggle");
+  const render = () => {
+    button.classList.toggle("active", state.colorByYear);
+    button.setAttribute("aria-pressed", String(state.colorByYear));
+    button.querySelector("span").textContent = state.colorByYear ? "Colour by year on" : "Colour by year";
+  };
+  try {
+    state.colorByYear = localStorage.getItem(COLOR_PREF) === "1";
+  } catch { /* storage blocked: start with the setting off */ }
+  render();
+  button.addEventListener("click", () => {
+    state.colorByYear = !state.colorByYear;
+    try {
+      localStorage.setItem(COLOR_PREF, state.colorByYear ? "1" : "0");
+    } catch { /* not remembered, still works */ }
+    render();
+    applyFilters();
+    if (state.openId !== null && !sidebar.hidden) showEvent(state.openId, { fly: false });
+  });
+}
+
 function setupFilterPanelToggle() {
   document.querySelectorAll("[data-toggle-filters]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -396,6 +532,7 @@ async function init() {
   setupCategoryButtons();
   setupSearch();
   setupHeatmapToggle();
+  setupColorToggle();
   setupFilterPanelToggle();
 
   let events;
