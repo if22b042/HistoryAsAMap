@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -64,6 +64,27 @@ def approved_events() -> list[Event]:
 
 def events_with_status(status: Status) -> list[Event]:
     stmt = select(Event).where(Event.status == status).order_by(Event.created_at.desc())
+    return list(db.session.scalars(stmt))
+
+
+def status_counts() -> dict[Status, int]:
+    """Number of events per status, counted in the database (one query)."""
+    rows = db.session.execute(select(Event.status, func.count(Event.id)).group_by(Event.status))
+    counts = {status: 0 for status in Status}
+    counts.update({status: count for status, count in rows})
+    return counts
+
+
+def events_page(status: Status, page: int = 1, per_page: int = 50) -> list[Event]:
+    """One page of events with ``status``: website submissions first, then newest first."""
+    stmt = (
+        select(Event)
+        .where(Event.status == status)
+        .order_by(Event.from_website.desc(), Event.created_at.desc(), Event.id.desc())
+        .offset((max(page, 1) - 1) * per_page)
+        .limit(per_page)
+        .options(selectinload(Event.tags))
+    )
     return list(db.session.scalars(stmt))
 
 
@@ -129,7 +150,8 @@ def _differs_from(article: Article, data: EventData) -> bool:
     )
 
 
-def create_event(article: Article, data: EventData, status: Status = Status.PENDING) -> Event:
+def create_event(article: Article, data: EventData, status: Status = Status.PENDING,
+                 from_website: bool = False) -> Event:
     """Store a new event. Submissions from the website start as ``pending``."""
     event = Event(
         title=data.title,
@@ -144,6 +166,7 @@ def create_event(article: Article, data: EventData, status: Status = Status.PEND
         category=data.category,
         status=status,
         modified=_differs_from(article, data),
+        from_website=from_website,
         tags=_tags_by_id(data.tag_ids),
     )
     db.session.add(event)
@@ -158,7 +181,7 @@ def create_event(article: Article, data: EventData, status: Status = Status.PEND
 def submit(url: str, data: EventData) -> Event:
     """Handle a submission from the website (re-checks the article server-side)."""
     article = preview(url)
-    return create_event(article, data)
+    return create_event(article, data, from_website=True)
 
 
 def update_event(event: Event, data: EventData) -> Event:

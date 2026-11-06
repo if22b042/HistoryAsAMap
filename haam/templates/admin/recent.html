@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% from "_macros.html" import category_badge %}
+{% block title %}Recent activity{% endblock %}
+
+{% macro more(shown, total) %}
+  {% if total > shown|length %}<p class="form-hint">Showing the newest {{ shown|length }} of {{ total }}.</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header">
+    <h1>Recent activity</h1>
+    <p>
+      <a href="{{ url_for('admin.review') }}">← Review events</a> ·
+      <a href="{{ url_for('admin.collections') }}">Review collections</a>
+    </p>
+  </header>
+
+  <nav class="tabs" aria-label="Period">
+    {% for value, label in periods.items() %}
+      <a class="tab {{ 'active' if value == days }}" href="{{ url_for('admin.recent', days=value) }}"
+         {% if value == days %}aria-current="page"{% endif %}>Last {{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <p class="review-meta">
+    Since {{ activity.since.strftime('%d %b %Y, %H:%M') }} UTC:
+    <strong>{{ activity.submitted_count }}</strong> event{{ 's' if activity.submitted_count != 1 }} submitted ·
+    <strong>{{ activity.imported_count }}</strong> imported ·
+    <strong>{{ activity.collections_count }}</strong> collection{{ 's' if activity.collections_count != 1 }} ·
+    <strong>{{ activity.entries_count }}</strong> collection entr{{ 'ies' if activity.entries_count != 1 else 'y' }} ·
+    <strong>{{ activity.reports_count }}</strong> report{{ 's' if activity.reports_count != 1 }}
+  </p>
+
+  {% if activity.is_empty %}
+    <p class="empty-state">Nothing new in the last {{ periods[days] }}.</p>
+  {% endif %}
+
+  {% if activity.submitted %}
+    <h2>Events submitted on the website</h2>
+    <div class="review-list">
+      {% for event in activity.submitted %}
+        <article class="card review-card">
+          <header>
+            <span class="year-pill">{{ event.year|year }}</span>
+            {{ category_badge(event.category) }}
+            <span class="badge {{ 'badge-diplomatic' if event.status.value == 'approved' else 'badge-military' if event.status.value == 'rejected' else 'badge-warning' }}">{{ event.status.value }}</span>
+            <h3><a href="{{ url_for('admin.edit', event_id=event.id) }}">{{ event.title }}</a></h3>
+          </header>
+          <p class="review-meta">{{ event.created_at.strftime('%d %b %Y, %H:%M') }} UTC ·
+            <a href="{{ event.wiki_url }}" target="_blank" rel="noopener">Wikipedia</a></p>
+        </article>
+      {% endfor %}
+    </div>
+    {{ more(activity.submitted, activity.submitted_count) }}
+  {% endif %}
+
+  {% if activity.imported_count %}
+    <p class="form-hint">{{ activity.imported_count }} event{{ 's' if activity.imported_count != 1 }} came from imports
+      (CSV, Wikidata, command line) and {{ 'is' if activity.imported_count == 1 else 'are' }} not listed one by one.
+      They are in the <a href="{{ url_for('admin.review', status='approved') }}">review tabs</a>.</p>
+  {% endif %}
+
+  {% if activity.collections %}
+    <h2>New collections</h2>
+    <div class="review-list">
+      {% for collection in activity.collections %}
+        <article class="card review-card">
+          <header>
+            <span class="badge {{ 'badge-diplomatic' if collection.is_public else 'badge-other' }}">{{ 'public' if collection.is_public else 'unlisted' }}</span>
+            {% if collection.is_hidden %}<span class="badge badge-warning">hidden</span>{% endif %}
+            <h3><a href="{{ url_for('collections.view', view_token=collection.view_token) }}" target="_blank" rel="noopener">{{ collection.title }}</a></h3>
+          </header>
+          <p class="review-meta">{{ collection.created_at.strftime('%d %b %Y, %H:%M') }} UTC · {{ collection.entries|length }} entries</p>
+        </article>
+      {% endfor %}
+    </div>
+    {{ more(activity.collections, activity.collections_count) }}
+  {% endif %}
+
+  {% if activity.entries %}
+    <h2>New collection entries</h2>
+    <div class="review-list">
+      {% for entry in activity.entries %}
+        <article class="card review-card">
+          <header>
+            <span class="badge {{ 'badge-diplomatic' if entry.is_event else 'badge-other' }}">{{ 'from main map' if entry.is_event else 'custom' }}</span>
+            <h3>{{ entry.title }}</h3>
+          </header>
+          <p class="review-meta">{{ entry.created_at.strftime('%d %b %Y, %H:%M') }} UTC · in
+            <a href="{{ url_for('collections.view', view_token=entry.collection.view_token) }}" target="_blank" rel="noopener">{{ entry.collection.title }}</a>
+            {% if not entry.is_event and entry.link %} ·
+              <a href="{{ entry.link }}" target="_blank" rel="noopener noreferrer nofollow ugc">link</a>{% endif %}
+          </p>
+        </article>
+      {% endfor %}
+    </div>
+    {{ more(activity.entries, activity.entries_count) }}
+  {% endif %}
+
+  {% if activity.reports %}
+    <h2>Reports</h2>
+    <ul class="report-list">
+      {% for report in activity.reports %}
+        <li>“{{ report.reason }}” on
+          <a href="{{ url_for('collections.view', view_token=report.collection.view_token) }}" target="_blank" rel="noopener">{{ report.collection.title }}</a>
+          <span class="form-hint">{{ report.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span></li>
+      {% endfor %}
+    </ul>
+    {{ more(activity.reports, activity.reports_count) }}
+  {% endif %}
+</div>
+{% endblock %}
