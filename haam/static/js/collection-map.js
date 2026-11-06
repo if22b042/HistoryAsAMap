@@ -56,8 +56,21 @@ if (dataTag && mapElement) {
   if (points.length === 1) map.setView(points[0], 6);
   else map.fitBounds(points, { padding: [40, 40], maxZoom: 8 });
 
+  // The same black-and-white ring as on the main map marks the selected entry.
+  const selectionRing = L.marker([0, 0], {
+    icon: L.divIcon({ className: "selected-ring", iconSize: [44, 44], iconAnchor: [22, 22] }),
+    interactive: false,
+    keyboard: false,
+    zIndexOffset: 10000,
+  });
+
   function highlight(id, scroll) {
     document.querySelectorAll(".entry-card.active").forEach((c) => c.classList.remove("active"));
+    const marker = markers.get(id);
+    if (marker) {
+      selectionRing.setLatLng(marker.getLatLng());
+      if (!map.hasLayer(selectionRing)) selectionRing.addTo(map);
+    }
     const card = document.getElementById(`entry-${id}`);
     if (!card) return;
     card.classList.add("active");

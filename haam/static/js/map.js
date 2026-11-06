@@ -304,6 +304,7 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   parts.push(actions);
 
   state.openId = id;
+  showSelection(event);
   sidebarContent.replaceChildren(...parts);
   sidebar.hidden = false;
   document.body.classList.add("sidebar-open");
@@ -319,7 +320,25 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   timeline.setActive(id);
 }
 
+// A black-and-white ring around the event that is open on the right. It uses no
+// colour, so it never looks like a category or year colour, and it is a separate
+// layer on top, so it shows even when the event is inside a cluster.
+const selectionRing = L.marker([0, 0], {
+  icon: L.divIcon({ className: "selected-ring", iconSize: [38, 38], iconAnchor: [19, 19] }),
+  interactive: false,
+  keyboard: false,
+  zIndexOffset: 10000,
+});
+
+function showSelection(event) {
+  selectionRing.setLatLng([event.lat, event.lon]);
+  if (!map.hasLayer(selectionRing)) selectionRing.addTo(map);
+}
+
 function closeSidebar() {
+  if (map.hasLayer(selectionRing)) selectionRing.remove();
+  timeline.setActive(null);
+  state.openId = null;
   sidebar.hidden = true;
   document.body.classList.remove("sidebar-open");
   const url = new URL(window.location);
