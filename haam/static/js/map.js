@@ -324,19 +324,76 @@ function closeSidebar() {
 }
 
 document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !sidebar.hidden) closeSidebar(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !e.defaultPrevented && !sidebar.hidden) closeSidebar();
+});
 
 // -------------------------------------------------------------- filtering
+
+// ------------------------------------------------------------------ search
+
+const search = {
+  terms: [], // lower-case words and "quoted phrases"
+  patterns: [], // one RegExp per term
+  in: "all", // "all" = titles and descriptions, "title" = titles only
+  match: "all", // every term must match, or "any"
+  whole: false, // whole words only
+  sort: "best",
+};
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function parseQuery(text) {
+  const terms = [];
+  const re = /"([^"]+)"|(\S+)/g;
+  let m;
+  while ((m = re.exec(text.toLowerCase()))) {
+    const term = (m[1] || m[2]).trim();
+    if (term) terms.push(term);
+  }
+  return terms;
+}
+
+function setQuery(text) {
+  search.terms = parseQuery(text);
+  search.patterns = search.terms.map((term) => {
+    const body = escapeRegExp(term).replace(/\s+/g, "\\s+");
+    return new RegExp(search.whole ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body, "iu");
+  });
+  state.query = search.terms.join(" ");
+}
+
+/** Lower-cased texts to search, built once per event. */
+function searchText(event) {
+  if (event._title === undefined) {
+    event._title = event.title.toLowerCase();
+    event._text = `${event.excerpt} ${event.display_year} ${event.date} ${event.year}`.toLowerCase();
+  }
+  return event;
+}
+
+/** 0 = no match; higher = better (title hits count more than description hits). */
+function searchScore(event) {
+  if (!search.patterns.length) return 1;
+  searchText(event);
+  let score = 0;
+  let hits = 0;
+  search.patterns.forEach((pattern, i) => {
+    let s = 0;
+    if (pattern.test(event._title)) s = event._title.startsWith(search.terms[i]) ? 4 : 3;
+    else if (search.in === "all" && pattern.test(event._text)) s = 1;
+    if (s) hits += 1;
+    score += s;
+  });
+  if (search.match === "all" ? hits < search.patterns.length : hits === 0) return 0;
+  return score;
+}
 
 function matches(event) {
   if (event.year < state.yearFrom || event.year > state.yearTo) return false;
   if (state.category !== "all" && event.category !== state.category) return false;
   if (state.tagId !== null && !event.tags.includes(state.tagId)) return false;
-  if (state.query) {
-    const haystack = `${event.title} ${event.excerpt} ${event.display_year} ${event.date}`.toLowerCase();
-    if (!haystack.includes(state.query)) return false;
-  }
-  return true;
+  return searchScore(event) > 0;
 }
 
 function applyFilters() {
@@ -372,6 +429,7 @@ function applyFilters() {
   document.getElementById("result-count").textContent =
     state.filtered.length === total ? `${total} events` : `${state.filtered.length} of ${total} events`;
   renderList();
+  renderSearchResults();
 }
 
 const LIST_PAGE = 60;
@@ -488,12 +546,176 @@ function setupTagFilter(tags) {
   });
 }
 
+const RESULTS_PAGE = 100;
+const searchPanel = document.getElementById("search-panel");
+const searchResults = document.getElementById("search-results");
+let resultsLimit = RESULTS_PAGE;
+let activeResult = -1;
+
+/** The text with every matched term wrapped in <mark> (built from text nodes, never HTML). */
+function highlighted(text) {
+  const box = document.createDocumentFragment();
+  if (!search.patterns.length || !text) {
+    box.append(text || "");
+    return box;
+  }
+  // Short words ("of", "a") still have to match, but highlighting them everywhere is noise.
+  const shown = search.patterns.filter((_, i) => search.terms[i].length >= 3);
+  if (!shown.length) {
+    box.append(text);
+    return box;
+  }
+  const source = shown.map((p) => `(?:${p.source})`).join("|");
+  const re = new RegExp(source, "giu");
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    if (!m[0]) continue;
+    box.append(text.slice(last, m.index), el("mark", null, m[0]));
+    last = m.index + m[0].length;
+  }
+  box.append(text.slice(last));
+  return box;
+}
+
+function sortedResults() {
+  const results = state.filtered.slice();
+  const byYear = (a, b) => a.year - b.year || a.title.localeCompare(b.title);
+  if (search.sort === "oldest") results.sort(byYear);
+  else if (search.sort === "newest") results.sort((a, b) => -byYear(a, b));
+  else if (search.sort === "title") results.sort((a, b) => a.title.localeCompare(b.title));
+  else {
+    const scores = new Map(results.map((e) => [e.id, searchScore(e)]));
+    results.sort((a, b) => scores.get(b.id) - scores.get(a.id) || byYear(a, b));
+  }
+  return results;
+}
+
+function renderSearchResults() {
+  if (searchPanel.hidden) return;
+  const status = document.getElementById("search-status");
+  const results = sortedResults();
+  const total = state.events.length;
+  const filtersOn = state.category !== "all" || state.tagId !== null || state.filtered.length < total && !search.terms.length;
+  status.textContent = !search.terms.length
+    ? `Type to search ${total.toLocaleString()} events${filtersOn ? " (filters apply)" : ""}.`
+    : results.length
+      ? `${results.length.toLocaleString()} event${results.length === 1 ? "" : "s"} match`
+      : "No events match. Try “Any word”, fewer words, or clear the year, category and tag filters.";
+
+  if (!search.terms.length) {
+    searchResults.replaceChildren();
+    return;
+  }
+  const items = results.slice(0, resultsLimit).map((event, index) => {
+    const li = el("li");
+    const button = el("button", "search-result");
+    button.type = "button";
+    button.dataset.index = index;
+    const meta = el("span", "search-result-meta");
+    const pill = el("span", "year-pill", event.date || event.display_year);
+    paintYearPill(pill, event.year);
+    meta.append(pill, el("span", `badge badge-${event.category}`, CATEGORY_LABELS[event.category]));
+    const title = el("span", "search-result-title");
+    title.append(highlighted(event.title));
+    const excerpt = el("span", "search-result-excerpt");
+    excerpt.append(highlighted(event.excerpt));
+    button.append(meta, title, excerpt);
+    button.addEventListener("click", () => openResult(event.id));
+    li.append(button);
+    return li;
+  });
+  if (results.length > resultsLimit) {
+    const more = el("button", "btn btn-secondary btn-small search-more",
+      `Show ${Math.min(RESULTS_PAGE, results.length - resultsLimit)} more (${(results.length - resultsLimit).toLocaleString()} left)`);
+    more.type = "button";
+    more.addEventListener("click", () => { resultsLimit += RESULTS_PAGE; renderSearchResults(); });
+    const li = el("li");
+    li.append(more);
+    items.push(li);
+  }
+  searchResults.replaceChildren(...items);
+  activeResult = -1;
+}
+
+function openResult(id) {
+  closeSearchPanel();
+  showEvent(id, { zoom: 8 });
+}
+
+function openSearchPanel() {
+  const big = document.getElementById("search-big");
+  big.value = document.getElementById("search").value;
+  searchPanel.hidden = false;
+  document.body.classList.add("search-open");
+  resultsLimit = RESULTS_PAGE;
+  renderSearchResults();
+  big.focus();
+  big.select();
+}
+
+function closeSearchPanel() {
+  searchPanel.hidden = true;
+  document.body.classList.remove("search-open");
+  document.getElementById("search-expand").focus({ preventScroll: true });
+}
+
+function moveActive(step) {
+  const buttons = [...searchResults.querySelectorAll(".search-result")];
+  if (!buttons.length) return;
+  activeResult = (activeResult + step + buttons.length) % buttons.length;
+  buttons.forEach((b, i) => b.classList.toggle("active", i === activeResult));
+  buttons[activeResult].scrollIntoView({ block: "nearest" });
+}
+
 function setupSearch() {
-  const input = document.getElementById("search");
-  input.addEventListener("input", debounce(() => {
-    state.query = input.value.trim().toLowerCase();
+  const small = document.getElementById("search");
+  const big = document.getElementById("search-big");
+  const run = debounce(() => {
+    resultsLimit = RESULTS_PAGE;
     refilter();
-  }, 200));
+  }, 200);
+  const onInput = (source, other) => () => {
+    other.value = source.value;
+    setQuery(source.value);
+    run();
+  };
+  small.addEventListener("input", onInput(small, big));
+  big.addEventListener("input", onInput(big, small));
+
+  const options = { "search-in": "in", "search-match": "match", "search-sort": "sort" };
+  Object.entries(options).forEach(([id, key]) => {
+    document.getElementById(id).addEventListener("change", (e) => {
+      search[key] = e.target.value;
+      setQuery(big.value);
+      if (key === "sort") renderSearchResults(); else refilter();
+    });
+  });
+  document.getElementById("search-whole").addEventListener("change", (e) => {
+    search.whole = e.target.checked;
+    setQuery(big.value);
+    refilter();
+  });
+
+  document.getElementById("search-expand").addEventListener("click", openSearchPanel);
+  document.getElementById("search-close").addEventListener("click", closeSearchPanel);
+  searchPanel.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); closeSearchPanel(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); moveActive(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); moveActive(-1); }
+    else if (e.key === "Enter" && e.target === big) {
+      e.preventDefault();
+      const target = searchResults.querySelectorAll(".search-result")[Math.max(activeResult, 0)];
+      if (target) target.click();
+    }
+  });
+  // "/" or Ctrl+K opens the large search from anywhere except a text field.
+  document.addEventListener("keydown", (e) => {
+    const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
+    if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
+      e.preventDefault();
+      openSearchPanel();
+    }
+  });
 }
 
 function setupHeatmapToggle() {
