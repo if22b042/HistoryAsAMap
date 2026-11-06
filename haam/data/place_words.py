@@ -28,7 +28,7 @@ Yemen Yugoslavia Zambia Zimbabwe Ceylon Persia Prussia Bavaria Saxony Siam Abyss
 Zaire Bohemia Moravia Hispania Gaul Britannia Anatolia Mesopotamia Byzantium Carthage Macedon
 Babylonia Assyria Phoenicia Judea Judaea Castile Aragon Navarre Granada Flanders Holland
 Burgundy Brittany Normandy Wales Scotland England Britain Austria-Hungary Manchuria Tibet
-Kurdistan Armenia Mughal Ottoman Seljuk
+Kurdistan
 """.split() + [
     "United States", "United Kingdom", "Soviet Union", "New Zealand", "South Africa",
     "Saudi Arabia", "Sri Lanka", "Costa Rica", "El Salvador", "Ivory Coast", "Côte d'Ivoire",
