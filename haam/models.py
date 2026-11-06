@@ -37,6 +37,7 @@ class Category(enum.Enum):
     DIPLOMATIC = "diplomatic"
     NAVAL = "naval"
     SCIENTIFIC = "scientific"
+    NATURAL = "natural"  # earthquakes, eruptions, storms, floods, fires
     OTHER = "other"
 
     @property
@@ -229,7 +230,9 @@ class CollectionEntry(db.Model):
     """One point in a collection: either a main-map event or a custom entry.
 
     Custom entries live only inside their collection and are not reviewed.
-    For main-map events the event's own data is shown; only ``note`` is stored here.
+    For main-map events the event's own data is shown; only ``note`` is stored
+    here – and, optionally, other coordinates for this collection (``custom_lat``
+    / ``custom_lon``), which never change the event itself.
     """
 
     __tablename__ = "haam_collection_entries"
@@ -240,7 +243,7 @@ class CollectionEntry(db.Model):
     position: Mapped[int] = mapped_column(default=0)
     note: Mapped[str] = mapped_column(Text, default="")
 
-    # Custom entries only:
+    # Custom entries (and, for main-map events, only custom_lat/custom_lon as a moved place):
     custom_title: Mapped[str | None] = mapped_column(String(300))
     custom_year: Mapped[int | None]
     custom_date_label: Mapped[str | None] = mapped_column(String(120))
@@ -290,12 +293,17 @@ class CollectionEntry(db.Model):
         return self.event.summary if self.event else (self.custom_summary or "")
 
     @property
+    def moved(self) -> bool:
+        """A main-map event shown at other coordinates in this collection."""
+        return self.event is not None and self.custom_lat is not None and self.custom_lon is not None
+
+    @property
     def lat(self) -> float:
-        return self.event.lat if self.event else self.custom_lat
+        return self.custom_lat if self.moved or not self.event else self.event.lat
 
     @property
     def lon(self) -> float:
-        return self.event.lon if self.event else self.custom_lon
+        return self.custom_lon if self.moved or not self.event else self.event.lon
 
     @property
     def category(self) -> Category:
@@ -321,6 +329,29 @@ class CollectionEntry(db.Model):
             "is_event": self.is_event,
             "is_confirmed": self.is_confirmed,
             "has_wikipedia": self.has_wikipedia,
+            "moved": self.moved,
+        }
+
+    def to_map_dict(self) -> dict:
+        """The shape of ``Event.to_list_dict`` (the main map's data), plus the full text and note."""
+        summary = self.summary
+        excerpt = summary if len(summary) <= Event.EXCERPT_LENGTH else summary[:Event.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+        return {
+            "id": self.id,
+            "title": self.title,
+            "year": self.year,
+            "display_year": self.display_year,
+            "date": self.date_label,
+            "excerpt": excerpt,
+            "summary": summary,
+            "note": self.note,
+            "wiki_url": self.url if self.has_wikipedia else None,
+            "link": None if self.has_wikipedia else self.link,
+            "lat": self.lat,
+            "lon": self.lon,
+            "category": self.category.value,
+            "tags": [tag.id for tag in self.event.tags] if self.event else [],
+            "moved": self.moved,
         }
 
 

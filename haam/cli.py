@@ -110,7 +110,8 @@ def sync_wikidata_command(path, dry_run):
     """
     stats = importer.sync_wikidata(path, dry_run=dry_run, report=click.echo)
     prefix = "Would" if dry_run else "Done:"
-    click.echo(f"{prefix} add {stats.added}, remove {stats.removed}, re-tag {stats.retagged} events "
+    click.echo(f"{prefix} add {stats.added}, remove {stats.removed}, re-tag {stats.retagged}, "
+               f"re-categorize {stats.recategorized} events "
                f"({stats.unchanged} already up to date; {stats.adopted} older rows linked to their Wikidata id)")
     if stats.kept_in_collections:
         click.echo("Kept although not in the file, because a collection uses them: "

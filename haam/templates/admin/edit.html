@@ -2,6 +2,10 @@
 {% from "_macros.html" import event_form %}
 {% block title %}Edit {{ event.title }}{% endblock %}
 
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+{% endblock %}
+
 {% block content %}
 <div class="page narrow">
   <header class="page-header">
@@ -16,5 +20,7 @@
 {% endblock %}
 
 {% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module" src="{{ url_for('static', filename='js/location-picker.js') }}"></script>
   <script type="module" src="{{ url_for('static', filename='js/tag-picker.js') }}"></script>
 {% endblock %}

@@ -14,6 +14,7 @@
   --cat-diplomatic: #3182ce;
   --cat-naval: #1a4e8a;
   --cat-scientific: #38a169;
+  --cat-natural: #dd6b20;
   --cat-other: #718096;
 
   --bg: #eef2f7;
@@ -269,6 +270,7 @@ img { max-width: 100%; }
 .badge-diplomatic { background: var(--cat-diplomatic); }
 .badge-naval { background: var(--cat-naval); }
 .badge-scientific { background: var(--cat-scientific); }
+.badge-natural { background: var(--cat-natural); }
 .badge-other { background: var(--cat-other); }
 .badge-warning { background: var(--warning-bg); color: var(--warning); }
 .year-pill {
@@ -285,6 +287,7 @@ img { max-width: 100%; }
 .dot-diplomatic { background: var(--cat-diplomatic); }
 .dot-naval { background: var(--cat-naval); }
 .dot-scientific { background: var(--cat-scientific); }
+.dot-natural { background: var(--cat-natural); }
 .dot-other { background: var(--cat-other); }
 .tag-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .tag {
@@ -479,6 +482,7 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 .marker-diplomatic { background: var(--cat-diplomatic); }
 .marker-naval { background: var(--cat-naval); }
 .marker-scientific { background: var(--cat-scientific); }
+.marker-natural { background: var(--cat-natural); }
 .cluster {
   display: grid;
   place-items: center;
@@ -1087,3 +1091,22 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 @media (prefers-reduced-motion: reduce) {
   .selected-ring { animation: none; }
 }
+
+/* heatmap: a hand over spots that open an event */
+.map.heat-clickable, .map.heat-clickable .leaflet-interactive { cursor: pointer; }
+
+/* collections: start from a tag, map view, notes */
+.tag-start { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1rem 0.25rem; margin: 0 0 1rem; }
+.tag-start legend { font-weight: 700; padding: 0 0.35rem; color: var(--text-strong); }
+.collection-banner {
+  display: grid;
+  gap: 0.15rem;
+  margin: -0.25rem 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+}
+.collection-banner strong { font-size: 1rem; color: var(--text-strong); }
+.collection-banner span { color: var(--text-muted); }
+.detail-note { margin: 0.75rem 0; padding: 0.6rem 0.75rem; border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: 0.4rem; white-space: pre-line; }

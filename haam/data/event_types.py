@@ -30,9 +30,9 @@ EVENT_TYPES = [
     ("Q3199915", "massacre", "other"),
     ("Q209715", "coronation", "other"),
     ("Q2401485", "expedition", "other"),
-    ("Q7692360", "volcanic eruption", "other"),
-    ("Q8065", "natural disaster", "other"),
-    ("Q168983", "conflagration", "other"),
+    ("Q7692360", "volcanic eruption", "natural"),
+    ("Q8065", "natural disaster", "natural"),
+    ("Q168983", "conflagration", "natural"),  # fires, also man-made ones
 ]
 
 # Rejected if the item is *directly* an instance of one of these, even when it

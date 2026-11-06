@@ -388,6 +388,7 @@ class SyncStats:
     added: int = 0
     removed: int = 0
     retagged: int = 0
+    recategorized: int = 0
     unchanged: int = 0
     adopted: int = 0  # older rows of the same article that now carry the Wikidata id
     rejected: int = 0  # invalid rows in the file
@@ -465,7 +466,28 @@ def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
         if doomed:
             report(f"  removed {len(doomed)} events that are no longer in the file")
 
-    # 3. set the tags of the imported events that stay
+    # 3. update the category of the imported events that stay
+    categories = dict(db.session.execute(
+        select(Event.id, Event.category).where(Event.id.in_(list(imported.values())))).all()) if imported else {}
+    changes: dict[Category, list[int]] = {}
+    for qid, event_id in imported.items():
+        if qid not in rows or event_id not in categories:
+            continue
+        try:
+            wanted = Category((rows[qid].get("category") or "other").strip().lower())
+        except ValueError:
+            continue
+        if categories[event_id] != wanted:
+            changes.setdefault(wanted, []).append(event_id)
+    stats.recategorized = sum(len(ids) for ids in changes.values())
+    if not dry_run:
+        for category, ids in changes.items():
+            for start in range(0, len(ids), chunk):
+                db.session.execute(Event.__table__.update().where(Event.id.in_(ids[start:start + chunk]))
+                                   .values(category=category.value))
+        db.session.commit()
+
+    # 4. set the tags of the imported events that stay
     links: dict[int, set[int]] = {}
     for event_id, tag_id in db.session.execute(select(event_tags.c.event_id, event_tags.c.tag_id)):
         links.setdefault(event_id, set()).add(tag_id)
@@ -492,7 +514,7 @@ def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
             db.session.execute(event_tags.insert(), add_links[start:start + 1000])
             db.session.commit()
 
-    # 4. add the rows that are not in the database yet
+    # 5. add the rows that are not in the database yet
     pending = 0
     for qid, row in rows.items():
         if qid in imported or qid in taken_qids:

@@ -42,6 +42,26 @@ def read_csv(name: str) -> list[dict]:
         return list(csv.DictReader(handle))
 
 
+def update_categories() -> int:
+    """Give demo events that are already in the database the category events.csv now gives them.
+
+    Only events without a Wikidata id: the others follow seed/wikidata_events.csv
+    through ``sync-wikidata``, and the two files must not overrule each other.
+    """
+    changed = 0
+    for row in read_csv("events.csv"):
+        title = title_from_url(row["url"])
+        event = find_existing(canonical_url(title)) if title else None
+        if event is None or event.from_website or event.wikidata_id or not row.get("category"):
+            continue
+        category = Category(row["category"].strip().lower())
+        if event.category != category:
+            event.category = category
+            changed += 1
+    db.session.commit()
+    return changed
+
+
 def seed_collections(base_url: str) -> list[str]:
     entries_by_key: dict[str, list[dict]] = {}
     for row in read_csv("collection_entries.csv"):
@@ -117,6 +137,9 @@ def main() -> None:
         print("\nEvents (fetched from Wikipedia, about 1–2 s each):")
         stats = importer.import_csv(str(SEED / "events.csv"), report=lambda m: print(f"  {m}"))
         print(f"  -> {stats}")
+        updated = update_categories()
+        if updated:
+            print(f"  -> category updated for {updated} demo event(s) already in the database")
 
         print("\nCollections:")
         links = seed_collections(args.base_url.rstrip("/"))

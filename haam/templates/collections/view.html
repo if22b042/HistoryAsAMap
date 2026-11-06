@@ -22,9 +22,16 @@
         · {% if collection.is_public %}<i class="fas fa-globe" aria-hidden="true"></i> public{% else %}<i class="fas fa-lock" aria-hidden="true"></i> unlisted{% endif %}
       </p>
     </div>
-    {% if editable %}
-      <a class="btn btn-primary" href="{{ url_for('collections.manage', view_token=collection.view_token) }}"><i class="fas fa-edit" aria-hidden="true"></i> Edit collection</a>
-    {% endif %}
+    <div class="button-row">
+      {% if collection.entries %}
+        <a class="btn btn-secondary" href="{{ url_for('collections.full_map', view_token=collection.view_token) }}"
+           title="The full map – filters, search, timeline – with only this collection's entries">
+          <i class="fas fa-map" aria-hidden="true"></i> Map view</a>
+      {% endif %}
+      {% if editable %}
+        <a class="btn btn-primary" href="{{ url_for('collections.manage', view_token=collection.view_token) }}"><i class="fas fa-edit" aria-hidden="true"></i> Edit collection</a>
+      {% endif %}
+    </div>
   </header>
 
   {% if collection.description %}<div class="card collection-description">{{ collection.description }}</div>{% endif %}

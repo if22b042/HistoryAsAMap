@@ -23,7 +23,7 @@ from flask import session
 from sqlalchemy import func, select
 
 from haam.extensions import db
-from haam.models import Category, Collection, CollectionEntry, CollectionReport, Event, Status
+from haam.models import Category, Collection, CollectionEntry, CollectionReport, Event, Status, Tag
 from haam.wikipedia import WikipediaError, get_client, title_from_url
 
 MAX_ENTRIES = 500
@@ -192,6 +192,58 @@ def add_event(collection: Collection, event_id: int, note: str) -> CollectionEnt
     _touch(collection)
     db.session.commit()
     return entry
+
+
+@dataclass
+class TagResult:
+    added: int = 0
+    already: int = 0  # already in the collection
+    no_room: int = 0  # did not fit (MAX_ENTRIES)
+
+
+def tag_events(tag_id: int, year_from: int | None = None, year_to: int | None = None) -> list[Event]:
+    """Approved events with a tag, oldest first, optionally within some years."""
+    stmt = (select(Event).join(Event.tags).where(Tag.id == tag_id, Event.status == Status.APPROVED)
+            .order_by(Event.year, Event.title))
+    if year_from is not None:
+        stmt = stmt.where(Event.year >= year_from)
+    if year_to is not None:
+        stmt = stmt.where(Event.year <= year_to)
+    return list(db.session.scalars(stmt))
+
+
+def add_tag_events(collection: Collection, tag_id: int, year_from: int | None = None,
+                   year_to: int | None = None) -> TagResult:
+    """Add every approved event with a tag (oldest first) that is not in the collection yet."""
+    if db.session.get(Tag, tag_id) is None:
+        raise CollectionError("Choose a tag from the list.")
+    result = TagResult()
+    present = {entry.event_id for entry in collection.entries if entry.event_id}
+    for event in tag_events(tag_id, year_from, year_to):
+        if event.id in present:
+            result.already += 1
+        elif len(collection.entries) >= MAX_ENTRIES:
+            result.no_room += 1
+        else:
+            collection.entries.append(CollectionEntry(event=event, note="", position=len(collection.entries)))
+            present.add(event.id)
+            result.added += 1
+    if result.added:
+        _touch(collection)
+    db.session.commit()
+    return result
+
+
+def move_entry(entry: CollectionEntry, lat: float | None, lon: float | None) -> None:
+    """Show a main-map event at other coordinates in this collection; ``None`` = its own place."""
+    if not entry.is_event:
+        raise CollectionError("Change a custom entry's place in its own form.")
+    if lat is None or lon is None:
+        entry.custom_lat = entry.custom_lon = None
+    else:
+        entry.custom_lat, entry.custom_lon = lat, lon
+    _touch(entry.collection)
+    db.session.commit()
 
 
 def add_custom(collection: Collection, data: CustomEntryData) -> CollectionEntry:

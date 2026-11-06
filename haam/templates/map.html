@@ -1,8 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Map{% endblock %}
+{% block title %}{% if collection %}{{ collection.title }} · Map{% else %}Map{% endif %}{% endblock %}
 {% block body_class %}page-map{% endblock %}
 
 {% block head %}
+  {% if collection %}<meta name="robots" content="noindex, nofollow">{% endif %}
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -12,6 +13,15 @@
 {% block content %}
 <section class="map-layout">
   <aside class="filters" id="filters" aria-label="Filters">
+    {% if collection %}
+      <div class="collection-banner">
+        <a href="{{ url_for('collections.view', view_token=collection.view_token) }}">
+          <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to the collection</a>
+        <strong>{{ collection.title }}</strong>
+        <span>{{ collection.entries|length }} {{ 'entry' if collection.entries|length == 1 else 'entries' }}
+          {%- if collection.year_span %} · {{ collection.year_span }}{% endif %}</span>
+      </div>
+    {% endif %}
     <div class="filters-header">
       <h2><i class="fas fa-filter" aria-hidden="true"></i> Filters</h2>
       <button class="icon-btn filters-close" type="button" aria-label="Hide filters" data-toggle-filters>
@@ -31,7 +41,7 @@
         <button type="button" class="category-btn active" data-category="all" aria-pressed="true">
           <i class="fas fa-globe" aria-hidden="true"></i> All
         </button>
-        {% set icons = {'military': 'crosshairs', 'diplomatic': 'handshake', 'naval': 'ship', 'scientific': 'flask', 'other': 'ellipsis-h'} %}
+        {% set icons = {'military': 'crosshairs', 'diplomatic': 'handshake', 'naval': 'ship', 'scientific': 'flask', 'natural': 'volcano', 'other': 'ellipsis-h'} %}
         {% for category in categories %}
           <button type="button" class="category-btn" data-category="{{ category.value }}" aria-pressed="false">
             <span class="dot dot-{{ category.value }}" aria-hidden="true"></span>
@@ -73,7 +83,8 @@
     <i class="fas fa-sliders-h" aria-hidden="true"></i>
   </button>
 
-  <div id="map" class="map" role="region" aria-label="Map of historical events"></div>
+  <div id="map" class="map" role="region" aria-label="Map of historical events"
+       data-events-url="{{ events_url or url_for('api.list_events') }}"{% if collection %} data-full-text="1"{% endif %}></div>
 
   <section class="search-panel" id="search-panel" role="dialog" aria-label="Search events" hidden>
     <div class="search-panel-top">
@@ -130,8 +141,14 @@
 
 <section class="events-section" id="events">
   <header class="section-header">
-    <h1>All historical events</h1>
-    <p>Browse the timeline; the filters above apply here too.</p>
+    {% if collection %}
+      <h1>{{ collection.title }}</h1>
+      <p>All entries of this collection; the filters above apply here too.
+        <a href="{{ url_for('collections.view', view_token=collection.view_token) }}">Back to the collection</a></p>
+    {% else %}
+      <h1>All historical events</h1>
+      <p>Browse the timeline; the filters above apply here too.</p>
+    {% endif %}
   </header>
   <div class="tag-search" id="tag-search-box">
     <label for="tag-search" class="tag-search-label">Filter by tag</label>
