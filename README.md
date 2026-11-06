@@ -118,14 +118,21 @@ printed and saved to `instance/demo-links.txt`.
 
 ## Bulk events from Wikidata
 
-`flask --app haam haam export-wikidata` builds `seed/wikidata_events.csv`: every
+`flask --app haam haam export-wikidata` builds `seed/wikidata_events_places.csv`: every
 column the Event model needs (Wikidata id, Wikipedia page id and URL, title, year,
 date text, coordinates, country, category, status, tags, introduction), plus where
 the date and coordinates came from. Load it, offline and in batches, with:
 
 ```bash
-flask --app haam haam import-csv seed/wikidata_events.csv
+flask --app haam haam import-csv seed/wikidata_events_places.csv
 ```
+
+Two exports are in `seed/`:
+
+| File | Events | Locations |
+|---|---|---|
+| `wikidata_events_places.csv` (+ `wikidata_rejected_places.csv`) | 18,078 | only specific places (towns, buildings); the current rules |
+| `wikidata_events.csv` (+ `wikidata_rejected.csv`) | 21,680 | older export that also placed 3,602 events at the centre of a country, region or sea |
 
 An item becomes an event only if it passes all of these checks
 (`haam/wikidata.py: validate`, tested in `tests/test_wikidata.py`):
@@ -138,10 +145,14 @@ An item becomes an event only if it passes all of these checks
 4. it has a point in time (P585) or start time (P580), at least year-precise,
    not in the future;
 5. it has coordinates on Earth: its own, or those of its location / place of
-   creation / place of formation (that is how treaties get a place);
-6. its Wikipedia link, after redirects, leads to an article about the same item.
+   creation / place of formation (that is how treaties get a place), but only
+   if that location is a specific place – a town, a building, a street – never
+   a country, region, province, sea or continent, whose coordinates are just a
+   rough centre (`PLACE_ROOTS` / `AREA_ROOTS` in `haam/data/event_types.py`);
+6. its Wikipedia link, after redirects, leads to an article about the same item;
+7. that article is not a list, timeline or disambiguation page.
 
-Everything rejected goes to `seed/wikidata_rejected.csv` with the reason. The
+Everything rejected goes to `seed/wikidata_rejected_places.csv` with the reason. The
 first matching type decides the category (naval battle → naval, treaty →
 diplomatic, …). Options: `--type Q178561` (only some types), `--limit 20` (trial
 run), `--status pending` (send everything through the review queue).
@@ -155,7 +166,7 @@ run), `--status pending` (send everything through the review queue).
 | `flask --app haam haam hash-password` | Generate `ADMIN_PASSWORD_HASH` |
 | `flask --app haam haam import-titles "Battle of Hastings" "Peace of Westphalia"` | Import articles by title |
 | `flask --app haam haam import-region --lat 35 70 --lon -10 40 --max-new 100` | Find dated events by geosearch in a lat/lon box |
-| `flask --app haam haam export-wikidata` | Write validated events from Wikidata to `seed/wikidata_events.csv` |
+| `flask --app haam haam export-wikidata` | Write validated events from Wikidata to `seed/wikidata_events_places.csv` |
 | `flask --app haam haam import-csv seed/events.csv` | Import a CSV (`url`, optional `category,status,year,lat,lon,tags`) |
 | `flask --app haam haam import-legacy` | Copy data from the previous version's `entries`/`locations` tables |
 

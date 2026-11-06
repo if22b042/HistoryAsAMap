@@ -55,4 +55,33 @@ NOT_EVENT_ROOTS = {
     "Q14897293": "fictional entity",
 }
 
+# An event without its own coordinates may borrow those of its location only when
+# the location is a specific place. Types (with all their subclasses) that count
+# as a specific place win over AREA_ROOTS, because many cities are also typed as
+# administrative regions (Berlin, Vienna, Moscow...). Locations matching neither,
+# such as buildings, palaces, streets or mountains, are accepted too.
+PLACE_ROOTS = {
+    "Q486972": "human settlement",
+    "Q515": "city",
+    "Q1549591": "big city",
+    "Q15284": "municipality",
+    "Q123705": "neighbourhood",
+    "Q2983893": "quarter",
+}
+# Countries, regions and bodies of water: their coordinates are only a rough centre
+# (e.g. the Atlantic Ocean at 0, -30), so they never place an event on the map.
+AREA_ROOTS = {
+    "Q6256": "country",
+    "Q3624078": "sovereign state",
+    "Q3024240": "historical country",
+    "Q7275": "state",
+    "Q10864048": "first-level administrative division",
+    "Q82794": "region",
+    "Q1620908": "historical region",
+    "Q5107": "continent",
+    "Q9430": "ocean",
+    "Q165": "sea",
+    "Q46831": "mountain range",
+}
+
 EARTH = "http://www.wikidata.org/entity/Q2"

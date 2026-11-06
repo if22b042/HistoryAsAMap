@@ -61,8 +61,8 @@ def import_csv_command(path, approve):
 
 
 @haam_cli.command("export-wikidata")
-@click.option("--out", default="seed/wikidata_events.csv", show_default=True, help="CSV of accepted events.")
-@click.option("--rejected", default="seed/wikidata_rejected.csv", show_default=True,
+@click.option("--out", default="seed/wikidata_events_places.csv", show_default=True, help="CSV of accepted events.")
+@click.option("--rejected", default="seed/wikidata_rejected_places.csv", show_default=True,
               help="CSV of rejected candidates with the reason.")
 @click.option("--type", "type_ids", multiple=True, help="Only these Wikidata types (e.g. --type Q178561).")
 @click.option("--limit", type=int, default=None, help="At most this many candidates per type (for trial runs).")
@@ -71,7 +71,7 @@ def import_csv_command(path, approve):
 def export_wikidata_command(out, rejected, type_ids, limit, status):
     """Export validated historical events from Wikidata to a CSV (no database changes).
 
-    Load the result with: flask --app haam haam import-csv seed/wikidata_events.csv
+    Load the result with: flask --app haam haam import-csv seed/wikidata_events_places.csv
     """
     from flask import current_app
     from sqlalchemy import select
