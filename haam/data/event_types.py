@@ -84,4 +84,22 @@ AREA_ROOTS = {
     "Q46831": "mountain range",
 }
 
+# Items without a point in time / start time of their own that are typed as one of
+# these are organisations or states that happen to be filed under an event type
+# (Afrika Korps, UN missions, Transnistria...), not events. Wikidata files many real
+# events (campaigns, coups, revolts) under "organization" too, so that class only
+# counts when it is the item's direct type, and only for items without such dates.
+ORGANISATION_ROOTS = {  # with all their subclasses
+    "Q176799": "military unit",
+    "Q7275": "state",
+    "Q1048835": "political territorial entity",
+}
+ORGANISATION_TYPES = {  # direct types only
+    "Q43229": "organization",
+    "Q484652": "international organization",
+    "Q136762766": "UN peacekeeping mission",
+    "Q4698967": "airport authority",
+    "Q16848268": "interstate compact",
+}
+
 EARTH = "http://www.wikidata.org/entity/Q2"

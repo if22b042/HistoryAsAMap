@@ -1,6 +1,7 @@
 import pytest
 
-from haam.dates import extract_date, format_year, parse_wikidata_time, parse_year_input
+from haam.dates import (ParsedDate, article_date, date_from_title, explicit_date, extract_date, format_year,
+                        parse_wikidata_time, parse_year_input)
 
 
 @pytest.mark.parametrize("text, year, label", [
@@ -65,3 +66,36 @@ def test_parse_wikidata_time():
     year_only = parse_wikidata_time({"time": "+0009-00-00T00:00:00Z", "precision": 9})
     assert (year_only.year, year_only.label) == (9, "AD 9")
     assert parse_wikidata_time({"time": "garbage"}) is None
+
+
+@pytest.mark.parametrize("title, expected", [
+    ("Battle of Tripoli (2018)", 2018),
+    ("Siege of Kandahar (1652–1653)", 1652),
+    ("Battle of Cannae (216 BC)", -216),
+    ("Second Punic War (218–201 BC)", -218),
+    ("Yangzhou massacre (760)", 760),
+    ("1906 San Francisco earthquake", 1906),
+    ("Siege of Trondheim", None),
+    ("Treaty of Paris (film)", None),
+    ("Battle of X (1)", None),
+])
+def test_date_from_title(title, expected):
+    parsed = date_from_title(title)
+    assert (parsed.year if parsed else None) == expected
+
+
+def test_article_date():
+    intro = "The siege of Trondheim took place from 17 September to 16 December 1658 during the war."
+    assert article_date("Siege of Trondheim", intro) == (ParsedDate(1658, "1658"), "Wikipedia intro")
+    assert article_date("Battle of Tripoli (2018)", "It was fought on 3 May 2018.") == (
+        ParsedDate(2018, "3 May 2018"), "Wikipedia title and intro")
+    assert article_date("Battle of Tripoli (2018)", "It was fought on 3 May 1999.") == (
+        ParsedDate(2018, "2018"), "Wikipedia title")
+    assert article_date("Battle of Foo", "A battle of the 17th century.") is None
+    assert article_date("Battle of Foo", "First paragraph.\nLater, in 1802, it ended.") is None
+
+
+def test_parts_of_larger_numbers_and_durations_are_not_years():
+    assert explicit_date("The fire burned 54,334 acres over a span of 104 days.") is None
+    assert explicit_date("It burned a total of 104,000 acres in 2017.") == ParsedDate(2017, "2017")
+    assert explicit_date("An army of 1,500 men fought in 1802.") == ParsedDate(1802, "1802")

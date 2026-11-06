@@ -27,8 +27,9 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from haam.data.event_types import AREA_ROOTS, EARTH, EVENT_TYPES, NOT_EVENT_ROOTS, NOT_EVENTS, PLACE_ROOTS
-from haam.dates import parse_wikidata_time
+from haam.data.event_types import (AREA_ROOTS, EARTH, EVENT_TYPES, NOT_EVENT_ROOTS, NOT_EVENTS,
+                                   ORGANISATION_ROOTS, ORGANISATION_TYPES, PLACE_ROOTS)
+from haam.dates import ParsedDate, article_date, parse_wikidata_time
 from haam.wikipedia import canonical_url
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ API_URL = "https://www.wikidata.org/w/api.php"
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 
 P_INSTANCE_OF, P_POINT_IN_TIME, P_START_TIME = "P31", "P585", "P580"
+P_END_TIME, P_INCEPTION = "P582", "P571"
+WIKIDATA_DATE_PROPS = (P_POINT_IN_TIME, P_START_TIME, P_END_TIME, P_INCEPTION)
 P_COORDINATES, P_COUNTRY, P_PART_OF = "P625", "P17", "P361"
 LOCATION_PROPS = ("P276", "P1071", "P740")  # location, location of creation, location of formation
 MIN_PRECISION = 9  # Wikidata time precision: 9 = year, 10 = month, 11 = day
@@ -65,6 +68,9 @@ class Candidate:
     location_coords: dict[str, tuple[float, float]] = field(default_factory=dict)
     # Locations that are countries, regions or seas: never used, only named in the reason.
     area_locations: dict[str, str] = field(default_factory=dict)
+    # Date from the Wikipedia article, used only when Wikidata has none.
+    text_date: ParsedDate | None = None
+    text_date_source: str = ""
 
 
 @dataclass
@@ -113,7 +119,8 @@ def is_specific_place(types: Iterable[str], place_classes: set[str], area_classe
 
 
 def validate(candidate: Candidate, *, today: date | None = None,
-             blocked_types: dict[str, str] | None = None) -> Verdict:
+             blocked_types: dict[str, str] | None = None,
+             organisation_types: dict[str, str] | None = None) -> Verdict:
     """Decide whether a Wikidata item is a historical event we can put on the map.
 
     Rules, in order (the first failing rule is the rejection reason):
@@ -124,8 +131,14 @@ def validate(candidate: Candidate, *, today: date | None = None,
     3. it is not also directly typed as a non-event (settlement, building,
        battlefield, list, category, recurring event, ...) or as any subclass
        of fictional entity (``blocked_types``, fetched once per export);
-    4. it has a point in time (P585) or start time (P580), precise to at least
-       a year, that is not in the future and not year 0;
+       and, if it has no point in time or start time, it is not typed as a
+       military unit, state or organisation (``organisation_types`` plus
+       ORGANISATION_TYPES);
+    4. it has a date precise to at least a year, not in the future and not
+       year 0: on Wikidata its point in time (P585), start time (P580), end
+       time (P582) or inception (P571), in that order; failing those, a year
+       in the article's title or a date in its first paragraph
+       (``text_date``, see :func:`haam.dates.article_date`);
     5. it has Earth coordinates – its own (P625) or those of its location /
        place of creation / place of formation, if that location is a specific
        place (a town, a building...) and not a country, region or sea.
@@ -147,8 +160,17 @@ def validate(candidate: Candidate, *, today: date | None = None,
     if blocked:
         return Verdict(False, f"also an instance of: {', '.join(blocked)}")
 
+    # 3b. Without a point in time or start time, an item typed as a military unit,
+    # state or organisation is an organisation (founded, not happened).
+    own_date = any(_values(candidate.claims, prop) for prop in (P_POINT_IN_TIME, P_START_TIME))
+    if not own_date:
+        organisations = {**(organisation_types or {}), **ORGANISATION_TYPES}
+        kinds = sorted({organisations[t] for t in types & organisations.keys()})
+        if kinds:
+            return Verdict(False, f"an organisation or state, not an event: {', '.join(kinds)}")
+
     parsed, source, vague = None, "", False
-    for prop in (P_POINT_IN_TIME, P_START_TIME):
+    for prop in WIKIDATA_DATE_PROPS:
         for value in _values(candidate.claims, prop):
             if value.get("precision", 0) < MIN_PRECISION:
                 vague = True
@@ -159,8 +181,10 @@ def validate(candidate: Candidate, *, today: date | None = None,
                 break
         if parsed:
             break
+    if parsed is None and candidate.text_date is not None:
+        parsed, source = candidate.text_date, candidate.text_date_source
     if parsed is None:
-        return Verdict(False, "date less precise than a year" if vague else "no usable date (P585/P580)")
+        return Verdict(False, "date less precise than a year" if vague else "no usable date on Wikidata or Wikipedia")
     if parsed.year > today.year:
         return Verdict(False, f"date in the future ({parsed.year})")
 
@@ -214,16 +238,24 @@ class WikidataClient:
         response.raise_for_status()
         return response.json()
 
-    def discover(self, type_qid: str) -> list[tuple[str, str]]:
-        """``(item id, English Wikipedia title)`` of dated instances of a type or its subclasses.
+    def discover(self, type_qid: str, undated: bool = False) -> list[tuple[str, str]]:
+        """``(item id, English Wikipedia title)`` of instances of a type or its subclasses.
+
+        By default only items with a point in time or start time; with
+        ``undated`` only the items that have neither (their date then comes from
+        their end time, inception or Wikipedia article).
 
         Fictional items are filtered later in :func:`validate`: a per-item
         subclass check in SPARQL makes these queries time out.
         """
+        if undated:
+            date_filter = "FILTER NOT EXISTS { ?item wdt:P585 [] } FILTER NOT EXISTS { ?item wdt:P580 [] }"
+        else:
+            date_filter = "{ ?item wdt:P585 [] } UNION { ?item wdt:P580 [] }"
         query = f"""
         SELECT DISTINCT ?item ?title WHERE {{
           ?item wdt:P31/wdt:P279* wd:{type_qid} .
-          {{ ?item wdt:P585 [] }} UNION {{ ?item wdt:P580 [] }}
+          {date_filter}
           ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> ; schema:name ?title .
         }}"""
         rows = self._sparql(query)
@@ -362,9 +394,14 @@ def export(
     status: str = "approved",
     tag_names: Iterable[str] = (),
     batch_size: int = 500,
+    undated: bool = False,
     report: Reporter = print,
 ) -> ExportStats:
-    """Run the whole pipeline and write the two CSV files."""
+    """Run the whole pipeline and write the two CSV files.
+
+    ``undated`` exports only the items without a point in time or start time,
+    which the normal export skips (see :meth:`WikidataClient.discover`).
+    """
     stats = ExportStats()
     types = [t for t in EVENT_TYPES if not type_ids or t[0] in type_ids]
     tag_lookup = {name.lower(): name for name in tag_names}
@@ -375,6 +412,11 @@ def export(
         blocked_types.update({qid: label for qid in classes})
         report(f"  {len(classes)} kinds of {label} will be rejected")
 
+    organisation_types: dict[str, str] = {}
+    for root, label in ORGANISATION_ROOTS.items():
+        organisation_types.update({qid: label for qid in client.subclasses(root)})
+    report(f"  {len(organisation_types)} kinds of military unit / state rejected when undated")
+
     place_classes = set().union(*(client.subclasses(root) for root in PLACE_ROOTS))
     area_classes = set().union(*(client.subclasses(root) for root in AREA_ROOTS))
     report(f"  locations: {len(place_classes)} kinds of specific place, {len(area_classes)} kinds of area")
@@ -383,7 +425,7 @@ def export(
     candidates: dict[str, Candidate] = {}
     for qid, label, _ in types:
         try:
-            found = client.discover(qid)
+            found = client.discover(qid, undated=undated)
         except (requests.RequestException, ValueError, KeyError) as exc:
             report(f"! {label}: discovery failed ({exc}); skipped")
             stats.failed_types.append(f"{label} ({qid})")
@@ -411,7 +453,7 @@ def export(
         for number, batch in enumerate(chunks(ids, batch_size), start=1):
             _process_batch(client, [candidates[i] for i in batch], events_csv, rejected_csv, stats,
                            categories, labels_by_type, tag_lookup, status, blocked_types,
-                           place_classes, area_classes)
+                           place_classes, area_classes, organisation_types)
             events_file.flush()
             rejected_file.flush()
             done = min(number * batch_size, len(ids))
@@ -419,8 +461,13 @@ def export(
     return stats
 
 
+def _has_wikidata_date(claims: dict) -> bool:
+    return any(value.get("precision", 0) >= MIN_PRECISION and parse_wikidata_time(value)
+               for prop in WIKIDATA_DATE_PROPS for value in _values(claims, prop))
+
+
 def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, labels_by_type,
-                   tag_lookup, status, blocked_types, place_classes, area_classes):
+                   tag_lookup, status, blocked_types, place_classes, area_classes, organisation_types):
     entities = client.entities([c.qid for c in batch])
     for candidate in batch:
         candidate.claims = entities.get(candidate.qid, {}).get("claims", {})
@@ -439,9 +486,21 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
         candidate.location_coords = location_coords
         candidate.area_locations = area_locations
 
-    verdicts = {c.qid: validate(c, blocked_types=blocked_types) for c in batch}
+    # Items without a usable Wikidata date: read the date from their article first.
+    undated = [c for c in batch if c.title and not _has_wikidata_date(c.claims)]
+    intros = client.introductions([c.title for c in undated]) if undated else {}
+    for candidate in undated:
+        intro = intros.get(candidate.title)
+        found = article_date(intro[1], intro[2]) if intro else None
+        if found:
+            candidate.text_date, candidate.text_date_source = found
+
+    verdicts = {c.qid: validate(c, blocked_types=blocked_types, organisation_types=organisation_types)
+                for c in batch}
     accepted = [c for c in batch if verdicts[c.qid].ok]
-    intros = client.introductions([c.title for c in accepted])
+    missing = [c.title for c in accepted if c.title not in intros]
+    if missing:
+        intros.update(client.introductions(missing))
     label_ids = {i for c in accepted for prop in (P_COUNTRY, P_PART_OF) for i in item_ids(c.claims, prop)}
     labels = client.labels(label_ids) if label_ids else {}
 
@@ -478,7 +537,9 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
             "lon": verdict.lon,
             "country": next((c for c in countries if c), ""),
             "category": categories[candidate.event_type],
-            "status": status,
+            # Dated only by "inception": often an organisation or project rather than an
+            # event (Project Artichoke, Barents Region), so it waits for review.
+            "status": "pending" if verdict.date_source == P_INCEPTION else status,
             "tags": ";".join(tags),
             "summary": summary or title,
             "event_type": event_type,

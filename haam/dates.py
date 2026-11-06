@@ -18,7 +18,8 @@ _ERA_AD = r"(?:AD|CE|A\.D\.|C\.E\.)"
 # Numbers directly followed by these words are quantities, not years.
 _NOT_A_YEAR = (
     r"(?!\s*(?:%|per\b|percent|men|soldiers|troops|people|ships|km|kilomet|miles?\b|"
-    r"metres|meters|m\b|ft\b|feet|deaths|casualties|killed|wounded|years?\b))"
+    r"metres|meters|m\b|ft\b|feet|deaths|casualties|killed|wounded|years?\b|"
+    r"days?\b|weeks?\b|months?\b|hours?\b|minutes?\b|acres?\b|hectares?\b|ha\b|square\b))"
 )
 
 
@@ -73,8 +74,9 @@ _MONTH_YEAR = re.compile(
 _YEAR_RANGE_BC = re.compile(rf"\b(?P<year>\d{{1,5}})\s*[–-]\s*\d{{1,5}}\s*(?P<era2>{_ERA_BC})")
 _YEAR_ERA_AFTER = re.compile(rf"\b(?P<year>\d{{1,5}})\s*(?P<era2>{_ERA_BC}|{_ERA_AD})(?![A-Za-z])")
 _YEAR_ERA_BEFORE = re.compile(rf"\b(?P<era1>{_ERA_AD})\s*(?P<year>\d{{1,4}})\b")
-_BARE_YEAR = re.compile(rf"(?<![\d,.])\b(?P<year>1\d{{3}}|20\d{{2}})\b{_NOT_A_YEAR}")
-_IN_YEAR = re.compile(rf"\b(?:in|of|from)\s+(?P<year>[1-9]\d{{2}})\b{_NOT_A_YEAR}")
+# "(?![.,]\d)": the start of a larger number such as "104,000 acres" or "1,500.5" is no year.
+_BARE_YEAR = re.compile(rf"(?<![\d,.])\b(?P<year>1\d{{3}}|20\d{{2}})\b(?![.,]\d){_NOT_A_YEAR}")
+_IN_YEAR = re.compile(rf"\b(?:in|of|from)\s+(?P<year>[1-9]\d{{2}})\b(?![.,]\d){_NOT_A_YEAR}")
 _CENTURY = re.compile(
     rf"\b(?P<num>\d{{1,2}})(?:st|nd|rd|th)[\s-]+century(?:\s+(?P<era2>{_ERA_BC}|{_ERA_AD}))?",
     re.IGNORECASE,
@@ -125,7 +127,7 @@ _TIERS = (
 )
 
 
-def _earliest(text: str, patterns) -> ParsedDate | None:
+def _earliest_match(text: str, patterns) -> tuple[int, ParsedDate] | None:
     best: tuple[int, ParsedDate] | None = None
     for pattern, build in patterns:
         for m in pattern.finditer(text):
@@ -135,6 +137,11 @@ def _earliest(text: str, patterns) -> ParsedDate | None:
             if parsed is not None:
                 best = (m.start(), parsed)
                 break
+    return best
+
+
+def _earliest(text: str, patterns) -> ParsedDate | None:
+    best = _earliest_match(text, patterns)
     return best[1] if best else None
 
 
@@ -153,6 +160,70 @@ def extract_date(text: str) -> ParsedDate | None:
             found = _earliest(chunk, tier)
             if found and found.year != 0:
                 return found
+    return None
+
+
+def explicit_date(text: str) -> ParsedDate | None:
+    """A date stated in the first paragraph: a full date, month and year, or a year.
+
+    Stricter than :func:`extract_date`: only the first paragraph is read and
+    centuries ("17th century") are not accepted. Used when Wikidata has no date.
+    """
+    paragraphs = [p for p in (text or "").split("\n") if p.strip()]
+    if not paragraphs:
+        return None
+    first = paragraphs[0]
+    for tier in _TIERS[:2]:
+        best = _earliest_match(first, tier)
+        if best and best[1].year != 0:
+            start, found = best
+            # "from 17 September to 16 December 1658": the match is the end of a
+            # range, so only its year is certain to be the event's.
+            if _RANGE_END.search(first[max(0, start - 12):start]):
+                return ParsedDate(found.year, format_year(found.year))
+            return found
+    return None
+
+
+_RANGE_END = re.compile(r"(?:\bto|\band|\buntil|\btill|[–-])\s*$")
+
+
+# "Battle of Tripoli (2018)", "Siege of Kandahar (1652–1653)", "Battle of X (44 BC)",
+# "1906 San Francisco earthquake", "2018 Russia–United States summit".
+_TITLE_YEAR_IN_BRACKETS = re.compile(
+    rf"\((?P<year>\d{{1,4}})(?:\s*(?P<era2>{_ERA_BC}|{_ERA_AD}))?(?:\s*[–-]\s*\d{{1,4}}(?:\s*{_ERA_BC})?)?\)\s*$")
+_TITLE_LEADING_YEAR = re.compile(r"^(?P<year>1\d{3}|20\d{2})(?=[\s–-])")
+
+
+def date_from_title(title: str) -> ParsedDate | None:
+    """The year an article title states, e.g. "Battle of Tripoli (2018)"."""
+    m = _TITLE_YEAR_IN_BRACKETS.search(title or "")
+    if m and (len(m.group("year")) >= 3 or m.group("era2")):
+        year = _signed(m.group("year"), m.group("era2"))
+        if not m.group("era2") and re.search(rf"[–-]\s*\d{{1,4}}\s*{_ERA_BC}\)", title):
+            year = -year  # "(218–201 BC)": the era applies to both years
+        return ParsedDate(year, format_year(year)) if year else None
+    m = _TITLE_LEADING_YEAR.match(title or "")
+    if m:
+        year = int(m.group("year"))
+        return ParsedDate(year, format_year(year))
+    return None
+
+
+def article_date(title: str, intro: str) -> tuple[ParsedDate, str] | None:
+    """Date of an event from its Wikipedia article, with where it was found.
+
+    A year in the title wins (it names the event); the first paragraph's date is
+    used when it agrees with the title's year (it is more precise) or when the
+    title has no year.
+    """
+    from_title, from_intro = date_from_title(title), explicit_date(intro)
+    if from_title and from_intro and from_intro.year == from_title.year:
+        return from_intro, "Wikipedia title and intro"
+    if from_title:
+        return from_title, "Wikipedia title"
+    if from_intro:
+        return from_intro, "Wikipedia intro"
     return None
 
 

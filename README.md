@@ -142,8 +142,14 @@ An item becomes an event only if it passes all of these checks
    (battle, siege, treaty, coup, earthquake, …) or any of their subtypes;
 3. it is not also typed as a non-event: a person, settlement, building,
    battlefield, list, category, recurring event, or any kind of fictional entity;
-4. it has a point in time (P585) or start time (P580), at least year-precise,
-   not in the future;
+   and an item with no point in time or start time of its own must not be a
+   military unit, state or organisation (Afrika Korps, UN missions, Transnistria
+   are filed under event types on Wikidata but were founded, not fought);
+4. it has a date, at least year-precise and not in the future: on Wikidata its
+   point in time (P585), start time (P580), end time (P582) or inception (P571);
+   failing those, the year in its Wikipedia title ("Battle of Tripoli (2018)")
+   or a date in the article's first paragraph – never a century. The CSV's
+   `date_source` column says which one was used;
 5. it has coordinates on Earth: its own, or those of its location / place of
    creation / place of formation (that is how treaties get a place), but only
    if that location is a specific place – a town, a building, a street – never
@@ -156,6 +162,16 @@ Everything rejected goes to `seed/wikidata_rejected_places.csv` with the reason.
 first matching type decides the category (naval battle → naval, treaty →
 diplomatic, …). Options: `--type Q178561` (only some types), `--limit 20` (trial
 run), `--status pending` (send everything through the review queue).
+
+`--undated` exports the items the normal export skips because Wikidata gives
+them no point in time or start time (such as the Siege of Trondheim); they go to
+`seed/wikidata_events_undated.csv` and `seed/wikidata_rejected_undated.csv`.
+Load both files to get everything:
+
+```bash
+flask --app haam haam import-csv seed/wikidata_events_places.csv
+flask --app haam haam import-csv seed/wikidata_events_undated.csv
+```
 
 ## Commands
 
