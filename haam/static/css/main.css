@@ -759,3 +759,33 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
   .collection-map { position: relative; top: 0; height: 50vh; }
   h1 { font-size: 1.6rem; }
 }
+
+/* colour by year */
+.filter-actions { flex-wrap: wrap; }
+.marker-year { background: transparent; }
+.marker .marker-year-fill { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.cluster-year { background: transparent; }
+.cluster-year-fill {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.year-pill.year-pill-colored { color: #fff; border-color: transparent; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+.year-legend {
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 90px));
+  padding: 0.55rem 0.75rem 0.5rem;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+}
+.year-legend-title { display: block; font-weight: 700; color: var(--text-strong); margin-bottom: 0.3rem; }
+.year-legend-bar { height: 10px; border-radius: 5px; }
+.year-legend-ticks { display: flex; justify-content: space-between; gap: 0.25rem; margin-top: 0.25rem; font-weight: 600; }
+.year-legend-tick { white-space: nowrap; filter: brightness(0.85); }
+.year-legend-span { display: block; margin-top: 0.15rem; color: var(--text-muted); font-size: 0.72rem; }
