@@ -27,7 +27,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from haam.data.event_types import EARTH, EVENT_TYPES, NOT_EVENT_ROOTS, NOT_EVENTS
+from haam.data.event_types import AREA_ROOTS, EARTH, EVENT_TYPES, NOT_EVENT_ROOTS, NOT_EVENTS, PLACE_ROOTS
 from haam.dates import parse_wikidata_time
 from haam.wikipedia import canonical_url
 
@@ -61,7 +61,10 @@ class Candidate:
     event_type: str  # Wikidata ID of the matched EVENT_TYPES entry
     title: str | None = None  # English Wikipedia article title
     claims: dict = field(default_factory=dict)
+    # Coordinates of locations that are specific places (towns, buildings...).
     location_coords: dict[str, tuple[float, float]] = field(default_factory=dict)
+    # Locations that are countries, regions or seas: never used, only named in the reason.
+    area_locations: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -101,6 +104,14 @@ def _earth_coordinates(value: dict) -> tuple[float, float] | None:
     return float(lat), float(lon)
 
 
+def is_specific_place(types: Iterable[str], place_classes: set[str], area_classes: set[str]) -> bool:
+    """True for towns, buildings, streets...; False for countries, regions and seas."""
+    types = set(types)
+    if types & place_classes:
+        return True
+    return not types & area_classes
+
+
 def validate(candidate: Candidate, *, today: date | None = None,
              blocked_types: dict[str, str] | None = None) -> Verdict:
     """Decide whether a Wikidata item is a historical event we can put on the map.
@@ -116,7 +127,8 @@ def validate(candidate: Candidate, *, today: date | None = None,
     4. it has a point in time (P585) or start time (P580), precise to at least
        a year, that is not in the future and not year 0;
     5. it has Earth coordinates – its own (P625) or those of its location /
-       place of creation / place of formation.
+       place of creation / place of formation, if that location is a specific
+       place (a town, a building...) and not a country, region or sea.
 
     Two more rules need the Wikipedia article and are applied in the export:
     the article the link leads to (after redirects) must belong to the same
@@ -167,6 +179,10 @@ def validate(candidate: Candidate, *, today: date | None = None,
             if coords:
                 break
     if coords is None:
+        areas = [candidate.area_locations[loc] for prop in LOCATION_PROPS
+                 for loc in item_ids(candidate.claims, prop) if loc in candidate.area_locations]
+        if areas:
+            return Verdict(False, f"location is a country or region, not a specific place: {areas[0]}")
         return Verdict(False, "no coordinates (P625) on the item or its location")
 
     return Verdict(True, year=parsed.year, date_label=parsed.label, date_source=source,
@@ -174,6 +190,13 @@ def validate(candidate: Candidate, *, today: date | None = None,
 
 
 # ------------------------------------------------------------------- client
+
+@dataclass
+class Location:
+    coords: tuple[float, float]
+    types: set[str]
+    label: str
+
 
 class WikidataClient:
     def __init__(self, user_agent: str, *, pause: float = 0.2, timeout: float = 90):
@@ -241,13 +264,16 @@ class WikidataClient:
         entities = self.entities(sorted(set(ids)), props="labels")
         return {qid: e.get("labels", {}).get("en", {}).get("value", "") for qid, e in entities.items()}
 
-    def coordinates(self, ids: Iterable[str]) -> dict[str, tuple[float, float]]:
+    def locations(self, ids: Iterable[str]) -> dict[str, Location]:
+        """Coordinates, types and English label of location items that have Earth coordinates."""
         result = {}
-        for qid, entity in self.entities(sorted(set(ids))).items():
-            for value in _values(entity.get("claims", {}), P_COORDINATES):
+        for qid, entity in self.entities(sorted(set(ids)), props="claims|labels").items():
+            claims = entity.get("claims", {})
+            for value in _values(claims, P_COORDINATES):
                 coords = _earth_coordinates(value)
                 if coords:
-                    result[qid] = coords
+                    label = entity.get("labels", {}).get("en", {}).get("value", "") or qid
+                    result[qid] = Location(coords, set(item_ids(claims, P_INSTANCE_OF)), label)
                     break
         return result
 
@@ -349,6 +375,10 @@ def export(
         blocked_types.update({qid: label for qid in classes})
         report(f"  {len(classes)} kinds of {label} will be rejected")
 
+    place_classes = set().union(*(client.subclasses(root) for root in PLACE_ROOTS))
+    area_classes = set().union(*(client.subclasses(root) for root in AREA_ROOTS))
+    report(f"  locations: {len(place_classes)} kinds of specific place, {len(area_classes)} kinds of area")
+
     # 1. discovery – the first type in EVENT_TYPES that finds an item wins
     candidates: dict[str, Candidate] = {}
     for qid, label, _ in types:
@@ -380,7 +410,8 @@ def export(
         ids = list(candidates)
         for number, batch in enumerate(chunks(ids, batch_size), start=1):
             _process_batch(client, [candidates[i] for i in batch], events_csv, rejected_csv, stats,
-                           categories, labels_by_type, tag_lookup, status, blocked_types)
+                           categories, labels_by_type, tag_lookup, status, blocked_types,
+                           place_classes, area_classes)
             events_file.flush()
             rejected_file.flush()
             done = min(number * batch_size, len(ids))
@@ -389,7 +420,7 @@ def export(
 
 
 def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, labels_by_type,
-                   tag_lookup, status, blocked_types):
+                   tag_lookup, status, blocked_types, place_classes, area_classes):
     entities = client.entities([c.qid for c in batch])
     for candidate in batch:
         candidate.claims = entities.get(candidate.qid, {}).get("claims", {})
@@ -397,9 +428,16 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
     # Locations only for items without their own coordinates (treaties, conferences...).
     need_location = {loc for c in batch if not _values(c.claims, P_COORDINATES)
                      for prop in LOCATION_PROPS for loc in item_ids(c.claims, prop)}
-    location_coords = client.coordinates(need_location) if need_location else {}
+    locations = client.locations(need_location) if need_location else {}
+    location_coords, area_locations = {}, {}
+    for qid, location in locations.items():
+        if is_specific_place(location.types, place_classes, area_classes):
+            location_coords[qid] = location.coords
+        else:
+            area_locations[qid] = location.label
     for candidate in batch:
         candidate.location_coords = location_coords
+        candidate.area_locations = area_locations
 
     verdicts = {c.qid: validate(c, blocked_types=blocked_types) for c in batch}
     accepted = [c for c in batch if verdicts[c.qid].ok]

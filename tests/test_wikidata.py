@@ -6,12 +6,13 @@ from datetime import date
 import pytest
 
 from haam import importer
-from haam.data.event_types import EVENT_TYPES
+from haam.data.event_types import AREA_ROOTS, EVENT_TYPES, PLACE_ROOTS
 from haam.extensions import db
 from haam.models import Category, Event, Status
-from haam.wikidata import Candidate, export, validate
+from haam.wikidata import Candidate, Location, export, is_specific_place, validate
 
 BATTLE, TREATY = "Q178561", "Q131569"
+CITY, COUNTRY, OCEAN = "Q515", "Q6256", "Q9430"
 TODAY = date(2026, 11, 6)
 
 
@@ -105,6 +106,27 @@ def test_coordinates_from_location_and_other_planets():
     assert validate(moon, today=TODAY).reason.startswith("no coordinates")
 
 
+def test_locations_must_be_specific_places():
+    def treaty_at(location_coords=None, area_locations=None):
+        return Candidate("Q3", TREATY, "Treaty of Somewhere", {
+            "P31": [claim(item(TREATY))], "P585": [claim(time("+1919-06-28T00:00:00Z"))],
+            "P276": [claim(item("Q97"))]}, location_coords=location_coords or {},
+            area_locations=area_locations or {})
+
+    verdict = validate(treaty_at(area_locations={"Q97": "Atlantic Ocean"}), today=TODAY)
+    assert verdict.reason == "location is a country or region, not a specific place: Atlantic Ocean"
+    assert validate(treaty_at(location_coords={"Q97": (1.0, 2.0)}), today=TODAY).ok
+
+
+def test_is_specific_place():
+    places, areas = {CITY}, {COUNTRY, OCEAN}
+    assert is_specific_place([CITY], places, areas)
+    assert is_specific_place([CITY, COUNTRY], places, areas)  # Berlin is a city and a state
+    assert is_specific_place(["Q41176"], places, areas)  # a building
+    assert not is_specific_place([COUNTRY], places, areas)
+    assert not is_specific_place([OCEAN], places, areas)
+
+
 def test_event_types_are_unique():
     ids = [qid for qid, _, _ in EVENT_TYPES]
     assert len(ids) == len(set(ids))
@@ -116,9 +138,13 @@ def test_event_types_are_unique():
 class FakeWikidata:
     def __init__(self, found, entities, locations=None, labels=None):
         self.found, self._entities = found, entities
-        self.locations, self._labels = locations or {}, labels or {}
+        self._locations, self._labels = locations or {}, labels or {}
 
     def subclasses(self, root):
+        if root in PLACE_ROOTS:
+            return {CITY}
+        if root in AREA_ROOTS:
+            return {COUNTRY, OCEAN}
         return {"Q15707521"}
 
     def discover(self, type_qid):
@@ -127,8 +153,8 @@ class FakeWikidata:
     def entities(self, ids, props="claims"):
         return {i: self._entities[i] for i in ids if i in self._entities}
 
-    def coordinates(self, ids):
-        return {i: self.locations[i] for i in ids if i in self.locations}
+    def locations(self, ids):
+        return {i: self._locations[i] for i in ids if i in self._locations}
 
     def labels(self, ids):
         return {i: self._labels.get(i, "") for i in ids}
@@ -165,6 +191,26 @@ def test_export_writes_accepted_and_rejected(tmp_path):
     assert rejected == {"Hastings Pier": "also an instance of: building", "Gone": "Wikipedia article not found",
                         "Redirected": "Wikipedia link leads to another topic: Domenico Tintoretto (Q999)"}
     assert (stats.candidates, stats.accepted, stats.rejected) == (5, 2, 3)
+
+
+def test_export_uses_town_locations_but_not_seas(tmp_path):
+    def treaty(location):
+        return {"claims": {"P31": [claim(item(TREATY))], "P585": [claim(time("+1919-06-28T00:00:00Z"))],
+                           "P276": [claim(item(location))]}}
+
+    client = FakeWikidata(
+        found={TREATY: [("Q10", "Battle of Trafalgar"), ("Q11", "Battle of Hastings")]},
+        entities={"Q10": treaty("Q90"), "Q11": treaty("Q97")},
+        locations={"Q90": Location((48.8567, 2.3508), {CITY}, "Paris"),
+                   "Q97": Location((0.0, -30.0), {OCEAN}, "Atlantic Ocean")},
+    )
+    events_path, rejected_path = tmp_path / "events.csv", tmp_path / "rejected.csv"
+    export(client, str(events_path), str(rejected_path), report=lambda m: None)
+
+    rows = list(csv.DictReader(events_path.open(encoding="utf-8")))
+    assert [(r["title"], r["lat"], r["coord_source"]) for r in rows] == [("Battle of Trafalgar", "48.8567", "P276:Q90")]
+    rejected = {r["title"]: r["reason"] for r in csv.DictReader(rejected_path.open(encoding="utf-8"))}
+    assert rejected == {"Battle of Hastings": "location is a country or region, not a specific place: Atlantic Ocean"}
 
 
 # ----------------------------------------------------------------- import
