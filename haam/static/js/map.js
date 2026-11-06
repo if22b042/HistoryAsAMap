@@ -383,37 +383,58 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
 }
 
 // The event that is open on the right gets a black-and-white ring (no colour, so it
-// never looks like a category or year colour). The ring is drawn on the event's own
-// marker, which leaves the cluster group while it is selected: so it is never hidden
-// in a cluster and the ring moves exactly with the dot while zooming.
-let selectedMarker = null;
+// never looks like a category or year colour). The ring is drawn on whatever shows
+// the event right now – the cluster it is bundled in ("3"), or its own dot once you
+// zoom in – so it moves with it while zooming, and it moves on to the new cluster or
+// dot after every zoom or pan. In the heatmap (no markers) the dot is shown on its own.
+let selectedId = null;
+let ringed = null; // the cluster or marker that carries the ring
+let standalone = null; // the selected marker, shown outside the clusters (heatmap, filtered out)
 
-function ringOn(marker) {
-  const element = marker.getElement();
-  if (element) element.classList.add("marker-selected");
+function placeRing() {
+  if (ringed) {
+    ringed.getElement?.()?.classList.remove("marker-selected");
+    ringed.setZIndexOffset?.(0);
+    ringed = null;
+  }
+  if (selectedId === null) return;
+  const marker = state.markersById.get(selectedId);
+  if (!marker) return;
+  let layer;
+  if (clusters.hasLayer(marker)) {
+    if (standalone) {
+      map.removeLayer(standalone);
+      standalone = null;
+    }
+    layer = clusters.getVisibleParent(marker); // its cluster, or the marker itself
+  } else {
+    if (!map.hasLayer(marker)) marker.addTo(map);
+    standalone = marker;
+    layer = marker;
+  }
+  const element = layer?.getElement?.();
+  if (!element) return;
+  element.classList.add("marker-selected");
+  layer.setZIndexOffset?.(10000);
+  ringed = layer;
 }
+
+// Clusters change (and their icons are rebuilt) on zoom, pan and spiderfy.
+map.on("zoomend moveend", placeRing);
+clusters.on("animationend spiderfied unspiderfied", placeRing);
 
 function showSelection(event) {
-  const marker = state.markersById.get(event.id);
-  if (!marker) return;
-  if (selectedMarker && selectedMarker !== marker) releaseSelection();
-  selectedMarker = marker;
-  if (clusters.hasLayer(marker)) clusters.removeLayer(marker);
-  if (!map.hasLayer(marker)) marker.addTo(map);
-  marker.setZIndexOffset(10000);
-  ringOn(marker);
+  selectedId = event.id;
+  placeRing();
 }
 
-/** Put the selected marker back where it belongs: into its cluster, if it is still shown. */
 function releaseSelection() {
-  const marker = selectedMarker;
-  if (!marker) return;
-  selectedMarker = null;
-  marker.getElement()?.classList.remove("marker-selected");
-  marker.setZIndexOffset(0);
-  map.removeLayer(marker);
-  const shown = !state.heatmap && state.filtered.some((e) => state.markersById.get(e.id) === marker);
-  if (shown) clusters.addLayer(marker);
+  selectedId = null;
+  if (standalone) {
+    map.removeLayer(standalone);
+    standalone = null;
+  }
+  placeRing();
 }
 
 function closeSidebar() {
@@ -717,6 +738,10 @@ function applyFilters() {
   updateTagOptions();
   syncUrl();
 
+  if (standalone) {  // it goes back into the clusters below (unless the heatmap is on)
+    map.removeLayer(standalone);
+    standalone = null;
+  }
   clusters.clearLayers();
   if (heatLayer) {
     map.removeLayer(heatLayer);
@@ -731,11 +756,12 @@ function applyFilters() {
     state.filtered.forEach((e) => {
       state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
     });
-    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)).filter((m) => m !== selectedMarker));
+    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)));
   }
-  if (selectedMarker) {  // stays on the map, outside the clusters, with its ring
-    if (!map.hasLayer(selectedMarker)) selectedMarker.addTo(map);
-    ringOn(selectedMarker);
+  if (selectedId !== null) {
+    // Large sets are added to the clusters in chunks: place the ring once they are in.
+    placeRing();
+    setTimeout(placeRing, 250);
   }
 
   const showLegend = state.colorByYear && !state.heatmap;
