@@ -131,9 +131,15 @@ const clusters = L.markerClusterGroup({
         iconSize: L.point(40, 40),
       });
     }
+    // All events of one category: the cluster takes that category's colour.
+    // Mixed clusters keep the default colour (which matches no category).
+    const markers = cluster.getAllChildMarkers();
+    const category = markers[0].options.category;
+    const single = markers.every((m) => m.options.category === category);
+    const catClass = single ? ` cluster-cat cluster-cat-${category}` : "";
     return L.divIcon({
       html: `<span>${count}</span>`, // a number we computed – safe
-      className: `cluster cluster-${size}`,
+      className: `cluster cluster-${size}${catClass}`,
       iconSize: L.point(40, 40),
     });
   },
@@ -265,7 +271,7 @@ function popupContent(event) {
 }
 
 function createMarker(event) {
-  return L.marker([event.lat, event.lon], { icon: markerIcon(event.category), title: event.title, year: event.year })
+  return L.marker([event.lat, event.lon], { icon: markerIcon(event.category), title: event.title, year: event.year, category: event.category })
     .bindPopup(() => popupContent(event), { maxWidth: 300 });
 }
 
