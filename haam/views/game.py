@@ -1,6 +1,9 @@
 """The daily game page and its JSON API.
 
-The puzzle endpoint never includes where an event happened (nor its id, which
+Practice mode serves random sets of five with the same rules; see
+:func:`haam.game.practice_event_ids`.
+
+The puzzle endpoints never include where an event happened (nor its id, which
 would let the answer be looked up through /api/events/<id>); the check endpoint
 scores a guess and only then reveals the answer.
 """
@@ -11,6 +14,7 @@ from flask import Blueprint, abort, jsonify, render_template, request, url_for
 
 from haam import game
 from haam.extensions import csrf
+from haam.models import Category
 
 bp = Blueprint("game", __name__)
 
@@ -29,7 +33,7 @@ def _day(value: str) -> date:
 
 @bp.get("/game")
 def page():
-    return render_template("game.html")
+    return render_template("game.html", eras=game.ERA_LABELS)
 
 
 @bp.get("/api/game/<value>")
@@ -64,20 +68,20 @@ def _number(data: dict, key: str, low: float, high: float) -> float:
     return value
 
 
-@bp.post("/api/game/check")
-@csrf.exempt  # stateless and changes nothing on the server
-def check():
+def _json_body() -> dict:
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not isinstance(data.get("date"), str):
+    if not isinstance(data, dict):
         abort(400)
-    day = _day(data["date"])
+    return data
+
+
+def _score(data: dict, events: list):
+    """Score the guess in ``data`` against ``events[data["index"]]`` and reveal it."""
     index = data.get("index")
     if isinstance(index, bool) or not isinstance(index, int):
         abort(400)
     lat = _number(data, "lat", -90, 90)
     lon = game.normalize_lon(_number(data, "lon", -1e6, 1e6))
-
-    events = game.daily_events(day)
     if not 0 <= index < len(events):
         abort(404)
     event = events[index]
@@ -85,3 +89,64 @@ def check():
     answer = game.answer_dict(event)
     answer["map_url"] = url_for("public.index", event=event.id)
     return jsonify(km=round(km, 1), points=game.score_distance(km), answer=answer)
+
+
+@bp.post("/api/game/check")
+@csrf.exempt  # stateless and changes nothing on the server
+def check():
+    data = _json_body()
+    if not isinstance(data.get("date"), str):
+        abort(400)
+    return _score(data, game.daily_events(_day(data["date"])))
+
+
+# ---------------------------------------------------------------- practice
+
+def _filters(source) -> tuple[int | None, Category | None]:
+    """Era index and category from query args or a JSON body; empty means "any"."""
+    era, category = source.get("era"), source.get("category")
+    if era in (None, ""):
+        era = None
+    else:
+        try:
+            era = int(era)
+        except (TypeError, ValueError):
+            abort(400)
+        if isinstance(source.get("era"), bool) or not 0 <= era < len(game.ERAS):
+            abort(400)
+    if category in (None, ""):
+        category = None
+    else:
+        try:
+            category = Category(category)
+        except ValueError:
+            abort(400)
+    return era, category
+
+
+@bp.get("/api/game/practice")
+def practice():
+    """A new random set of five; only its seed is needed to check guesses later."""
+    era, category = _filters(request.args)
+    seed = game.new_practice_seed()
+    events = game.practice_events(seed, era, category)
+    response = jsonify(
+        seed=seed,
+        era=era,
+        category=category.value if category else None,
+        max_points=game.MAX_POINTS,
+        rounds=[game.round_dict(i, event) for i, event in enumerate(events)],
+    )
+    response.cache_control.no_store = True
+    return response
+
+
+@bp.post("/api/game/practice/check")
+@csrf.exempt  # stateless and changes nothing on the server
+def practice_check():
+    data = _json_body()
+    seed = data.get("seed")
+    if not isinstance(seed, str) or not game.SEED_PATTERN.fullmatch(seed):
+        abort(400)
+    era, category = _filters(data)
+    return _score(data, game.practice_events(seed, era, category))

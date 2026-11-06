@@ -8,7 +8,8 @@
 
 {% block content %}
 <section class="game-layout" id="game" data-puzzle-url="{{ url_for('game.puzzle', value='DAY') }}"
-         data-check-url="{{ url_for('game.check') }}" data-page-url="{{ url_for('game.page') }}">
+         data-check-url="{{ url_for('game.check') }}" data-page-url="{{ url_for('game.page') }}"
+         data-practice-url="{{ url_for('game.practice') }}" data-practice-check-url="{{ url_for('game.practice_check') }}">
   <aside class="game-panel" aria-label="Game">
     <header class="game-header">
       <div>
@@ -23,6 +24,32 @@
           <i class="fas fa-chevron-right" aria-hidden="true"></i></a>
       </nav>
     </header>
+
+    <nav class="game-modes" aria-label="Game mode">
+      <a class="game-mode" id="mode-daily" href="{{ url_for('game.page') }}">
+        <i class="far fa-calendar-check" aria-hidden="true"></i> Daily</a>
+      <a class="game-mode" id="mode-practice" href="{{ url_for('game.page', mode='practice') }}">
+        <i class="fas fa-dumbbell" aria-hidden="true"></i> Practice</a>
+    </nav>
+
+    <form class="game-filters" id="practice-filters" hidden>
+      <label class="game-filter">
+        <span>Era</span>
+        <select class="form-input" id="practice-era">
+          <option value="">Any era</option>
+          {% for label in eras %}<option value="{{ loop.index0 }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="game-filter">
+        <span>Category</span>
+        <select class="form-input" id="practice-category">
+          <option value="">Any category</option>
+          {% for category in categories %}<option value="{{ category.value }}">{{ category.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-secondary btn-small" type="submit">
+        <i class="fas fa-random" aria-hidden="true"></i> New set</button>
+    </form>
 
     <p class="game-note" id="game-archive-note" hidden>
       <i class="fas fa-history" aria-hidden="true"></i> A past game: it does not count toward your streak.
@@ -63,13 +90,17 @@
       <p class="game-total"><strong id="summary-total"></strong> <span id="summary-max"></span></p>
       <ol class="game-summary-list" id="summary-list"></ol>
 
-      <label class="sr-only" for="share-text">Result to share</label>
-      <textarea class="form-input game-share" id="share-text" rows="4" readonly></textarea>
-      <button class="btn btn-secondary btn-block" type="button" data-copy="#share-text">
-        <i class="far fa-copy" aria-hidden="true"></i> Copy result</button>
+      <div id="summary-daily">
+        <label class="sr-only" for="share-text">Result to share</label>
+        <textarea class="form-input game-share" id="share-text" rows="4" readonly></textarea>
+        <button class="btn btn-secondary btn-block" type="button" data-copy="#share-text">
+          <i class="far fa-copy" aria-hidden="true"></i> Copy result</button>
 
-      <p class="game-streak" id="summary-streak"></p>
-      <p class="game-countdown" id="summary-countdown"></p>
+        <p class="game-streak" id="summary-streak"></p>
+        <p class="game-countdown" id="summary-countdown"></p>
+      </div>
+      <button class="btn btn-primary btn-block" type="button" id="practice-again" hidden>
+        <i class="fas fa-redo" aria-hidden="true"></i> Play another set</button>
     </article>
   </aside>
 
