@@ -32,7 +32,16 @@
     <div class="filter-group">
       <h3>Years</h3>
       <div id="year-slider" class="year-slider"></div>
-      <p class="year-values"><span id="year-from"></span> – <span id="year-to"></span></p>
+      <div class="year-inputs">
+        <label class="sr-only" for="year-from">From year</label>
+        <input id="year-from" class="form-input year-input" type="text" inputmode="text" autocomplete="off"
+               spellcheck="false" title="Type a year, e.g. 1805, 44 BC or AD 9, then press Enter">
+        <span aria-hidden="true">–</span>
+        <label class="sr-only" for="year-to">To year</label>
+        <input id="year-to" class="form-input year-input" type="text" inputmode="text" autocomplete="off"
+               spellcheck="false" title="Type a year, e.g. 1815, 44 BC or AD 9, then press Enter">
+      </div>
+      <p class="year-scope" id="year-scope" aria-live="polite"></p>
     </div>
 
     <div class="filter-group">

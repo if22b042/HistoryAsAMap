@@ -1110,3 +1110,10 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .collection-banner strong { font-size: 1rem; color: var(--text-strong); }
 .collection-banner span { color: var(--text-muted); }
 .detail-note { margin: 0.75rem 0; padding: 0.6rem 0.75rem; border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: 0.4rem; white-space: pre-line; }
+
+/* year boxes under the slider */
+.year-inputs { display: flex; align-items: center; justify-content: center; gap: 0.4rem; margin-top: 0.5rem; }
+.year-input { width: 7.5rem; padding: 0.35rem 0.5rem; text-align: center; font-weight: 700; color: var(--text-strong); }
+.year-input-invalid { border-color: var(--cat-military) !important; box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.2); }
+.year-scope { margin: 0.35rem 0 0; text-align: center; font-size: 0.75rem; color: var(--text-muted); }
+.year-scope:empty { display: none; }

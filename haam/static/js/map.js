@@ -574,48 +574,88 @@ function renderList() {
   grid.replaceChildren(fragment);
 }
 
-const refilter = () => { listLimit = LIST_PAGE; applyFilters(); };
+const refilter = () => {
+  listLimit = LIST_PAGE;
+  rescaleYears();
+  applyFilters();
+};
 
 // ---------------------------------------------------------------- controls
 
-/**
- * Move the year slider to the selected tag's years – widened to its events' years,
- * since an event may be dated a year before its war officially starts – or back to
- * all years when no tag is selected.
- */
-function fitYearsToTag() {
-  const slider = document.getElementById("year-slider").noUiSlider;
-  if (!slider) return;
-  const { min, max } = slider.options.range;
-  const tag = state.tagId !== null ? state.tagsById.get(state.tagId) : null;
-  if (!tag) {
-    slider.set([min, max]);
-    return;
-  }
-  const years = state.events.filter((e) => e.tags.includes(tag.id)).map((e) => e.year);
-  const from = Math.min(tag.start_year ?? Infinity, ...years);
-  const to = Math.max(tag.end_year ?? Math.max(...years, tag.start_year ?? -Infinity), ...years);
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return;
-  slider.set([Math.max(from, min), Math.min(to, max)]);
+/** "1066", "-44", "44 BC", "AD 9", "9 CE" → a year (negative = BC); null if not a year. */
+function parseYearText(text) {
+  const m = /^\s*(?:(AD|CE)\s*)?(-)?(\d{1,5})\s*(BC|BCE|B\.C\.|AD|CE)?\s*$/i.exec(text || "");
+  if (!m || (m[2] && (m[1] || m[4]))) return null;
+  let year = Number(m[3]);
+  if (m[2] || /^b/i.test(m[4] || "")) year = -year;
+  return year || null; // there is no year 0
 }
 
-function setupYearSlider(years) {
-  const slider = document.getElementById("year-slider");
-  const fromLabel = document.getElementById("year-from");
-  const toLabel = document.getElementById("year-to");
-  let min = Math.min(...years);
-  let max = Math.max(...years);
+/** Slider range; over long spans modern centuries get more room (most events are recent). */
+function sliderRange(min, max) {
   if (min === max) { min -= 1; max += 1; } // noUiSlider needs a non-empty range
-
-  // Most events are recent, so give modern centuries more room on the slider.
   const range = { min, max };
   if (max - min > 1000) {
     const stops = [[0, "35%"], [1500, "65%"], [1900, "85%"]];
     stops.forEach(([year, pos]) => { if (year > min && year < max) range[pos] = year; });
   }
+  return range;
+}
+
+/** Events that match everything except the year filter. */
+function matchesIgnoringYears(event) {
+  if (state.category !== "all" && event.category !== state.category) return false;
+  if (state.tagId !== null && !event.tags.includes(state.tagId)) return false;
+  return searchScore(event) > 0;
+}
+
+let yearScopeKey = "";
+let yearsNarrowed = false;
+
+/**
+ * With a tag or a search, the whole slider spans just the years of the matching
+ * events (so years can be picked precisely); without them it spans all events.
+ * Only acts when the tag, search or category changed, not when the years did.
+ */
+function rescaleYears() {
+  const slider = document.getElementById("year-slider").noUiSlider;
+  if (!slider) return;
+  const key = JSON.stringify([state.tagId, state.query, state.category, search.in, search.match, search.whole]);
+  if (key === yearScopeKey) return;
+  yearScopeKey = key;
+  const scope = document.getElementById("year-scope");
+  const narrowed = state.tagId !== null || search.terms.length > 0;
+  const wasNarrowed = yearsNarrowed;
+  yearsNarrowed = narrowed;
+  // Only the category changed, with no tag or search: keep the years someone set by hand.
+  if (!narrowed && !wasNarrowed && slider.options.range.min === state.allYears.min) return;
+  const years = narrowed ? state.events.filter(matchesIgnoringYears).map((e) => e.year) : [];
+  let min = state.allYears.min;
+  let max = state.allYears.max;
+  if (years.length) {
+    min = Math.min(...years);
+    max = Math.max(...years);
+    const what = [state.tagId !== null ? state.tagsById.get(state.tagId)?.name : null,
+      search.terms.length ? `“${search.terms.join(" ")}”` : null].filter(Boolean).join(" + ");
+    scope.textContent = `Slider fitted to ${what}: ${years.length.toLocaleString()} event${years.length === 1 ? "" : "s"}`;
+  } else {
+    scope.textContent = "";
+  }
+  slider.updateOptions({ range: sliderRange(min, max) }, false);
+  slider.set([min, max]);
+}
+
+function setupYearSlider(years) {
+  const slider = document.getElementById("year-slider");
+  const fromInput = document.getElementById("year-from");
+  const toInput = document.getElementById("year-to");
+  const min = Math.min(...years);
+  const max = Math.max(...years);
+  state.allYears = { min, max };
+  const range = sliderRange(min, max);
 
   noUiSlider.create(slider, {
-    start: [min, max],
+    start: [range.min, range.max],
     connect: true,
     step: 1,
     range,
@@ -625,11 +665,43 @@ function setupYearSlider(years) {
 
   const update = debounce(refilter, 120);
   slider.noUiSlider.on("update", ([from, to]) => {
-    fromLabel.textContent = formatYear(from);
-    toLabel.textContent = formatYear(to);
+    if (document.activeElement !== fromInput) fromInput.value = formatYear(from);
+    if (document.activeElement !== toInput) toInput.value = formatYear(to);
     state.yearFrom = from;
     state.yearTo = to;
     update();
+  });
+
+  // Typing a year: Enter or leaving the box applies it, a wrong entry goes back.
+  const apply = (input, index) => {
+    const year = parseYearText(input.value);
+    const values = slider.noUiSlider.get().map(Number);
+    if (year === null) {
+      input.value = formatYear(values[index]);
+      input.classList.add("year-input-invalid");
+      setTimeout(() => input.classList.remove("year-input-invalid"), 900);
+      return;
+    }
+    const { min: low, max: high } = slider.noUiSlider.options.range;
+    const clamped = Math.min(Math.max(year, low), high);
+    const next = [...values];
+    next[index] = clamped;
+    if (next[0] > next[1]) next[1 - index] = clamped; // typed past the other end: move both
+    slider.noUiSlider.set(next);
+    input.value = formatYear(clamped);
+  };
+  [[fromInput, 0], [toInput, 1]].forEach(([input, index]) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        apply(input, index);
+      } else if (e.key === "Escape") {
+        input.value = formatYear(Number(slider.noUiSlider.get()[index]));
+        input.blur();
+      }
+    });
+    input.addEventListener("change", () => apply(input, index));
+    input.addEventListener("focus", () => input.select());
   });
 }
 
@@ -659,7 +731,6 @@ function setupTagFilter(tags) {
   select.addEventListener("change", () => {
     state.tagId = select.value ? Number(select.value) : null;
     syncTagSearch();
-    fitYearsToTag();
     refilter();
   });
   setupTagSearch(tags.filter((t) => used.has(t.id)));
@@ -689,7 +760,6 @@ function setupTagSearch(tags) {
     select.value = tag ? String(tag.id) : "";
     syncTagSearch();
     close();
-    fitYearsToTag();
     refilter();
   }
 
