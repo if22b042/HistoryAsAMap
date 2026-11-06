@@ -133,6 +133,19 @@
     <h1>All historical events</h1>
     <p>Browse the timeline; the filters above apply here too.</p>
   </header>
+  <div class="tag-search" id="tag-search-box">
+    <label for="tag-search" class="tag-search-label">Filter by tag</label>
+    <div class="tag-search-field">
+      <i class="fas fa-tag" aria-hidden="true"></i>
+      <input id="tag-search" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Type a war, era or period – e.g. Napoleonic, Cold War, Crusades…"
+             role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tag-search-list">
+      <button type="button" class="icon-btn" id="tag-search-clear" aria-label="Show all tags" hidden>
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+    <ul class="tag-search-list" id="tag-search-list" role="listbox" aria-label="Matching tags" hidden></ul>
+  </div>
   <div class="events-grid" id="events-grid" aria-live="polite">
     <p class="empty-state">Loading events…</p>
   </div>
