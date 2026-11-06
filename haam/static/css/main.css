@@ -1247,11 +1247,7 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .leaflet-marker-icon.marker-selected::after {
   content: "";
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 38px;
-  height: 38px;
-  margin: -19px 0 0 -19px;
+  inset: -10px; /* around a dot or a whole cluster, whatever its size */
   box-sizing: border-box;
   border-radius: 50%;
   border: 3px solid #fff;
