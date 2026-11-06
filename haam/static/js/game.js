@@ -3,6 +3,7 @@
 // localStorage, so a reload keeps the game. Practice mode (?mode=practice): random
 // sets of five, optionally from one era or category; nothing is stored.
 /* global L */
+import { addBasemapSwitcher } from "./basemaps.js";
 
 const STORAGE_KEY = "haam-game-v1";
 const ROOT = document.getElementById("game");
@@ -98,22 +99,14 @@ let pin = null; // [lat, lng] the player picked for the current round
 
 // ---------------------------------------------------------------- map
 
-const map = L.map("game-map", { worldCopyJump: true, minZoom: 2 }).setView([30, 10], 2);
+const map = L.map("game-map", { worldCopyJump: true, minZoom: 2, maxZoom: 16 }).setView([30, 10], 2);
 
-// Esri's gray canvas base maps without their label layer, so zooming in does not
-// reveal the answer. (CARTO's no-label tiles now need an API key.)
-const tileUrl = () => {
-  const style = document.documentElement.dataset.theme === "dark" ? "World_Dark_Gray_Base" : "World_Light_Gray_Base";
-  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`;
-};
-const tiles = L.tileLayer(tileUrl(), {
-  maxZoom: 16,
-  attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community",
-}).addTo(map);
+// Only base maps without place names, so zooming in does not reveal the answer:
+// Esri's gray canvas (follows the theme) or satellite imagery.
+addBasemapSwitcher(map, { choices: ["plain", "satellite"], storageKey: "basemap-game" });
 
-// Follow the theme toggle; the pin line takes the theme's text colour too.
+// The pin line takes the theme's text colour.
 new MutationObserver(() => {
-  tiles.setUrl(tileUrl());
   layer.eachLayer((item) => {
     if (item instanceof L.Polyline && !(item instanceof L.CircleMarker)) item.setStyle(lineStyle());
   });

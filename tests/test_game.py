@@ -204,6 +204,13 @@ def test_game_tiles_are_allowed_by_csp(client):
     assert "https://server.arcgisonline.com" in client.get("/game").headers["Content-Security-Policy"]
 
 
+def test_all_base_map_tiles_are_allowed_by_csp(client):
+    csp = client.get("/").headers["Content-Security-Policy"]
+    for host in ("https://tile.openstreetmap.org", "https://*.tile.opentopomap.org",
+                 "https://server.arcgisonline.com"):
+        assert host in csp
+
+
 # ---------------------------------------------------------------- practice
 
 def test_practice_set_hides_the_answers(client, events):
