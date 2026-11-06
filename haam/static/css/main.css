@@ -789,3 +789,103 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .year-legend-ticks { display: flex; justify-content: space-between; gap: 0.25rem; margin-top: 0.25rem; font-weight: 600; }
 .year-legend-tick { white-space: nowrap; filter: brightness(0.85); }
 .year-legend-span { display: block; margin-top: 0.15rem; color: var(--text-muted); font-size: 0.72rem; }
+
+/* pop-out timeline (main map and collection maps) */
+.timeline-toggle {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 1.5rem;
+  z-index: 800;
+  box-shadow: var(--shadow);
+  border-radius: 999px;
+}
+.timeline-toggle:disabled { opacity: 0.75; cursor: not-allowed; }
+.timeline-panel {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 1.5rem;
+  z-index: 800;
+  display: flex;
+  flex-direction: column;
+  max-height: 45%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.timeline-panel[hidden] { display: none; }
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem 0.25rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.timeline-heading { color: var(--text-strong); }
+.timeline-scroller { overflow: auto; padding: 0.4rem 0 0.2rem; overscroll-behavior: contain; }
+.timeline-track { position: relative; min-width: 100%; }
+.timeline-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22px;
+  border-top: 2px solid var(--border);
+}
+.timeline-tick {
+  position: absolute;
+  top: 3px;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.timeline-tick::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 1px;
+  height: 5px;
+  background: var(--text-muted);
+}
+.timeline-item {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 24px;
+  max-width: 200px;
+  padding: 0 0.45rem 0 0.2rem;
+  transform: translateX(-7px); /* the dot sits on the event's year */
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.timeline-item:hover, .timeline-item:focus-visible { background: var(--surface-alt); border-color: var(--border); }
+.timeline-item.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.timeline-dot { flex: none; width: 12px; height: 12px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15); }
+.timeline-label { overflow: hidden; text-overflow: ellipsis; }
+/* Main map: keep clear of the filter panel and the "All events" button. */
+.page-map:not(.filters-hidden) .timeline-toggle,
+.page-map:not(.filters-hidden) .timeline-panel { left: calc(300px + 2rem); }
+.timeline-open .scroll-to-list { display: none; }
+@media (max-width: 768px) {
+  .page-map:not(.filters-hidden) .timeline-toggle,
+  .page-map:not(.filters-hidden) .timeline-panel { left: 0.5rem; }
+  .timeline-panel { left: 0.5rem; right: 0.5rem; bottom: 0.5rem; max-height: 60%; }
+  .timeline-toggle { bottom: 0.75rem; left: 0.5rem; }
+}
+.has-timeline .leaflet-bottom { bottom: calc(var(--timeline-height, 0px) + 1.5rem); }
+@media (max-width: 768px) {
+  .has-timeline .leaflet-bottom { bottom: calc(var(--timeline-height, 0px) + 0.5rem); }
+}
