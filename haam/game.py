@@ -2,7 +2,8 @@
 
 Every player gets the same five events on a given (UTC) day. The year is shown;
 the player places a pin on the map and scores up to 1,000 points per event
-depending on how far the pin is from the real place.
+depending on how far the pin is from the real place. The hard game of the day
+has five other events, and the year is guessed too.
 
 The pick is deterministic: each candidate gets a rank from a hash of the date and
 its id (events with a tag first), and the events are taken in rank order while keeping them apart in time
@@ -152,8 +153,8 @@ class _Candidate:
     rank: int
 
 
-def _rank(day: date, event_id: int) -> int:
-    digest = hashlib.sha256(f"haam-game:{day.isoformat()}:{event_id}".encode()).digest()
+def _rank(day: date, event_id: int, salt: str = "haam-game") -> int:
+    digest = hashlib.sha256(f"{salt}:{day.isoformat()}:{event_id}".encode()).digest()
     return int.from_bytes(digest[:8], "big")
 
 
@@ -253,19 +254,28 @@ def _pick(candidates: list[_Candidate], seed: str) -> list[int]:
     return [c.id for c in picked]
 
 
-def daily_event_ids(day: date) -> list[int]:
-    """The ids of ``day``'s events, in play order. Cached per app process."""
-    cache: dict[date, list[int]] = current_app.extensions.setdefault("haam_game_cache", {})
-    if day not in cache:
-        if len(cache) > 64:
+def daily_event_ids(day: date, hard: bool = False) -> list[int]:
+    """The ids of ``day``'s events, in play order. Cached per app process.
+
+    The hard game has its own five events, never the ones of that day's normal
+    game: it is ranked with another salt and skips the normal picks.
+    """
+    cache: dict[tuple[date, bool], list[int]] = current_app.extensions.setdefault("haam_game_cache", {})
+    key = (day, hard)
+    if key not in cache:
+        if len(cache) > 128:
             cache.clear()
-        candidates = _candidates(lambda event_id: _rank(day, event_id))
-        cache[day] = _pick(candidates, f"haam-game:{day.isoformat()}")
-    return cache[day]
+        salt = "haam-game-hard" if hard else "haam-game"
+        candidates = _candidates(lambda event_id: _rank(day, event_id, salt))
+        if hard:
+            normal = set(daily_event_ids(day))
+            candidates = [c for c in candidates if c.id not in normal]
+        cache[key] = _pick(candidates, f"{salt}:{day.isoformat()}")
+    return cache[key]
 
 
-def daily_events(day: date) -> list[Event]:
-    return _load(daily_event_ids(day))
+def daily_events(day: date, hard: bool = False) -> list[Event]:
+    return _load(daily_event_ids(day, hard))
 
 
 # ---------------------------------------------------------------- practice

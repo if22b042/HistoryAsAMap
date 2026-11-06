@@ -373,8 +373,25 @@ def test_hard_puzzle_hides_the_years(client, events):
         assert str(abs(event.year)) not in raw
 
 
+def test_hard_daily_events_differ_from_normal(app, events):
+    for d in range(10):
+        day = date(2026, 11, 1) + timedelta(days=d)
+        normal, hard = game.daily_event_ids(day), game.daily_event_ids(day, hard=True)
+        assert len(hard) == game.EVENTS_PER_DAY and not set(normal) & set(hard)
+        app.extensions["haam_game_cache"].clear()
+        assert game.daily_event_ids(day, hard=True) == hard  # still deterministic
+
+
+def test_hard_check_uses_the_hard_events(client, events):
+    normal = game.daily_events(game.today_utc())[0]
+    hard = game.daily_events(game.today_utc(), hard=True)[0]
+    body = {"date": "today", "index": 0, "lat": hard.lat, "lon": hard.lon}
+    assert client.post("/api/game/check", json={**body, "hard": True, "year": hard.year}).json["answer"]["id"] == hard.id
+    assert client.post("/api/game/check", json=body).json["answer"]["id"] == normal.id
+
+
 def test_hard_check_scores_place_and_year(client, events):
-    event = game.daily_events(game.today_utc())[0]
+    event = game.daily_events(game.today_utc(), hard=True)[0]
     body = {"date": "today", "index": 0, "lat": event.lat, "lon": event.lon, "hard": True}
     assert client.post("/api/game/check", json=body).status_code == 400  # year missing
     result = client.post("/api/game/check", json={**body, "year": event.year}).json
@@ -382,7 +399,7 @@ def test_hard_check_scores_place_and_year(client, events):
     assert result["location_points"] == game.HARD_LOCATION_POINTS
     assert result["year_points"] == game.HARD_YEAR_POINTS and result["year_error"] == 0
     assert result["answer"]["year"] == event.year
-    off = client.post("/api/game/check", json={**body, "year": event.year + 200}).json
+    off = client.post("/api/game/check", json={**body, "year": event.year - 200}).json
     assert off["location_points"] == game.HARD_LOCATION_POINTS
     assert off["year_points"] < game.HARD_YEAR_POINTS and off["year_error"] == 200
 

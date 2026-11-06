@@ -45,7 +45,7 @@ def puzzle(value: str):
     day = _day(value)
     hard = _hard_arg()
     today = game.today_utc()
-    events = game.daily_events(day)
+    events = game.daily_events(day, hard)
     previous = date.fromordinal(day.toordinal() - 1)
     following = date.fromordinal(day.toordinal() + 1)
     response = jsonify(
@@ -123,7 +123,7 @@ def check():
     data = _json_body()
     if not isinstance(data.get("date"), str):
         abort(400)
-    return _score(data, game.daily_events(_day(data["date"])))
+    return _score(data, game.daily_events(_day(data["date"]), hard=data.get("hard") is True))
 
 
 # ---------------------------------------------------------------- practice
