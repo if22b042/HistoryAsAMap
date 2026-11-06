@@ -382,23 +382,42 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   timeline.setActive(id);
 }
 
-// A black-and-white ring around the event that is open on the right. It uses no
-// colour, so it never looks like a category or year colour, and it is a separate
-// layer on top, so it shows even when the event is inside a cluster.
-const selectionRing = L.marker([0, 0], {
-  icon: L.divIcon({ className: "selected-ring", iconSize: [38, 38], iconAnchor: [19, 19] }),
-  interactive: false,
-  keyboard: false,
-  zIndexOffset: 10000,
-});
+// The event that is open on the right gets a black-and-white ring (no colour, so it
+// never looks like a category or year colour). The ring is drawn on the event's own
+// marker, which leaves the cluster group while it is selected: so it is never hidden
+// in a cluster and the ring moves exactly with the dot while zooming.
+let selectedMarker = null;
+
+function ringOn(marker) {
+  const element = marker.getElement();
+  if (element) element.classList.add("marker-selected");
+}
 
 function showSelection(event) {
-  selectionRing.setLatLng([event.lat, event.lon]);
-  if (!map.hasLayer(selectionRing)) selectionRing.addTo(map);
+  const marker = state.markersById.get(event.id);
+  if (!marker) return;
+  if (selectedMarker && selectedMarker !== marker) releaseSelection();
+  selectedMarker = marker;
+  if (clusters.hasLayer(marker)) clusters.removeLayer(marker);
+  if (!map.hasLayer(marker)) marker.addTo(map);
+  marker.setZIndexOffset(10000);
+  ringOn(marker);
+}
+
+/** Put the selected marker back where it belongs: into its cluster, if it is still shown. */
+function releaseSelection() {
+  const marker = selectedMarker;
+  if (!marker) return;
+  selectedMarker = null;
+  marker.getElement()?.classList.remove("marker-selected");
+  marker.setZIndexOffset(0);
+  map.removeLayer(marker);
+  const shown = !state.heatmap && state.filtered.some((e) => state.markersById.get(e.id) === marker);
+  if (shown) clusters.addLayer(marker);
 }
 
 function closeSidebar() {
-  if (map.hasLayer(selectionRing)) selectionRing.remove();
+  releaseSelection();
   timeline.setActive(null);
   state.openId = null;
   sidebar.hidden = true;
@@ -712,7 +731,11 @@ function applyFilters() {
     state.filtered.forEach((e) => {
       state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
     });
-    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)));
+    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)).filter((m) => m !== selectedMarker));
+  }
+  if (selectedMarker) {  // stays on the map, outside the clusters, with its ring
+    if (!map.hasLayer(selectedMarker)) selectedMarker.addTo(map);
+    ringOn(selectedMarker);
   }
 
   const showLegend = state.colorByYear && !state.heatmap;

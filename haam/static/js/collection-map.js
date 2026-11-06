@@ -56,20 +56,21 @@ if (dataTag && mapElement) {
   if (points.length === 1) map.setView(points[0], 6);
   else map.fitBounds(points, { padding: [40, 40], maxZoom: 8 });
 
-  // The same black-and-white ring as on the main map marks the selected entry.
-  const selectionRing = L.marker([0, 0], {
-    icon: L.divIcon({ className: "selected-ring", iconSize: [44, 44], iconAnchor: [22, 22] }),
-    interactive: false,
-    keyboard: false,
-    zIndexOffset: 10000,
-  });
+  // The same black-and-white ring as on the main map marks the selected entry; it is
+  // drawn on the entry's own marker, so the two always move together.
+  let selectedMarker = null;
 
   function highlight(id, scroll) {
     document.querySelectorAll(".entry-card.active").forEach((c) => c.classList.remove("active"));
     const marker = markers.get(id);
+    if (selectedMarker && selectedMarker !== marker) {
+      selectedMarker.getElement()?.classList.remove("marker-selected");
+      selectedMarker.setZIndexOffset(0);
+    }
     if (marker) {
-      selectionRing.setLatLng(marker.getLatLng());
-      if (!map.hasLayer(selectionRing)) selectionRing.addTo(map);
+      selectedMarker = marker;
+      marker.setZIndexOffset(10000);
+      marker.getElement()?.classList.add("marker-selected");
     }
     const card = document.getElementById(`entry-${id}`);
     if (!card) return;
