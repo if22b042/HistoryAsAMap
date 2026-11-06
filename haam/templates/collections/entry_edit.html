@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% from "_macros.html" import text_field %}
+{% from "_macros.html" import text_field, field_errors %}
 {% block title %}Edit entry{% endblock %}
 
 {% block head %}
   <meta name="robots" content="noindex, nofollow">
-  {% if not entry.is_event %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">{% endif %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 {% endblock %}
 
 {% block content %}
@@ -13,14 +13,33 @@
     <p class="eyebrow"><a href="{{ url_for('collections.manage', view_token=collection.view_token, _anchor='entries') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ collection.title }}</a></p>
     <h1>{{ entry.title }}</h1>
     {% if entry.is_event %}
-      <p>This event comes from the main map, so its details can't be changed here – but you can write your own note about it.</p>
+      <p>This event comes from the main map, so its details can't be changed here – but you can write your own
+        note about it and show it at other coordinates in this collection. The event itself is not changed.</p>
     {% endif %}
   </header>
 
   <form class="card" method="post" novalidate>
     {% if entry.is_event %}
       {{ form.csrf_token }}
-      {{ text_field(form.note, icon='sticky-note', rows=5, autofocus=True) }}
+      {{ text_field(form.note, icon='sticky-note', rows=4, autofocus=True) }}
+      <div class="form-group {{ 'has-error' if form.lat.errors or form.lon.errors }}">
+        <span class="form-label"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Place in this collection</span>
+        <div class="picker-map" data-location-picker data-lat="#{{ form.lat.id }}" data-lon="#{{ form.lon.id }}"
+             data-origin-lat="{{ entry.event.lat }}" data-origin-lon="{{ entry.event.lon }}"
+             role="application" aria-label="Click the map to move the entry"></div>
+        <p class="form-hint">The grey marker is the event's own place ({{ '%.4f'|format(entry.event.lat) }},
+          {{ '%.4f'|format(entry.event.lon) }}). Click the map or drag the marker to show it elsewhere in this
+          collection; leave the fields empty to keep its own place.</p>
+        <div class="form-row">
+          <div>{{ form.lat.label(class_='sr-only') }}{{ form.lat(class_='form-input', placeholder='Latitude (own place)', inputmode='decimal') }}</div>
+          <div>{{ form.lon.label(class_='sr-only') }}{{ form.lon(class_='form-input', placeholder='Longitude (own place)', inputmode='decimal') }}</div>
+        </div>
+        {{ field_errors(form.lat) }}{% if not form.lat.errors %}{{ field_errors(form.lon) }}{% endif %}
+        {% if entry.moved %}
+          <button class="btn btn-small btn-secondary" type="submit" name="reset" value="1">
+            <i class="fas fa-undo" aria-hidden="true"></i> Back to its own place (and save)</button>
+        {% endif %}
+      </div>
     {% else %}
       {% include "collections/_custom_form.html" %}
     {% endif %}
@@ -30,8 +49,6 @@
 {% endblock %}
 
 {% block scripts %}
-  {% if not entry.is_event %}
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <script type="module" src="{{ url_for('static', filename='js/location-picker.js') }}"></script>
-  {% endif %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module" src="{{ url_for('static', filename='js/location-picker.js') }}"></script>
 {% endblock %}

@@ -12,6 +12,7 @@ const CATEGORY_LABELS = {
   diplomatic: "Diplomatic",
   naval: "Naval",
   scientific: "Scientific",
+  natural: "Natural",
   other: "Other",
 };
 
@@ -138,6 +139,38 @@ const clusters = L.markerClusterGroup({
 
 let heatLayer = null;
 
+// The heatmap has no markers, so a click looks for events right under the pointer:
+// one opens it, several close together zoom in, none does nothing.
+const HEAT_CLICK_RADIUS = 14; // px
+map.on("click", (e) => {
+  if (!state.heatmap) return;
+  const hits = [];
+  state.filtered.forEach((event) => {
+    const distance = map.latLngToContainerPoint([event.lat, event.lon]).distanceTo(e.containerPoint);
+    if (distance <= HEAT_CLICK_RADIUS) hits.push({ event, distance });
+  });
+  if (!hits.length) return;
+  hits.sort((a, b) => a.distance - b.distance);
+  const sameSpot = hits.every((h) => h.event.lat === hits[0].event.lat && h.event.lon === hits[0].event.lon);
+  if (hits.length === 1 || sameSpot || map.getZoom() >= map.getMaxZoom()) {
+    showEvent(hits[0].event.id, { zoom: map.getZoom() });
+  } else {
+    map.flyTo(e.latlng, Math.min(map.getZoom() + 2, map.getMaxZoom()), { duration: 0.6 });
+  }
+});
+
+// …and the pointer becomes a hand over a spot where clicking does something.
+let heatHover = 0;
+map.on("mousemove", (e) => {
+  if (!state.heatmap || heatHover) return;
+  heatHover = requestAnimationFrame(() => {
+    heatHover = 0;
+    const near = state.filtered.some((event) =>
+      map.latLngToContainerPoint([event.lat, event.lon]).distanceTo(e.containerPoint) <= HEAT_CLICK_RADIUS);
+    map.getContainer().classList.toggle("heat-clickable", near);
+  });
+});
+
 // Pop-out timeline of the events shown (only while there are few of them).
 const timeline = createTimeline({
   map,
@@ -241,7 +274,19 @@ const sidebarContent = document.getElementById("sidebar-content");
 
 const detailsCache = new Map();
 
+// The data this page shows: every approved event, or one collection's entries
+// (whose list already carries the full text, so no details are fetched).
+const MAP_ELEMENT = document.getElementById("map");
+const EVENTS_URL = MAP_ELEMENT.dataset.eventsUrl || "/api/events";
+const FULL_TEXT = MAP_ELEMENT.dataset.fullText === "1";
+
+const safeWebUrl = (url) => (/^https?:\/\//.test(url || "") ? url : null);
+
 async function loadDetails(id) {
+  if (FULL_TEXT) {
+    const event = state.eventsById.get(id);
+    return event ? { summary: event.summary || event.excerpt, country: null } : null;
+  }
   if (!detailsCache.has(id)) {
     detailsCache.set(id, getJson(`/api/events/${id}`).catch((error) => {
       console.error(error);
@@ -287,6 +332,13 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
     parts.push(tags);
   }
 
+  if (event.note) {
+    const note = el("div", "detail-note");
+    note.append(el("strong", null, "Note from the collection: "), event.note);
+    parts.push(note);
+  }
+  if (event.moved) parts.push(el("p", "form-hint", "Placed at other coordinates in this collection."));
+
   const actions = el("div", "detail-actions");
   const wiki = safeWikipediaUrl(event.wiki_url);
   if (wiki) {
@@ -294,6 +346,14 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
     link.href = wiki;
     link.target = "_blank";
     link.rel = "noopener";
+    actions.append(link);
+  }
+  const source = !wiki && safeWebUrl(event.link);
+  if (source) {
+    const link = el("a", "btn btn-primary", "Open the source");
+    link.href = source;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer nofollow ugc";
     actions.append(link);
   }
   const maps = el("a", "btn btn-secondary", "Google Maps");
@@ -877,6 +937,7 @@ function setupHeatmapToggle() {
     button.classList.toggle("active", state.heatmap);
     button.setAttribute("aria-pressed", String(state.heatmap));
     button.querySelector("span").textContent = state.heatmap ? "Heatmap on" : "Heatmap";
+    if (!state.heatmap) map.getContainer().classList.remove("heat-clickable");
     applyFilters();
   });
 }
@@ -926,7 +987,7 @@ async function init() {
   let events;
   let tags;
   try {
-    [events, tags] = await Promise.all([getJson("/api/events"), getJson("/api/tags")]);
+    [events, tags] = await Promise.all([getJson(EVENTS_URL), getJson("/api/tags")]);
   } catch (error) {
     console.error(error);
     document.getElementById("events-grid").replaceChildren(

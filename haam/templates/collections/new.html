@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import text_field, field_errors %}
+{% from "_macros.html" import text_field, field_errors, tag_fields %}
 {% block title %}New collection{% endblock %}
 
 {% block content %}
@@ -18,6 +18,12 @@
       <p class="form-hint">Unlisted collections can only be seen by people you give the share link to.</p>
       {{ field_errors(form.is_public) }}
     </div>
+    <fieldset class="tag-start">
+      <legend>Start from an official tag <span class="form-hint">(optional)</span></legend>
+      <p class="form-hint">All confirmed events with that tag are added – oldest first, at most 500 – and you can
+        remove or add entries afterwards. Leave the years empty to take the whole tag.</p>
+      {{ tag_fields(form) }}
+    </fieldset>
     <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-layer-group" aria-hidden="true"></i> Create collection</button>
   </form>
 </div>

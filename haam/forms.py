@@ -14,7 +14,7 @@ from wtforms import (
     StringField,
     TextAreaField,
 )
-from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, ValidationError
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, ValidationError
 
 from haam.dates import parse_year_input
 from haam.models import Category
@@ -67,6 +67,39 @@ class CollectionForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired(), Length(max=200)])
     description = TextAreaField("Description", validators=[Length(max=5000)])
     is_public = BooleanField("List this collection on the public Collections page")
+
+
+class OptionalYearField(StringField):
+    """Like YearField, but may be left empty (``.year`` is then None)."""
+
+    def pre_validate(self, form):
+        self.year = parse_year_input(self.data) if (self.data or "").strip() else None
+        if (self.data or "").strip() and self.year is None:
+            raise ValidationError("Enter a year such as 1066, 44 BC or AD 9, or leave it empty.")
+
+
+class TagEntriesForm(FlaskForm):
+    """Add all events of an official tag (optionally only some years) to a collection."""
+
+    tag_id = SelectField("Tag", coerce=int, validate_choice=False)
+    year_from = OptionalYearField("From year")
+    year_to = OptionalYearField("To year")
+
+
+class NewCollectionForm(CollectionForm):
+    """A new collection, optionally starting with all events of a tag."""
+
+    tag_id = SelectField("Start with the events of a tag (optional)", coerce=int, validate_choice=False, default=0)
+    year_from = OptionalYearField("From year")
+    year_to = OptionalYearField("To year")
+
+
+class EntryEventEditForm(FlaskForm):
+    """A main-map event in a collection: a note, and optionally other coordinates."""
+
+    note = TextAreaField("Your note", validators=[Length(max=2000)])
+    lat = FloatField("Latitude", validators=[Optional(), NumberRange(-90, 90)])
+    lon = FloatField("Longitude", validators=[Optional(), NumberRange(-180, 180)])
 
 
 class CustomEntryForm(FlaskForm):

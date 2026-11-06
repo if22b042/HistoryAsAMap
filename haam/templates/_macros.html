@@ -36,6 +36,12 @@
     {{ field_errors(form.category) }}
   </div>
 
+  <div class="form-group">
+    <span class="form-label"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Where it happened</span>
+    <div class="picker-map" data-location-picker data-lat="#{{ form.lat.id }}" data-lon="#{{ form.lon.id }}"
+         role="application" aria-label="Click the map to set the coordinates"></div>
+    <p class="form-hint">Click the map to place the marker (drag it to adjust), or type the coordinates below.</p>
+  </div>
   <div class="form-row">
     {{ text_field(form.lat, icon='globe', inputmode='decimal', required=True) }}
     {{ text_field(form.lon, icon='globe-americas', inputmode='decimal', required=True) }}
@@ -120,5 +126,17 @@
       <button class="btn btn-secondary" type="button" data-copy="#{{ id }}"><i class="fas fa-copy" aria-hidden="true"></i> Copy</button>
     </div>
     {% if hint %}<p class="form-hint">{{ hint }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro tag_fields(form) %}
+  <div class="form-group {{ 'has-error' if form.tag_id.errors }}">
+    <label class="form-label" for="{{ form.tag_id.id }}"><i class="fas fa-tag" aria-hidden="true"></i> {{ form.tag_id.label.text }}</label>
+    {{ form.tag_id(class_='form-input') }}
+    {{ field_errors(form.tag_id) }}
+  </div>
+  <div class="form-row">
+    {{ text_field(form.year_from, hint='Optional, e.g. 1805', icon='calendar') }}
+    {{ text_field(form.year_to, hint='Optional, e.g. 1812 or 44 BC', icon='calendar') }}
   </div>
 {% endmacro %}

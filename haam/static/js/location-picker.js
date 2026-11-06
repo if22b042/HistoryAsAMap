@@ -45,5 +45,16 @@ document.querySelectorAll("[data-location-picker]").forEach((element) => {
   }
   latInput.addEventListener("change", () => fromInputs(true));
   lonInput.addEventListener("change", () => fromInputs(true));
+
+  // data-origin-lat/-lon: a grey marker at the original place (e.g. the event's own
+  // coordinates when it is moved in a collection); the map starts there.
+  const originLat = parseFloat(element.dataset.originLat);
+  const originLon = parseFloat(element.dataset.originLon);
+  if (Number.isFinite(originLat) && Number.isFinite(originLon)) {
+    L.circleMarker([originLat, originLon], {
+      radius: 7, color: "#4a5568", weight: 2, fillColor: "#a0aec0", fillOpacity: 0.8, interactive: false,
+    }).addTo(map);
+    map.setView([originLat, originLon], 6);
+  }
   fromInputs(true); // editing an existing entry, or re-showing a form with errors
 });

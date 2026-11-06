@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import text_field, field_errors, entry_badges, collection_badges, copy_field %}
+{% from "_macros.html" import text_field, field_errors, entry_badges, collection_badges, copy_field, tag_fields %}
 {% block title %}Edit {{ collection.title }}{% endblock %}
 
 {% block head %}
@@ -37,11 +37,12 @@
               <div>
                 <span class="year-pill">{{ entry.display_year }}</span>
                 <strong>{{ entry.title }}</strong> {{ entry_badges(entry) }}
+                {% if entry.moved %}<span class="badge badge-other" title="Shown at other coordinates in this collection"><i class="fas fa-map-pin" aria-hidden="true"></i> moved</span>{% endif %}
                 {% if entry.note %}<p class="form-hint"><i class="fas fa-sticky-note" aria-hidden="true"></i> {{ entry.note|truncate(120) }}</p>{% endif %}
               </div>
               <div class="button-row">
                 <a class="btn btn-small btn-secondary" href="{{ url_for('collections.edit_entry', view_token=collection.view_token, entry_id=entry.id) }}">
-                  <i class="fas fa-edit" aria-hidden="true"></i> {{ 'Note' if entry.is_event else 'Edit' }}
+                  <i class="fas fa-edit" aria-hidden="true"></i> {{ 'Note & place' if entry.is_event else 'Edit' }}
                 </a>
                 <form method="post" action="{{ url_for('collections.delete_entry', view_token=collection.view_token, entry_id=entry.id) }}"
                       data-confirm="Remove “{{ entry.title }}” from this collection?">
@@ -92,6 +93,17 @@
           </div>
           {{ text_field(event_form.note, icon='sticky-note', rows=2, placeholder='Optional note') }}
           <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-plus" aria-hidden="true"></i> Add event</button>
+        </form>
+      </section>
+
+      <section class="card" id="add-tag">
+        <h2><i class="fas fa-tags" aria-hidden="true"></i> Add all events of a tag</h2>
+        <p class="form-hint">Every confirmed event with the tag that is not in the collection yet, oldest first,
+          up to {{ max_entries }} entries in all.</p>
+        <form method="post" action="{{ url_for('collections.add_tag', view_token=collection.view_token) }}" novalidate>
+          {{ tag_form.csrf_token }}
+          {{ tag_fields(tag_form) }}
+          <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-plus" aria-hidden="true"></i> Add the tag's events</button>
         </form>
       </section>
 
