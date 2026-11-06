@@ -8,7 +8,7 @@ document.querySelectorAll("[data-location-picker]").forEach((element) => {
   if (!latInput || !lonInput) return;
 
   const map = L.map(element, { worldCopyJump: true, minZoom: 1 }).setView([35, 15], 2);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 18,
   }).addTo(map);

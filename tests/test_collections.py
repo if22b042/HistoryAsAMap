@@ -88,7 +88,7 @@ def test_collection_pages_are_not_indexed(client):
     collection, _ = create(client)
     response = client.get(f"/collections/{collection.view_token}")
     assert response.headers["X-Robots-Tag"] == "noindex, nofollow"
-    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Referrer-Policy"] == "strict-origin"
 
 
 # -------------------------------------------------------------- entries

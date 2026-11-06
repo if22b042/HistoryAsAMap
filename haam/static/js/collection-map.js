@@ -14,7 +14,7 @@ function el(tag, className, text) {
 if (dataTag && mapElement) {
   const entries = JSON.parse(dataTag.textContent);
   const map = L.map(mapElement, { worldCopyJump: true, minZoom: 2 });
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 18,
   }).addTo(map);
