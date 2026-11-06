@@ -296,3 +296,100 @@ def test_titles_naming_a_country_are_never_picked(app, events, make_event):
     titles = {e.title for day in days for e in game.daily_events(day)}
     titles |= {e.title for _ in range(10) for e in game.practice_events(game.new_practice_seed(), era=2)}
     assert "Siege of Malta" not in titles and "1755 Portugal earthquake" not in titles
+
+
+# ---------------------------------------------------------------- hard mode
+
+@pytest.mark.parametrize("text, expected", [
+    ("fought on Sunday 18 June 1815, near Waterloo", "fought on Sunday 18 June ____, near Waterloo"),
+    ("the American Revolutionary War (1775–1783)", "the American Revolutionary War (____)"),
+    ("in the 5th century BC", "in ____"),
+    ("in the late nineteenth century", "in ____"),
+    ("in 424 BC between", "in ____ between"),
+    ("circa AD 60–61 in", "circa ____ in"),
+    ("in the 1640s", "in ____"),
+    ("dated to 232 CE ± 10", "dated to ____ ± 10"),
+    ("on February 5, 1918.", "on February 5, ____."),
+    ("in 960 the", "in ____ the"),
+    ("between 1309 and 1310", "between ____"),
+    # Not years: quantities, names, small numbers.
+    ("SM U-154 attacked", "SM U-154 attacked"),
+    ("killing 53 to 62 prisoners", "killing 53 to 62 prisoners"),
+    ("1,500 men and 2.5 km", "1,500 men and 2.5 km"),
+])
+def test_hide_years(text, expected):
+    assert game.hide_years(text) == expected
+
+
+@pytest.mark.parametrize("title, expected", [
+    ("Siege of London (1471)", "Siege of London"),
+    ("Siege of Algeciras (1309–1310)", "Siege of Algeciras"),
+    ("1755 Lisbon earthquake", "____ Lisbon earthquake"),
+    ("Action of 13 March 1806", "Action of 13 March ____"),
+    ("Battle of Hastings", "Battle of Hastings"),
+])
+def test_hard_title(title, expected):
+    assert game.hard_title(title) == expected
+
+
+def test_year_scoring():
+    today = date(2026, 1, 1)
+    assert game.score_year(1813, 1813, today) == game.HARD_YEAR_POINTS
+    # Half points at 10% of the age: 21.3 years for 1813.
+    assert game.score_year(1834, 1813, today) == pytest.approx(game.HARD_YEAR_POINTS / 2, abs=10)
+    # Old events are more forgiving: 300 years off for 1000 BC is about half.
+    assert game.score_year(-1300, -1000, today) == pytest.approx(game.HARD_YEAR_POINTS / 2, abs=10)
+    # Recent events: at least YEAR_HALF_MIN years for half points.
+    assert game.score_year(2020, 2025, today) == pytest.approx(game.HARD_YEAR_POINTS / 2, abs=1)
+    errors = [game.score_year(1813 + d, 1813, today) for d in range(0, 300, 10)]
+    assert errors == sorted(errors, reverse=True)
+    # There is no year 0: 1 BC and AD 1 are one year apart.
+    assert game.year_error(-1, 1) == 1 and game.year_error(-44, 1) == 44
+
+
+def test_hard_location_points_are_half():
+    assert game.score_hard_location(0) == game.HARD_LOCATION_POINTS
+    assert game.score_hard_location(500) == round(game.score_distance(500) / 2)
+
+
+def test_hard_puzzle_hides_the_years(client, events):
+    normal = client.get("/api/game/today").json
+    hard = client.get("/api/game/today?hard=1").json
+    assert hard["hard"] and not normal["hard"]
+    assert len(hard["rounds"]) == len(normal["rounds"])
+    for round_ in hard["rounds"]:
+        assert round_["year"] is None and round_["date"] is None
+    raw = json.dumps(hard["rounds"])
+    for event in events:
+        assert str(abs(event.year)) not in raw
+
+
+def test_hard_check_scores_place_and_year(client, events):
+    event = game.daily_events(game.today_utc())[0]
+    body = {"date": "today", "index": 0, "lat": event.lat, "lon": event.lon, "hard": True}
+    assert client.post("/api/game/check", json=body).status_code == 400  # year missing
+    result = client.post("/api/game/check", json={**body, "year": event.year}).json
+    assert result["points"] == game.MAX_POINTS
+    assert result["location_points"] == game.HARD_LOCATION_POINTS
+    assert result["year_points"] == game.HARD_YEAR_POINTS and result["year_error"] == 0
+    assert result["answer"]["year"] == event.year
+    off = client.post("/api/game/check", json={**body, "year": event.year + 200}).json
+    assert off["location_points"] == game.HARD_LOCATION_POINTS
+    assert off["year_points"] < game.HARD_YEAR_POINTS and off["year_error"] == 200
+
+
+@pytest.mark.parametrize("year", [0, True, "1066", 99999, 1.5])
+def test_hard_check_rejects_bad_years(client, events, year):
+    body = {"date": "today", "index": 0, "lat": 0, "lon": 0, "hard": True, "year": year}
+    assert client.post("/api/game/check", json=body).status_code == 400
+
+
+def test_hard_practice(client, events):
+    data = client.get("/api/game/practice?hard=1").json
+    assert data["hard"] and all(r["year"] is None for r in data["rounds"])
+    by_title = {game.hard_title(e.title): e for e in events}
+    event = by_title[data["rounds"][0]["title"]]
+    result = client.post("/api/game/practice/check", json={
+        "seed": data["seed"], "index": 0, "lat": event.lat, "lon": event.lon,
+        "hard": True, "year": event.year}).json
+    assert result["points"] == game.MAX_POINTS

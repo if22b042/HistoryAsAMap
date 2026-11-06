@@ -29,6 +29,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import selectinload
 
 from haam.data.place_words import COUNTRIES, NATIONALITIES
+from haam.dates import MONTHS
 from haam.extensions import db
 from haam.models import Category, Event, Status, event_tags
 
@@ -53,6 +54,16 @@ EARTH_RADIUS_KM = 6371.0
 
 EXCERPT_MIN, EXCERPT_MAX = 160, 320
 HIDDEN = "____"
+
+# Hard mode: the year is guessed too. Each event is still worth MAX_POINTS, split
+# between the place and the year. A year off by YEAR_HALF_SHARE of the event's
+# age (at least YEAR_HALF_MIN years) gets half the year points: 21 years for
+# 1813, about 300 years for 1000 BC.
+HARD_LOCATION_POINTS = 500
+HARD_YEAR_POINTS = MAX_POINTS - HARD_LOCATION_POINTS
+YEAR_HALF_SHARE = 0.10
+YEAR_HALF_MIN = 5
+MIN_YEAR_GUESS, MAX_YEAR_GUESS = -10000, 2100
 
 
 # ------------------------------------------------------------------ dates
@@ -101,6 +112,26 @@ def score_distance(km: float) -> int:
     # Exponential decay, shifted so it reaches exactly 0 at ZERO_KM.
     value = (math.exp(-km / _DECAY_KM) - _FLOOR) / (1 - _FLOOR)
     return max(0, min(MAX_POINTS, round(MAX_POINTS * value)))
+
+
+def _astronomical(year: int) -> int:
+    """1 BC (-1) is year 0, so that 1 BC and AD 1 are one year apart."""
+    return year + 1 if year < 0 else year
+
+
+def year_error(guess: int, actual: int) -> int:
+    return abs(_astronomical(guess) - _astronomical(actual))
+
+
+def score_year(guess: int, actual: int, today: date | None = None) -> int:
+    """Hard-mode year points: 500 when exact, half at ~10% of the event's age."""
+    age = (today or today_utc()).year - actual
+    half = max(YEAR_HALF_MIN, YEAR_HALF_SHARE * age)
+    return round(HARD_YEAR_POINTS * 0.5 ** (year_error(guess, actual) / half))
+
+
+def score_hard_location(km: float) -> int:
+    return round(score_distance(km) * HARD_LOCATION_POINTS / MAX_POINTS)
 
 
 # ---------------------------------------------------------------- picking
@@ -305,8 +336,68 @@ def excerpt(event: Event) -> str:
     return _hide_place(text, event)
 
 
-def round_dict(index: int, event: Event) -> dict:
-    """What the player sees before guessing: no coordinates, country, id or link."""
+# Hard mode hides every hint at the year. Applied in this order: years after a
+# month, centuries, year ranges, decades, years with an era, any other three- or
+# four-digit number, and finally lone era markers (BC, AD).
+_ERA = r"(?:BCE|BC|B\.C\.E\.|B\.C\.|AD|CE|A\.D\.|C\.E\.)"
+_ORDINAL_WORDS = (
+    "first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|"
+    "thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|"
+    "twenty-first"
+)
+# Not part of a larger number such as "1,500" or "2.5", nor of a name like "U-154".
+_NUM_START = r"(?<![\w\-–])(?<!\d[,.])"
+_NUM_END = r"(?![\w]|[,.]\d)"
+_MONTH_YEAR = re.compile(rf"\b((?:{MONTHS})(?:\s+\d{{1,2}})?,?\s+)\d{{3,4}}{_NUM_END}")
+_YEAR_HINTS = (
+    re.compile(
+        rf"\b(?:the\s+)?(?:(?:early|mid|late)[\s-]+)?(?:\d{{1,2}}(?:st|nd|rd|th)|{_ORDINAL_WORDS})"
+        rf"[\s-]+(?:century|centuries|millennium|millennia)(?:\s+{_ERA}(?![A-Za-z]))?",
+        re.IGNORECASE,
+    ),
+    re.compile(rf"{_NUM_START}\d{{1,4}}\s*[–—-]\s*\d{{1,4}}(?:\s*{_ERA}(?![A-Za-z]))?{_NUM_END}"),
+    re.compile(rf"{_NUM_START}\d{{3,4}}\s+(?:to|until|and)\s+\d{{3,4}}{_NUM_END}"),
+    re.compile(r"\b(?:the\s+)?(?:(?:early|mid|late)[\s-]+)?\d{1,3}0s\b", re.IGNORECASE),
+    re.compile(rf"{_NUM_START}\d{{1,5}}\s*{_ERA}(?![A-Za-z])"),
+    re.compile(rf"(?<![A-Za-z]){_ERA}\s*\d{{1,4}}\b"),
+    re.compile(rf"{_NUM_START}\d{{3,4}}{_NUM_END}"),
+    re.compile(rf"(?<![A-Za-z.]){_ERA}(?![A-Za-z])"),
+)
+
+
+def hide_years(text: str) -> str:
+    """Blank out years, dates, spans, decades, centuries and BC/AD markers.
+
+    "fought on 18 June 1815" → "fought on 18 June ____", "(1775–1783)" →
+    "(____)", "the 5th century BC" → "____".
+    """
+    text = _MONTH_YEAR.sub(lambda m: m.group(1) + HIDDEN, text or "")
+    for pattern in _YEAR_HINTS:
+        text = pattern.sub(HIDDEN, text)
+    return re.sub(rf"{HIDDEN}(?:[\s,–—-]*{HIDDEN})+", HIDDEN, text)
+
+
+def hard_title(title: str) -> str:
+    """"Siege of London (1471)" → "Siege of London"; "1755 Lisbon earthquake" → "____ Lisbon earthquake"."""
+    text = re.sub(rf"\s*\(\s*{HIDDEN}\s*\)", "", hide_years(title))
+    return text.strip() or HIDDEN
+
+
+def round_dict(index: int, event: Event, hard: bool = False) -> dict:
+    """What the player sees before guessing: no coordinates, country, id or link.
+
+    In hard mode the year is an answer too, so it is left out and hidden in the
+    title and excerpt.
+    """
+    if hard:
+        return {
+            "index": index,
+            "title": hard_title(event.title),
+            "date": None,
+            "year": None,
+            "excerpt": hide_years(excerpt(event)),
+            "category": event.category.value,
+        }
     return {
         "index": index,
         "title": event.title,
@@ -325,4 +416,7 @@ def answer_dict(event: Event) -> dict:
         "lon": event.lon,
         "country": event.country,
         "wiki_url": event.wiki_url,
+        "year": event.year,
+        "display_year": event.display_year,
+        "date": event.date_label or event.display_year,
     }

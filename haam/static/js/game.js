@@ -2,6 +2,8 @@
 // Daily mode: the same five for everyone each day; progress and the streak live in
 // localStorage, so a reload keeps the game. Practice mode (?mode=practice): random
 // sets of five, optionally from one era or category; nothing is stored.
+// Hard mode (&hard=1, either mode): the year is hidden and guessed too; the daily
+// hard game keeps its own progress and streak.
 /* global L */
 
 const STORAGE_KEY = "haam-game-v1";
@@ -22,9 +24,17 @@ const CATEGORY_LABELS = {
 function loadStore() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (parsed && typeof parsed === "object" && parsed.days) return parsed;
+    if (parsed && typeof parsed === "object" && parsed.days) {
+      parsed.streak = parsed.streak || { current: 0, best: 0, last: null };
+      parsed.hardStreak = parsed.hardStreak || { current: 0, best: 0, last: null };
+      return parsed;
+    }
   } catch (e) { /* storage blocked or corrupt */ }
-  return { days: {}, streak: { current: 0, best: 0, last: null } };
+  return {
+    days: {},
+    streak: { current: 0, best: 0, last: null },
+    hardStreak: { current: 0, best: 0, last: null },
+  };
 }
 
 function saveStore(store) {
@@ -83,18 +93,107 @@ function el(tag, className, text) {
   return node;
 }
 
-function dayUrl(day) {
-  return `${ROOT.dataset.pageUrl}?date=${encodeURIComponent(day)}`;
+const PARAMS = new URLSearchParams(window.location.search);
+const PRACTICE = PARAMS.get("mode") === "practice";
+const HARD = PARAMS.get("hard") === "1";
+
+/** The game page URL for a mode, day and difficulty. */
+function pageUrl({ practice = PRACTICE, hard = HARD, day = null } = {}) {
+  const params = new URLSearchParams();
+  if (practice) params.set("mode", "practice");
+  if (day && !practice) params.set("date", day);
+  if (hard) params.set("hard", "1");
+  const query = params.toString();
+  return ROOT.dataset.pageUrl + (query ? `?${query}` : "");
+}
+
+const dayUrl = (day) => pageUrl({ day });
+
+// ---------------------------------------------------------------- years
+
+function formatYear(year) {
+  if (year === null || year === undefined) return "";
+  if (year < 0) return `${-year} BC`;
+  if (year < 1000) return `AD ${year}`;
+  return String(year);
+}
+
+/** "1066", "-44", "44 BC", "AD 9", "9 CE" → a year (negative = BC), else null. */
+function parseYear(text) {
+  const m = /^\s*(?:(AD|CE)\s*)?(-)?(\d{1,5})\s*(BCE|BC|AD|CE)?\s*$/i.exec(text || "");
+  if (!m || (m[2] && (m[1] || m[4]))) return null;
+  let year = Number(m[3]);
+  if (m[2] || /^BC/i.test(m[4] || "")) year = -year;
+  if (year === 0 || year < SLIDER_FROM || year > CURRENT_YEAR) return null;
+  return year;
+}
+
+// The slider is not linear: recent centuries get more room than antiquity.
+const CURRENT_YEAR = new Date().getUTCFullYear();
+const SLIDER_FROM = -3000;
+const SLIDER_MAX = 1000;
+const SLIDER_SPAN = CURRENT_YEAR - SLIDER_FROM;
+
+function sliderToYear(value) {
+  const t = 1 - value / SLIDER_MAX;
+  const year = Math.round(CURRENT_YEAR - SLIDER_SPAN * t * t);
+  return year === 0 ? 1 : year;
+}
+
+function yearToSlider(year) {
+  const t = Math.sqrt(Math.max(0, Math.min(1, (CURRENT_YEAR - year) / SLIDER_SPAN)));
+  return Math.round((1 - t) * SLIDER_MAX);
+}
+
+function plural(n, word) {
+  return `${n.toLocaleString("en")} ${word}${n === 1 ? "" : "s"}`;
 }
 
 // ---------------------------------------------------------------- state
 
-const PRACTICE = new URLSearchParams(window.location.search).get("mode") === "practice";
 const store = loadStore();
 let puzzle = null;
 let record = null; // this day's progress: { rounds, guesses }
 let showingResult = false; // the last guess is revealed, waiting for "Next"
 let pin = null; // [lat, lng] the player picked for the current round
+let yearGuess = null; // hard mode: the year the player picked for the current round
+
+const streakOf = () => (HARD ? store.hardStreak : store.streak);
+const storeKey = (day) => (HARD ? `${day}:hard` : day);
+const canConfirm = () => Boolean(pin) && (!HARD || yearGuess !== null);
+
+function updateConfirm() {
+  const ready = canConfirm();
+  $("guess-btn").disabled = !ready;
+  $("guess-btn-map").hidden = !ready || showingResult;
+  let hint;
+  if (!HARD) hint = pin ? "Click again to move your pin." : "Click the map to place your pin, then confirm.";
+  else if (!pin && yearGuess === null) hint = "Click the map to place your pin and pick a year.";
+  else if (!pin) hint = "Now click the map to place your pin.";
+  else if (yearGuess === null) hint = "Now pick a year: type it or use the slider.";
+  else hint = "Click again to move your pin, or change the year.";
+  $("round-hint").textContent = hint;
+}
+
+function setYear(year, { fromSlider = false, fromInput = false } = {}) {
+  yearGuess = year;
+  $("year-shown").textContent = year === null ? "" : formatYear(year);
+  if (year !== null && !fromSlider) $("year-slider").value = yearToSlider(year);
+  if (year !== null && !fromInput) $("year-input").value = formatYear(year);
+  $("year-input").classList.toggle("year-input-invalid", fromInput && year === null && $("year-input").value.trim() !== "");
+  updateConfirm();
+}
+
+function resetYear() {
+  yearGuess = null;
+  $("year-input").value = "";
+  $("year-slider").value = yearToSlider(1500);
+  $("year-shown").textContent = "";
+  $("year-input").classList.remove("year-input-invalid");
+}
+
+$("year-input").addEventListener("input", () => setYear(parseYear($("year-input").value), { fromInput: true }));
+$("year-slider").addEventListener("input", () => setYear(sliderToYear(Number($("year-slider").value)), { fromSlider: true }));
 
 // ---------------------------------------------------------------- map
 
@@ -152,9 +251,7 @@ map.on("click", (e) => {
   pin = [e.latlng.lat, e.latlng.lng];
   if (guessMarker) guessMarker.setLatLng(e.latlng);
   else guessMarker = L.circleMarker(e.latlng, guessStyle()).addTo(layer);
-  $("guess-btn").disabled = false;
-  $("guess-btn-map").hidden = false;
-  $("round-hint").textContent = "Click again to move your pin.";
+  updateConfirm();
 });
 
 // ---------------------------------------------------------------- rendering
@@ -183,8 +280,10 @@ function renderRound() {
   $("game-round").hidden = false;
   $("game-summary").hidden = true;
   $("round-num").textContent = `Event ${index + 1} of ${record.rounds.length}`;
-  $("round-title").textContent = round.title;
-  $("round-date").textContent = round.date;
+  // In hard mode the result shows the real title (the clue's has its year hidden).
+  const revealed = showingResult ? record.guesses[index].answer : null;
+  $("round-title").textContent = HARD && revealed ? revealed.title : round.title;
+  $("round-date").textContent = round.date || (revealed ? revealed.date : "Year hidden");
   const category = $("round-category");
   category.firstElementChild.className = `dot dot-${round.category}`;
   category.lastElementChild.textContent = CATEGORY_LABELS[round.category] || round.category;
@@ -192,18 +291,26 @@ function renderRound() {
   $("round-excerpt").hidden = !round.excerpt;
 
   $("round-guess").hidden = showingResult;
-  $("guess-btn-map").hidden = showingResult || !pin;
+  $("round-year").hidden = !HARD;
   $("round-result").hidden = !showingResult;
   if (!showingResult) {
-    $("guess-btn").disabled = !pin;
-    $("round-hint").textContent = pin
-      ? "Click again to move your pin."
-      : "Click the map to place your pin, then confirm.";
+    updateConfirm();
     return;
   }
+  $("guess-btn-map").hidden = true;
   const guess = record.guesses[index];
   $("result-points").textContent = formatPoints(guess.points);
   $("result-distance").textContent = `Your pin was ${formatKm(guess.km)} away.`;
+  $("result-breakdown").hidden = !HARD;
+  $("result-year").hidden = !HARD;
+  if (HARD) {
+    $("result-breakdown").textContent = `${formatPoints(guess.locationPoints)} for the place`
+      + ` + ${formatPoints(guess.yearPoints)} for the year`;
+    $("result-year").textContent = guess.yearError === 0
+      ? `Your year ${formatYear(guess.year)} was exactly right.`
+      : `Your year ${formatYear(guess.year)} was ${plural(guess.yearError, "year")} off: `
+        + `it was ${guess.answer.date}.`;
+  }
   $("result-answer").textContent = guess.answer.country
     ? `${guess.answer.title} took place in ${guess.answer.country}.`
     : `The red dot marks where ${guess.answer.title} took place.`;
@@ -227,7 +334,7 @@ function shareText() {
   const squares = record.guesses.map((g) => emojiFor(g.points, puzzle.max_points)).join("");
   const url = new URL(dayUrl(puzzle.date), window.location.origin).href;
   return [
-    `History As A Map · Game #${puzzle.number}`,
+    `History As A Map · Game #${puzzle.number}${HARD ? " (Hard)" : ""}`,
     `${squares} ${formatPoints(total())} / ${formatPoints(max)}`,
     url,
   ].join("\n");
@@ -242,7 +349,7 @@ function renderCountdown() {
     if (left === 0) {
       clearInterval(countdownTimer);
       const link = el("a", null, "A new game is ready – play it");
-      link.href = ROOT.dataset.pageUrl;
+      link.href = pageUrl({ practice: false });
       $("summary-countdown").replaceChildren(link);
       return;
     }
@@ -257,7 +364,7 @@ function renderCountdown() {
 }
 
 function currentStreak() {
-  const { current, last } = store.streak;
+  const { current, last } = streakOf();
   // A streak survives until the day after its last game ends.
   return last === puzzle.today || last === addDays(puzzle.today, -1) ? current : 0;
 }
@@ -276,8 +383,9 @@ function renderSummary() {
     const item = el("li");
     item.append(
       el("span", "game-summary-emoji", emojiFor(guess.points, puzzle.max_points)),
-      el("span", "game-summary-title", round.title),
-      el("span", "game-summary-points", `${formatPoints(guess.points)} · ${formatKm(guess.km)}`),
+      el("span", "game-summary-title", HARD ? guess.answer.title : round.title),
+      el("span", "game-summary-points", `${formatPoints(guess.points)} · ${formatKm(guess.km)}`
+        + (HARD ? ` · ${guess.yearError === 0 ? "exact year" : `${plural(guess.yearError, "year")} off`}` : "")),
     );
     list.append(item);
   });
@@ -290,8 +398,8 @@ function renderSummary() {
   }
   $("share-text").value = shareText();
   const streak = currentStreak();
-  $("summary-streak").textContent = `Streak: ${streak} ${streak === 1 ? "day" : "days"}`
-    + ` · best ${store.streak.best}`;
+  $("summary-streak").textContent = `${HARD ? "Hard streak" : "Streak"}: ${streak} ${streak === 1 ? "day" : "days"}`
+    + ` · best ${streakOf().best}`;
   renderCountdown();
 }
 
@@ -314,7 +422,7 @@ function showAllResults() {
 
 function finishDay() {
   if (PRACTICE || !puzzle.is_today) return;
-  const { streak } = store;
+  const streak = streakOf();
   if (streak.last === puzzle.date) return;
   streak.current = streak.last === addDays(puzzle.date, -1) ? streak.current + 1 : 1;
   streak.best = Math.max(streak.best || 0, streak.current);
@@ -322,13 +430,14 @@ function finishDay() {
 }
 
 async function submitGuess() {
-  if (!pin) return;
+  if (!canConfirm()) return;
   const button = $("guess-btn");
   button.disabled = true;
   $("guess-btn-map").hidden = true;
   $("game-message").textContent = "";
   try {
     const guessed = { index: record.guesses.length, lat: pin[0], lon: pin[1] };
+    if (HARD) Object.assign(guessed, { hard: true, year: yearGuess });
     const body = PRACTICE
       ? { ...guessed, seed: puzzle.seed, era: puzzle.era, category: puzzle.category }
       : { ...guessed, date: puzzle.date };
@@ -340,6 +449,14 @@ async function submitGuess() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const result = await response.json();
     const guess = { lat: pin[0], lon: pin[1], km: result.km, points: result.points, answer: result.answer };
+    if (HARD) {
+      Object.assign(guess, {
+        year: yearGuess,
+        yearError: result.year_error,
+        yearPoints: result.year_points,
+        locationPoints: result.location_points,
+      });
+    }
     record.guesses.push(guess);
     if (record.guesses.length >= record.rounds.length) finishDay();
     if (!PRACTICE) saveStore(store);
@@ -348,6 +465,7 @@ async function submitGuess() {
       guessMarker = null;
     }
     pin = null;
+    resetYear();
     showingResult = true;
     drawResult(guess, true);
     render();
@@ -355,8 +473,7 @@ async function submitGuess() {
       $("round-result").scrollIntoView({ block: "center" });
     }
   } catch (e) {
-    button.disabled = false;
-    $("guess-btn-map").hidden = false;
+    updateConfirm();
     $("game-message").textContent = "Could not check your guess. Please try again.";
   }
 }
@@ -384,13 +501,13 @@ function sameRounds(a, b) {
 
 function renderHeader() {
   const label = puzzle.is_today ? "Today" : formatDay(puzzle.date);
-  $("game-meta").textContent = `Game #${puzzle.number} · ${label}`
+  $("game-meta").textContent = `Game #${puzzle.number}${HARD ? " · Hard" : ""} · ${label}`
     + (puzzle.is_today ? ` · ${formatDay(puzzle.date)}` : "");
   $("game-archive-note").hidden = puzzle.is_today;
   const links = [["day-prev", puzzle.previous], ["day-next", puzzle.next]];
   for (const [id, day] of links) {
     $(id).hidden = !day;
-    if (day) $(id).href = day === puzzle.today ? ROOT.dataset.pageUrl : dayUrl(day);
+    if (day) $(id).href = day === puzzle.today ? pageUrl({ practice: false }) : dayUrl(day);
   }
   $("day-today").hidden = puzzle.is_today;
 }
@@ -399,12 +516,23 @@ function renderModes() {
   $("mode-daily").classList.toggle("active", !PRACTICE);
   $("mode-practice").classList.toggle("active", PRACTICE);
   $(PRACTICE ? "mode-practice" : "mode-daily").setAttribute("aria-current", "page");
+  $("mode-daily").href = pageUrl({ practice: false });
+  $("mode-practice").href = pageUrl({ practice: true });
+  $("day-today").href = pageUrl({ practice: false });
   $("practice-filters").hidden = !PRACTICE;
+  $("hard-toggle").checked = HARD;
 }
+
+// Switching difficulty reloads the page: the clues differ (years hidden or not).
+$("hard-toggle").addEventListener("change", () => {
+  const day = PRACTICE || !puzzle || puzzle.is_today ? null : puzzle.date;
+  window.location.href = pageUrl({ hard: $("hard-toggle").checked, day });
+});
 
 function resetBoard() {
   showingResult = false;
   pin = null;
+  resetYear();
   guessMarker = null;
   layer.clearLayers();
   map.setView([30, 10], 2);
@@ -414,6 +542,7 @@ async function loadPractice() {
   const params = new URLSearchParams();
   if ($("practice-era").value) params.set("era", $("practice-era").value);
   if ($("practice-category").value) params.set("category", $("practice-category").value);
+  if (HARD) params.set("hard", "1");
   $("game-message").textContent = "";
   $("game-meta").textContent = "Loading a practice set…";
   try {
@@ -425,7 +554,7 @@ async function loadPractice() {
     $("game-meta").textContent = "The practice set could not be loaded. Please try again.";
     return;
   }
-  $("game-meta").textContent = "Practice · random events, not counted for your streak";
+  $("game-meta").textContent = `Practice${HARD ? " · Hard" : ""} · random events, not counted for your streak`;
   resetBoard();
   if (!puzzle.rounds.length) {
     record = null;
@@ -457,11 +586,11 @@ async function init() {
   const requested = new URLSearchParams(window.location.search).get("date");
   const day = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : "today";
   try {
-    const response = await fetch(ROOT.dataset.puzzleUrl.replace("DAY", day));
+    const response = await fetch(ROOT.dataset.puzzleUrl.replace("DAY", day) + (HARD ? "?hard=1" : ""));
     if (response.status === 404) {
       $("game-meta").textContent = "There is no game for that day.";
       const link = el("a", null, "Play today's game");
-      link.href = ROOT.dataset.pageUrl;
+      link.href = pageUrl({ practice: false });
       $("game-message").replaceChildren(link);
       return;
     }
@@ -478,13 +607,13 @@ async function init() {
     return;
   }
 
-  const saved = store.days[puzzle.date];
+  const saved = store.days[storeKey(puzzle.date)];
   // Keep saved progress unless the day's events changed since it was played.
   if (saved && sameRounds(saved.rounds, puzzle.rounds) && Array.isArray(saved.guesses)) {
     record = saved;
   } else {
     record = { rounds: puzzle.rounds, guesses: [] };
-    store.days[puzzle.date] = record;
+    store.days[storeKey(puzzle.date)] = record;
   }
   if (record.guesses.length >= record.rounds.length) showAllResults();
   render();

@@ -36,9 +36,14 @@ def page():
     return render_template("game.html", eras=game.ERA_LABELS)
 
 
+def _hard_arg() -> bool:
+    return request.args.get("hard") in ("1", "true")
+
+
 @bp.get("/api/game/<value>")
 def puzzle(value: str):
     day = _day(value)
+    hard = _hard_arg()
     today = game.today_utc()
     events = game.daily_events(day)
     previous = date.fromordinal(day.toordinal() - 1)
@@ -52,7 +57,8 @@ def puzzle(value: str):
         next=following.isoformat() if game.is_playable(following) else None,
         next_game_at=game.next_game_at(today).isoformat(),
         max_points=game.MAX_POINTS,
-        rounds=[game.round_dict(i, event) for i, event in enumerate(events)],
+        hard=hard,
+        rounds=[game.round_dict(i, event, hard) for i, event in enumerate(events)],
     )
     response.cache_control.no_store = True
     return response
@@ -82,13 +88,33 @@ def _score(data: dict, events: list):
         abort(400)
     lat = _number(data, "lat", -90, 90)
     lon = game.normalize_lon(_number(data, "lon", -1e6, 1e6))
+    hard = data.get("hard", False)
+    if not isinstance(hard, bool):
+        abort(400)
+    year = None
+    if hard:
+        year = data.get("year")
+        if (isinstance(year, bool) or not isinstance(year, int) or year == 0
+                or not game.MIN_YEAR_GUESS <= year <= game.MAX_YEAR_GUESS):
+            abort(400)
     if not 0 <= index < len(events):
         abort(404)
     event = events[index]
     km = game.haversine_km(lat, lon, event.lat, event.lon)
     answer = game.answer_dict(event)
     answer["map_url"] = url_for("public.index", event=event.id)
-    return jsonify(km=round(km, 1), points=game.score_distance(km), answer=answer)
+    if not hard:
+        return jsonify(km=round(km, 1), points=game.score_distance(km), answer=answer)
+    location_points = game.score_hard_location(km)
+    year_points = game.score_year(year, event.year)
+    return jsonify(
+        km=round(km, 1),
+        points=location_points + year_points,
+        location_points=location_points,
+        year_points=year_points,
+        year_error=game.year_error(year, event.year),
+        answer=answer,
+    )
 
 
 @bp.post("/api/game/check")
@@ -128,6 +154,7 @@ def _filters(source) -> tuple[int | None, Category | None]:
 def practice():
     """A new random set of five; only its seed is needed to check guesses later."""
     era, category = _filters(request.args)
+    hard = _hard_arg()
     seed = game.new_practice_seed()
     events = game.practice_events(seed, era, category)
     response = jsonify(
@@ -135,7 +162,8 @@ def practice():
         era=era,
         category=category.value if category else None,
         max_points=game.MAX_POINTS,
-        rounds=[game.round_dict(i, event) for i, event in enumerate(events)],
+        hard=hard,
+        rounds=[game.round_dict(i, event, hard) for i, event in enumerate(events)],
     )
     response.cache_control.no_store = True
     return response

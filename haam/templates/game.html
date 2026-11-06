@@ -31,6 +31,10 @@
       <a class="game-mode" id="mode-practice" href="{{ url_for('game.page', mode='practice') }}">
         <i class="fas fa-dumbbell" aria-hidden="true"></i> Practice</a>
     </nav>
+    <label class="game-hard">
+      <input type="checkbox" id="hard-toggle">
+      <span><strong>Hard mode</strong> · guess the year too</span>
+    </label>
 
     <form class="game-filters" id="practice-filters" hidden>
       <label class="game-filter">
@@ -67,6 +71,18 @@
       <p class="game-round-excerpt" id="round-excerpt"></p>
 
       <div id="round-guess">
+        <div class="game-year" id="round-year" hidden>
+          <label for="year-input">Your year</label>
+          <div class="game-year-row">
+            <input class="form-input game-year-input" id="year-input" type="text" inputmode="text"
+                   autocomplete="off" spellcheck="false" placeholder="1805 or 44 BC"
+                   title="Type a year, e.g. 1805, 44 BC or AD 9, or use the slider">
+            <span class="game-year-shown" id="year-shown" aria-live="polite"></span>
+          </div>
+          <input class="game-year-slider" id="year-slider" type="range" min="0" max="1000" step="1" value="700"
+                 aria-label="Year slider: earlier to the left, later to the right">
+          <div class="game-year-scale" aria-hidden="true"><span>3000 BC</span><span>more room for recent centuries</span><span>Today</span></div>
+        </div>
         <p class="game-hint" id="round-hint"><i class="fas fa-mouse-pointer" aria-hidden="true"></i>
           Click the map to place your pin, then confirm.</p>
         <button class="btn btn-primary btn-block" type="button" id="guess-btn" disabled>
@@ -75,7 +91,9 @@
 
       <div class="game-result" id="round-result" hidden aria-live="polite">
         <p class="game-points"><strong id="result-points"></strong> points</p>
+        <p class="game-breakdown" id="result-breakdown" hidden></p>
         <p class="game-distance" id="result-distance"></p>
+        <p class="game-distance" id="result-year" hidden></p>
         <p class="game-answer" id="result-answer"></p>
         <p class="game-links">
           <a id="result-wiki" target="_blank" rel="noopener">Read on Wikipedia <i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
