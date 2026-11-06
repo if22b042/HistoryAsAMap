@@ -1,0 +1,15 @@
+# Never upload secrets or local state
+.env
+.env.*
+!.env.example
+instance/
+.venv/
+.claude/
+.pytest_cache/
+__pycache__/
+# Not needed at runtime
+tests/
+seed/
+seed_demo.py
+ToDo
+.github/

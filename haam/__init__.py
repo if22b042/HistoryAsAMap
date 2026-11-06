@@ -74,6 +74,9 @@ def create_app(config_name: str | None = None) -> Flask:
     return app
 
 
+SETUP_LOCK_KEY = 4_861_337  # arbitrary, identifies the setup lock
+
+
 def _ensure_database(app: Flask) -> None:
     """Apply pending migrations and load the tags when the app starts.
 
@@ -83,7 +86,7 @@ def _ensure_database(app: Flask) -> None:
     from alembic.migration import MigrationContext
     from alembic.script import ScriptDirectory
     from flask_migrate import upgrade
-    from sqlalchemy import select
+    from sqlalchemy import select, text
     from sqlalchemy.exc import SQLAlchemyError
 
     from haam.extensions import db, migrate
@@ -92,17 +95,23 @@ def _ensure_database(app: Flask) -> None:
 
     with app.app_context():
         try:
-            config = migrate.get_config(str(MIGRATIONS_DIR))
-            newest = set(ScriptDirectory.from_config(config).get_heads())
-            with db.engine.connect() as connection:
-                current = set(MigrationContext.configure(connection).get_current_heads())
-            if current != newest:
-                logger.info("Database schema is out of date; running migrations.")
-                upgrade(directory=str(MIGRATIONS_DIR))
-            if db.session.scalar(select(Tag.id).limit(1)) is None:
-                logger.info("Loaded %d tags.", seed_tags())
+            # Parallel cold starts would all migrate and seed at once; on PostgreSQL the
+            # first one takes this lock and the others wait, then find nothing to do.
+            # A transaction-level lock also works through Neon's pooled connections.
+            with db.engine.connect() as lock, lock.begin():
+                if lock.dialect.name == "postgresql":
+                    lock.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": SETUP_LOCK_KEY})
+                config = migrate.get_config(str(MIGRATIONS_DIR))
+                newest = set(ScriptDirectory.from_config(config).get_heads())
+                with db.engine.connect() as connection:
+                    current = set(MigrationContext.configure(connection).get_current_heads())
+                if current != newest:
+                    logger.info("Database schema is out of date; running migrations.")
+                    upgrade(directory=str(MIGRATIONS_DIR))
+                if db.session.scalar(select(Tag.id).limit(1)) is None:
+                    logger.info("Loaded %d tags.", seed_tags())
+                db.session.remove()
         except SQLAlchemyError:
-            # Another instance may be doing the same right now (parallel cold starts).
             db.session.rollback()
             logger.exception("Automatic database setup failed; run `flask --app haam db upgrade`.")
         except Exception:
