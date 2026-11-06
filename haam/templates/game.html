@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Daily game{% endblock %}
+{% block body_class %}page-game{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+{% endblock %}
+
+{% block content %}
+<section class="game-layout" id="game" data-puzzle-url="{{ url_for('game.puzzle', value='DAY') }}"
+         data-check-url="{{ url_for('game.check') }}" data-page-url="{{ url_for('game.page') }}">
+  <aside class="game-panel" aria-label="Game">
+    <header class="game-header">
+      <div>
+        <h1><i class="fas fa-gamepad" aria-hidden="true"></i> Where did it happen?</h1>
+        <p class="game-meta" id="game-meta">Loading today's game…</p>
+      </div>
+      <nav class="game-days" aria-label="Other days">
+        <a class="icon-btn" id="day-prev" hidden aria-label="Previous day's game" title="Previous day">
+          <i class="fas fa-chevron-left" aria-hidden="true"></i></a>
+        <a class="btn btn-secondary btn-small" id="day-today" hidden href="{{ url_for('game.page') }}">Today</a>
+        <a class="icon-btn" id="day-next" hidden aria-label="Next day's game" title="Next day">
+          <i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+      </nav>
+    </header>
+
+    <p class="game-note" id="game-archive-note" hidden>
+      <i class="fas fa-history" aria-hidden="true"></i> A past game: it does not count toward your streak.
+    </p>
+
+    <ol class="game-progress" id="game-progress" aria-label="Progress"></ol>
+
+    <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
+
+    <article class="game-round" id="game-round" hidden>
+      <p class="game-round-num" id="round-num"></p>
+      <h2 id="round-title"></h2>
+      <p class="game-round-date"><i class="far fa-calendar-alt" aria-hidden="true"></i> <span id="round-date"></span>
+        <span class="game-category" id="round-category"><span class="dot" aria-hidden="true"></span><span></span></span></p>
+      <p class="game-round-excerpt" id="round-excerpt"></p>
+
+      <div id="round-guess">
+        <p class="game-hint" id="round-hint"><i class="fas fa-mouse-pointer" aria-hidden="true"></i>
+          Click the map to place your pin, then confirm.</p>
+        <button class="btn btn-primary btn-block" type="button" id="guess-btn" disabled>
+          <i class="fas fa-map-pin" aria-hidden="true"></i> Confirm guess</button>
+      </div>
+
+      <div class="game-result" id="round-result" hidden aria-live="polite">
+        <p class="game-points"><strong id="result-points"></strong> points</p>
+        <p class="game-distance" id="result-distance"></p>
+        <p class="game-answer" id="result-answer"></p>
+        <p class="game-links">
+          <a id="result-wiki" target="_blank" rel="noopener">Read on Wikipedia <i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+          <a id="result-map" target="_blank" rel="noopener">Show on the map <i class="fas fa-globe-europe" aria-hidden="true"></i></a>
+        </p>
+        <button class="btn btn-primary btn-block" type="button" id="next-btn"></button>
+      </div>
+    </article>
+
+    <article class="game-summary" id="game-summary" hidden>
+      <h2>Your score</h2>
+      <p class="game-total"><strong id="summary-total"></strong> <span id="summary-max"></span></p>
+      <ol class="game-summary-list" id="summary-list"></ol>
+
+      <label class="sr-only" for="share-text">Result to share</label>
+      <textarea class="form-input game-share" id="share-text" rows="4" readonly></textarea>
+      <button class="btn btn-secondary btn-block" type="button" data-copy="#share-text">
+        <i class="far fa-copy" aria-hidden="true"></i> Copy result</button>
+
+      <p class="game-streak" id="summary-streak"></p>
+      <p class="game-countdown" id="summary-countdown"></p>
+    </article>
+  </aside>
+
+  <div class="game-map-wrap">
+    <div class="game-map" id="game-map" role="application" aria-label="Map: click to place your guess"></div>
+    {# On phones the panel's button is above the map, out of sight while placing the pin. #}
+    <button class="btn btn-primary game-map-confirm" type="button" id="guess-btn-map" hidden>
+      <i class="fas fa-map-pin" aria-hidden="true"></i> Confirm guess</button>
+  </div>
+</section>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="{{ url_for('static', filename='js/copy.js') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='js/game.js') }}"></script>
+{% endblock %}
