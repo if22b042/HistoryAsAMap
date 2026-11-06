@@ -22,6 +22,7 @@ const state = {
   tagId: null,
   query: "",
   heatmap: false,
+  openId: null,
 };
 
 // ------------------------------------------------------------------ helpers
@@ -109,8 +110,7 @@ function popupContent(event) {
   const box = el("div", "popup");
   box.append(el("strong", "popup-title", event.title));
   box.append(el("span", "popup-year", event.date || event.display_year));
-  const summary = event.summary.length > 160 ? `${event.summary.slice(0, 157)}…` : event.summary;
-  box.append(el("p", "popup-summary", summary));
+  box.append(el("p", "popup-summary", event.excerpt));
   const button = el("button", "popup-btn", "View details →");
   button.type = "button";
   button.addEventListener("click", () => showEvent(event.id));
@@ -128,6 +128,19 @@ function createMarker(event) {
 const sidebar = document.getElementById("sidebar");
 const sidebarContent = document.getElementById("sidebar-content");
 
+const detailsCache = new Map();
+
+async function loadDetails(id) {
+  if (!detailsCache.has(id)) {
+    detailsCache.set(id, getJson(`/api/events/${id}`).catch((error) => {
+      console.error(error);
+      detailsCache.delete(id);
+      return null;
+    }));
+  }
+  return detailsCache.get(id);
+}
+
 function showEvent(id, { fly = true } = {}) {
   const event = state.eventsById.get(id);
   if (!event) return;
@@ -139,10 +152,18 @@ function showEvent(id, { fly = true } = {}) {
   const meta = el("p", "detail-meta");
   const badge = el("span", `badge badge-${event.category}`, CATEGORY_LABELS[event.category]);
   meta.append(badge, ` ${event.lat.toFixed(4)}, ${event.lon.toFixed(4)}`);
-  if (event.country) meta.append(` · ${event.country}`);
+  const country = el("span");
+  meta.append(country);
   parts.push(meta);
 
-  parts.push(el("p", "detail-summary", event.summary));
+  // The list only carries an excerpt; the full text is fetched on demand.
+  const summary = el("p", "detail-summary", event.excerpt);
+  parts.push(summary);
+  loadDetails(id).then((details) => {
+    if (!details || state.openId !== id) return;
+    summary.textContent = details.summary;
+    if (details.country) country.textContent = ` · ${details.country}`;
+  });
 
   if (event.tags.length) {
     const tags = el("p", "tag-list");
@@ -169,6 +190,7 @@ function showEvent(id, { fly = true } = {}) {
   actions.append(maps);
   parts.push(actions);
 
+  state.openId = id;
   sidebarContent.replaceChildren(...parts);
   sidebar.hidden = false;
   document.body.classList.add("sidebar-open");
@@ -201,7 +223,7 @@ function matches(event) {
   if (state.category !== "all" && event.category !== state.category) return false;
   if (state.tagId !== null && !event.tags.includes(state.tagId)) return false;
   if (state.query) {
-    const haystack = `${event.title} ${event.summary} ${event.display_year} ${event.date}`.toLowerCase();
+    const haystack = `${event.title} ${event.excerpt} ${event.display_year} ${event.date}`.toLowerCase();
     if (!haystack.includes(state.query)) return false;
   }
   return true;
@@ -248,7 +270,7 @@ function renderList() {
     badge.classList.add(`badge-${event.category}`);
     badge.textContent = CATEGORY_LABELS[event.category];
     card.querySelector(".event-card-title").textContent = event.title;
-    card.querySelector(".event-card-summary").textContent = event.summary;
+    card.querySelector(".event-card-summary").textContent = event.excerpt;
     const tags = card.querySelector(".event-card-tags");
     event.tags.forEach((tagId) => {
       const tag = state.tagsById.get(tagId);

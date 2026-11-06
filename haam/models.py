@@ -106,6 +106,7 @@ class Event(db.Model):
     summary: Mapped[str] = mapped_column(Text)
     wiki_url: Mapped[str] = mapped_column(String(500), unique=True)
     wiki_page_id: Mapped[int | None] = mapped_column(unique=True)
+    wikidata_id: Mapped[str | None] = mapped_column(String(20), unique=True)
 
     lat: Mapped[float]
     lon: Mapped[float]
@@ -132,6 +133,31 @@ class Event(db.Model):
     @property
     def google_maps_url(self) -> str:
         return f"https://www.google.com/maps?q={self.lat},{self.lon}"
+
+    EXCERPT_LENGTH = 140
+
+    @property
+    def excerpt(self) -> str:
+        text = self.summary or ""
+        if len(text) <= self.EXCERPT_LENGTH:
+            return text
+        return text[: self.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+
+    def to_list_dict(self) -> dict:
+        """Compact form for the map, which loads every approved event at once."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "year": self.year,
+            "display_year": self.display_year,
+            "date": self.date_label,
+            "excerpt": self.excerpt,
+            "wiki_url": self.wiki_url,
+            "lat": self.lat,
+            "lon": self.lon,
+            "category": self.category.value,
+            "tags": [tag.id for tag in self.tags],
+        }
 
     def to_dict(self) -> dict:
         return {

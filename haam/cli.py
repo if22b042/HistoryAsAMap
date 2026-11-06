@@ -60,6 +60,44 @@ def import_csv_command(path, approve):
     click.echo(f"Done: {importer.import_csv(path, approve=approve)}")
 
 
+@haam_cli.command("export-wikidata")
+@click.option("--out", default="seed/wikidata_events.csv", show_default=True, help="CSV of accepted events.")
+@click.option("--rejected", default="seed/wikidata_rejected.csv", show_default=True,
+              help="CSV of rejected candidates with the reason.")
+@click.option("--type", "type_ids", multiple=True, help="Only these Wikidata types (e.g. --type Q178561).")
+@click.option("--limit", type=int, default=None, help="At most this many candidates per type (for trial runs).")
+@click.option("--status", type=click.Choice(["approved", "pending"]), default="approved", show_default=True,
+              help="Status written into the CSV for every accepted event.")
+def export_wikidata_command(out, rejected, type_ids, limit, status):
+    """Export validated historical events from Wikidata to a CSV (no database changes).
+
+    Load the result with: flask --app haam haam import-csv seed/wikidata_events.csv
+    """
+    from flask import current_app
+    from sqlalchemy import select
+
+    from haam.extensions import db
+    from haam.models import Tag
+    from haam.wikidata import WikidataClient, export
+
+    client = WikidataClient(current_app.config["HAAM_USER_AGENT"])
+    tag_names = db.session.scalars(select(Tag.name)).all()
+    click.echo("Discovering candidates on Wikidata…")
+    stats = export(client, out, rejected, type_ids=list(type_ids) or None, limit_per_type=limit,
+                   status=status, tag_names=tag_names, report=click.echo)
+    click.echo()
+    click.echo(f"Accepted {stats.accepted} of {stats.candidates} candidates -> {out}")
+    click.echo(f"Rejected {stats.rejected} -> {rejected}")
+    for reason, count in sorted(stats.reasons.items(), key=lambda kv: -kv[1]):
+        click.echo(f"  {count:6d}  {reason}")
+    if stats.failed_types:
+        click.echo(err=True)
+        click.echo("INCOMPLETE – discovery failed for: " + ", ".join(stats.failed_types), err=True)
+        click.echo("Re-run just those with --type, e.g. --type " + stats.failed_types[0].split("(")[-1].rstrip(")"),
+                   err=True)
+        raise SystemExit(1)
+
+
 @haam_cli.command("import-legacy")
 def import_legacy_command():
     """Copy events from the previous version's tables (entries/locations)."""

@@ -133,6 +133,9 @@ def _optional_float(value) -> float | None:
         return None
 
 
+FULL_COLUMNS = {"url", "title", "year", "lat", "lon", "summary"}
+
+
 def import_csv(path: str, *, approve: bool = False, report: Reporter = print) -> ImportStats:
     """Import rows with columns ``url`` and, all optional, ``category``, ``year``,
     ``tags`` (``;``-separated), ``status`` (approved/pending/rejected) and ``lat``/``lon``.
@@ -140,7 +143,15 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
     Each row is looked up on Wikipedia. ``year`` and ``lat``/``lon`` override the
     extracted values (useful for articles without coordinates, e.g. treaties).
     Without a ``status`` column, rows are pending unless ``approve`` is set.
+
+    Files that already contain every field (as written by ``export-wikidata``)
+    are imported offline by :func:`import_full_csv` instead.
     """
+    with open(path, newline="", encoding="utf-8") as handle:
+        header = set(next(csv.reader(handle), []))
+    if FULL_COLUMNS <= header:
+        return import_full_csv(path, approve=approve, report=report)
+
     stats = ImportStats()
     tags_by_name = {t.name.lower(): t.id for t in db.session.scalars(select(Tag))}
     client = get_client()
@@ -198,6 +209,85 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
             stats.added += 1
             report(f"+ {article.title} [{status.value}]")
     return stats
+
+
+def import_full_csv(path: str, *, approve: bool = False, report: Reporter = print,
+                    commit_every: int = 500) -> ImportStats:
+    """Insert complete rows (url, title, year, lat, lon, summary, ...) without network access.
+
+    Used for files written by ``flask haam export-wikidata``. Rows whose Wikipedia
+    URL, page id or Wikidata id already exist are skipped; invalid rows are
+    reported with their line number. Inserts are committed in batches.
+    """
+    stats = ImportStats()
+    default_status = Status.APPROVED if approve else Status.PENDING
+    tags_by_name = {t.name.lower(): t for t in db.session.scalars(select(Tag))}
+    seen_urls = set(db.session.scalars(select(Event.wiki_url)))
+    seen_pages = set(db.session.scalars(select(Event.wiki_page_id).where(Event.wiki_page_id.is_not(None))))
+    seen_qids = set(db.session.scalars(select(Event.wikidata_id).where(Event.wikidata_id.is_not(None))))
+    pending = 0
+
+    with open(path, newline="", encoding="utf-8") as handle:
+        for line_no, row in enumerate(csv.DictReader(handle), start=2):
+            problem, event = _event_from_row(row, default_status, tags_by_name)
+            if problem:
+                report(f"line {line_no}: {problem}")
+                stats.rejected += 1
+                continue
+            if (event.wiki_url in seen_urls or (event.wiki_page_id and event.wiki_page_id in seen_pages)
+                    or (event.wikidata_id and event.wikidata_id in seen_qids)):
+                stats.skipped += 1
+                continue
+            seen_urls.add(event.wiki_url)
+            if event.wiki_page_id:
+                seen_pages.add(event.wiki_page_id)
+            if event.wikidata_id:
+                seen_qids.add(event.wikidata_id)
+            db.session.add(event)
+            stats.added += 1
+            pending += 1
+            if pending >= commit_every:
+                db.session.commit()
+                pending = 0
+                report(f"  {stats.added} imported…")
+    db.session.commit()
+    return stats
+
+
+def _event_from_row(row: dict, default_status: Status, tags_by_name: dict) -> tuple[str | None, Event | None]:
+    title = title_from_url(row.get("url", ""))
+    if title is None:
+        return "not an English Wikipedia link", None
+    year = parse_year_input(row.get("year", ""))
+    lat, lon = _optional_float(row.get("lat")), _optional_float(row.get("lon"))
+    if year is None:
+        return f"bad year {row.get('year')!r}", None
+    if lat is None or lon is None or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return "missing or invalid coordinates", None
+    if not (row.get("title") or "").strip():
+        return "missing title", None
+    try:
+        category = Category((row.get("category") or "other").strip().lower())
+        status = Status((row.get("status") or default_status.value).strip().lower())
+    except ValueError as exc:
+        return str(exc), None
+    page_id = row.get("wiki_page_id", "").strip()
+    return None, Event(
+        title=row["title"].strip()[:300],
+        year=year,
+        date_label=(row.get("date") or "").strip()[:120],
+        summary=(row.get("summary") or "").strip() or row["title"].strip(),
+        wiki_url=canonical_url(title),
+        wiki_page_id=int(page_id) if page_id.isdigit() else None,
+        wikidata_id=(row.get("wikidata_id") or "").strip() or None,
+        lat=lat,
+        lon=lon,
+        country=(row.get("country") or "").strip()[:100] or None,
+        category=category,
+        status=status,
+        tags=[tags_by_name[n.strip().lower()] for n in (row.get("tags") or "").split(";")
+              if n.strip().lower() in tags_by_name],
+    )
 
 
 # ------------------------------------------------------------------ legacy data
