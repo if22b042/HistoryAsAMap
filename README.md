@@ -118,28 +118,23 @@ printed and saved to `instance/demo-links.txt`.
 
 ## Bulk events from Wikidata
 
-`flask --app haam haam export-wikidata` builds `seed/wikidata_events_places.csv`: every
-column the Event model needs (Wikidata id, Wikipedia page id and URL, title, year,
-date text, coordinates, country, category, status, tags, introduction), plus where
-the date and coordinates came from. Load it, offline and in batches, with:
+`seed/wikidata_events.csv` holds 19,176 validated events (52 of them pending
+review) with every column the Event model needs: Wikidata id, Wikipedia page id
+and URL, title, year, date text, coordinates, country, category, status, tags and
+introduction, plus where the date and coordinates came from. Make a database's
+Wikidata events match it – offline, in seconds, safe to re-run – with:
 
 ```bash
-flask --app haam haam import-csv seed/wikidata_events_places.csv
+flask --app haam haam sync-wikidata --dry-run   # shows what would change
+flask --app haam haam sync-wikidata
 ```
 
-Two exports are in `seed/`:
-
-| File | Events | Locations |
-|---|---|---|
-| `wikidata_events_places.csv` (+ `wikidata_rejected_places.csv`) | 18,078 | only specific places (towns, buildings); the current rules |
-| `wikidata_events.csv` (+ `wikidata_rejected.csv`) | 21,680 | older export that also placed 3,602 events at the centre of a country, region or sea |
-
-A database loaded from the older file can drop those 3,602 events with
-(`--dry-run` only counts; events used in a collection are kept and listed):
-
-```bash
-flask --app haam haam remove-events seed/wikidata_rejected_places.csv --reason "location is a country"
-```
+It adds events that are missing, removes imported events that are no longer in
+the file, and sets each imported event's tags to the file's. Events submitted on
+the website are never changed, and an event used in a collection is never
+removed (it is listed instead). Older rows of the same article without a
+Wikidata id (the demo data) are adopted. `flask --app haam haam export-wikidata`
+rebuilds the file from Wikidata (about an hour).
 
 An item becomes an event only if it passes all of these checks
 (`haam/wikidata.py: validate`, tested in `tests/test_wikidata.py`):
@@ -165,20 +160,11 @@ An item becomes an event only if it passes all of these checks
 6. its Wikipedia link, after redirects, leads to an article about the same item;
 7. that article is not a list, timeline or disambiguation page.
 
-Everything rejected goes to `seed/wikidata_rejected_places.csv` with the reason. The
+Everything rejected goes to `seed/wikidata_rejected.csv` with the reason. The
 first matching type decides the category (naval battle → naval, treaty →
-diplomatic, …). Options: `--type Q178561` (only some types), `--limit 20` (trial
-run), `--status pending` (send everything through the review queue).
-
-`--undated` exports the items the normal export skips because Wikidata gives
-them no point in time or start time (such as the Siege of Trondheim); they go to
-`seed/wikidata_events_undated.csv` and `seed/wikidata_rejected_undated.csv`.
-Load both files to get everything:
-
-```bash
-flask --app haam haam import-csv seed/wikidata_events_places.csv
-flask --app haam haam import-csv seed/wikidata_events_undated.csv
-```
+diplomatic, …), and events dated only by an inception go in as pending. Options:
+`--type Q178561` (only some types), `--limit 20` (trial run), `--status pending`
+(send everything through the review queue).
 
 ### Tags
 
@@ -194,16 +180,13 @@ found Wikidata links that join conflicts historians treat as separate (the wars
 in Afghanistan → "War against the Islamic State" → Syrian Civil War, Lebanon →
 Arab Cold War → Cold War, Finnish Civil War → Russian Civil War, ...): the chain
 is not followed above those items (`NO_CLIMB`), and three direct links are
-excluded (`EXCLUDED_TAGS`). To apply the rules to existing data without a full
-export:
+excluded (`EXCLUDED_TAGS`). After changing the rules, refresh the file's tags
+without a full export, then sync:
 
 ```bash
-flask --app haam haam retag-csv seed/wikidata_events_places.csv seed/wikidata_events_undated.csv
-flask --app haam haam retag-events --replace --dry-run   # then without --dry-run
+flask --app haam haam retag-csv seed/wikidata_events.csv
+flask --app haam haam sync-wikidata
 ```
-
-`retag-events` only adds tags; `--replace` also removes the tags the rules no
-longer give. Both leave events submitted on the website alone.
 
 ## Commands
 
@@ -214,7 +197,9 @@ longer give. Both leave events submitted on the website alone.
 | `flask --app haam haam hash-password` | Generate `ADMIN_PASSWORD_HASH` |
 | `flask --app haam haam import-titles "Battle of Hastings" "Peace of Westphalia"` | Import articles by title |
 | `flask --app haam haam import-region --lat 35 70 --lon -10 40 --max-new 100` | Find dated events by geosearch in a lat/lon box |
-| `flask --app haam haam export-wikidata` | Write validated events from Wikidata to `seed/wikidata_events_places.csv` |
+| `flask --app haam haam export-wikidata` | Rebuild `seed/wikidata_events.csv` from Wikidata |
+| `flask --app haam haam sync-wikidata` | Make the database's Wikidata events match `seed/wikidata_events.csv` |
+| `flask --app haam haam retag-csv seed/wikidata_events.csv` | Recompute the file's tags column from Wikidata |
 | `flask --app haam haam import-csv seed/events.csv` | Import a CSV (`url`, optional `category,status,year,lat,lon,tags`) |
 | `flask --app haam haam import-legacy` | Copy data from the previous version's `entries`/`locations` tables |
 
@@ -242,7 +227,12 @@ start time, which filters out towns, buildings and other places.
    and `ADMIN_PASSWORD_HASH` (never commit `.env` files).
 2. Push. Vercel serves `api/index.py`; on its first start the app creates its tables
    and loads the tags.
-3. Once, to keep the events of the old version, run from your machine:
+3. Load the events, from your machine, with the database's connection string:
+   ```bash
+   set DATABASE_URL=postgresql://...   # PowerShell: $env:DATABASE_URL = "..."
+   flask --app haam haam sync-wikidata
+   ```
+4. Once, to keep the events of the old version, run from your machine:
    ```bash
    set DATABASE_URL=postgresql://...   # macOS/Linux: export DATABASE_URL=...
    flask --app haam haam import-legacy
