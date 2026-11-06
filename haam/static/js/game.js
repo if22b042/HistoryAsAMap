@@ -3,7 +3,7 @@
 // localStorage, so a reload keeps the game. Practice mode (?mode=practice): random
 // sets of five, optionally from one era or category; nothing is stored.
 // Hard mode (&hard=1, either mode): the year is hidden and guessed too; the daily
-// hard game keeps its own progress and streak.
+// hard game has five other events, with its own progress and streak.
 /* global L */
 
 const STORAGE_KEY = "haam-game-v1";
