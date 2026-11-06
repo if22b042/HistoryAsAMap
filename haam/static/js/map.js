@@ -382,11 +382,11 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   timeline.setActive(id);
 }
 
-// The event that is open on the right gets a black-and-white ring (no colour, so it
-// never looks like a category or year colour). The ring is drawn on whatever shows
-// the event right now – the cluster it is bundled in ("3"), or its own dot once you
-// zoom in – so it moves with it while zooming, and it moves on to the new cluster or
-// dot after every zoom or pan. In the heatmap (no markers) the dot is shown on its own.
+// The event that is open on the right is marked on whatever shows it right now: while
+// it is bundled, the cluster it is in ("3") pulses; once you zoom in far enough to see
+// its own dot, that dot gets a ring in the event's colour. The mark is part of that
+// cluster or dot, so it moves with it while zooming, and it moves on to the new cluster
+// or dot after every zoom or pan. In the heatmap (no markers) the dot is shown on its own.
 let selectedId = null;
 let ringed = null; // the cluster or marker that carries the ring
 let standalone = null; // the selected marker, shown outside the clusters (heatmap, filtered out)
@@ -401,7 +401,9 @@ function dropStandalone() {
 
 function placeRing() {
   if (ringed) {
-    ringed.getElement?.()?.classList.remove("marker-selected");
+    const old = ringed.getElement?.();
+    old?.classList.remove("marker-selected", "ring-colored", "cluster-selected");
+    old?.style.removeProperty("--ring-color");
     ringed.setZIndexOffset?.(0);
     ringed = null;
   }
@@ -424,7 +426,14 @@ function placeRing() {
   }
   const element = layer?.getElement?.();
   if (!element) return;
-  element.classList.add("marker-selected");
+  if (layer === marker) {
+    // Its own dot: a ring in the event's colour (category, or year when colouring by year).
+    const fill = element.querySelector(".marker-year-fill") || element;
+    element.style.setProperty("--ring-color", getComputedStyle(fill).backgroundColor);
+    element.classList.add("marker-selected", "ring-colored");
+  } else {
+    element.classList.add("cluster-selected"); // still bundled: the cluster pulses
+  }
   layer.setZIndexOffset?.(10000);
   ringed = layer;
 }
