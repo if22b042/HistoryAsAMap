@@ -116,6 +116,36 @@ Events are looked up live on Wikipedia, so the first run takes a couple of minut
 running it again skips what already exists. Collection share and edit links are
 printed and saved to `instance/demo-links.txt`.
 
+## Bulk events from Wikidata
+
+`flask --app haam haam export-wikidata` builds `seed/wikidata_events.csv`: every
+column the Event model needs (Wikidata id, Wikipedia page id and URL, title, year,
+date text, coordinates, country, category, status, tags, introduction), plus where
+the date and coordinates came from. Load it, offline and in batches, with:
+
+```bash
+flask --app haam haam import-csv seed/wikidata_events.csv
+```
+
+An item becomes an event only if it passes all of these checks
+(`haam/wikidata.py: validate`, tested in `tests/test_wikidata.py`):
+
+1. it has an English Wikipedia article;
+2. it is an *instance of* one of the event types in `haam/data/event_types.py`
+   (battle, siege, treaty, coup, earthquake, …) or any of their subtypes;
+3. it is not also typed as a non-event: a person, settlement, building,
+   battlefield, list, category, recurring event, or any kind of fictional entity;
+4. it has a point in time (P585) or start time (P580), at least year-precise,
+   not in the future;
+5. it has coordinates on Earth: its own, or those of its location / place of
+   creation / place of formation (that is how treaties get a place);
+6. its Wikipedia link, after redirects, leads to an article about the same item.
+
+Everything rejected goes to `seed/wikidata_rejected.csv` with the reason. The
+first matching type decides the category (naval battle → naval, treaty →
+diplomatic, …). Options: `--type Q178561` (only some types), `--limit 20` (trial
+run), `--status pending` (send everything through the review queue).
+
 ## Commands
 
 | Command | Purpose |
@@ -125,6 +155,7 @@ printed and saved to `instance/demo-links.txt`.
 | `flask --app haam haam hash-password` | Generate `ADMIN_PASSWORD_HASH` |
 | `flask --app haam haam import-titles "Battle of Hastings" "Peace of Westphalia"` | Import articles by title |
 | `flask --app haam haam import-region --lat 35 70 --lon -10 40 --max-new 100` | Find dated events by geosearch in a lat/lon box |
+| `flask --app haam haam export-wikidata` | Write validated events from Wikidata to `seed/wikidata_events.csv` |
 | `flask --app haam haam import-csv seed/events.csv` | Import a CSV (`url`, optional `category,status,year,lat,lon,tags`) |
 | `flask --app haam haam import-legacy` | Copy data from the previous version's `entries`/`locations` tables |
 
