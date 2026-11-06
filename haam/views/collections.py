@@ -14,9 +14,10 @@ bp = Blueprint("collections", __name__, url_prefix="/collections")
 @bp.after_request
 def private_headers(response):
     # Collection URLs contain secret tokens: keep them out of search engines and
-    # out of the Referer header sent to the (arbitrary) websites entries link to.
+    # out of the Referer header. "strict-origin" sends only the site's address
+    # (never the path with the token), which OpenStreetMap's tile servers require.
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "strict-origin"
     return response
 
 

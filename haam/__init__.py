@@ -16,7 +16,7 @@ CSP = "; ".join([
     "script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com",
     "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com",
     "font-src 'self' https://cdnjs.cloudflare.com",
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com",
+    "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
