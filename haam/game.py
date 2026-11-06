@@ -56,13 +56,12 @@ EXCERPT_MIN, EXCERPT_MAX = 160, 320
 HIDDEN = "____"
 
 # Hard mode: the year is guessed too. Each event is still worth MAX_POINTS, split
-# between the place and the year. A year off by YEAR_HALF_SHARE of the event's
-# age (at least YEAR_HALF_MIN years) gets half the year points: 21 years for
-# 1813, about 300 years for 1000 BC.
+# between the place and the year. The year points follow a piecewise-linear curve
+# through these anchors (years off → share of the year points): exact = all,
+# 50 years off = 1/2, 100 = 1/3, 200 = 1/5, then down to nothing at 500 years.
 HARD_LOCATION_POINTS = 500
 HARD_YEAR_POINTS = MAX_POINTS - HARD_LOCATION_POINTS
-YEAR_HALF_SHARE = 0.10
-YEAR_HALF_MIN = 5
+YEAR_CURVE = ((0, 1.0), (50, 1 / 2), (100, 1 / 3), (200, 1 / 5), (500, 0.0))
 MIN_YEAR_GUESS, MAX_YEAR_GUESS = -10000, 2100
 
 
@@ -123,11 +122,17 @@ def year_error(guess: int, actual: int) -> int:
     return abs(_astronomical(guess) - _astronomical(actual))
 
 
-def score_year(guess: int, actual: int, today: date | None = None) -> int:
-    """Hard-mode year points: 500 when exact, half at ~10% of the event's age."""
-    age = (today or today_utc()).year - actual
-    half = max(YEAR_HALF_MIN, YEAR_HALF_SHARE * age)
-    return round(HARD_YEAR_POINTS * 0.5 ** (year_error(guess, actual) / half))
+def year_share(error: int) -> float:
+    """Share of the year points for an error in years, interpolated linearly on YEAR_CURVE."""
+    for (x0, y0), (x1, y1) in zip(YEAR_CURVE, YEAR_CURVE[1:]):
+        if error <= x1:
+            return y0 + (y1 - y0) * (max(error, x0) - x0) / (x1 - x0)
+    return 0.0
+
+
+def score_year(guess: int, actual: int) -> int:
+    """Hard-mode year points: 500 when exact, 250 at 50 years off, 0 from 500 years off."""
+    return round(HARD_YEAR_POINTS * year_share(year_error(guess, actual)))
 
 
 def score_hard_location(km: float) -> int:
