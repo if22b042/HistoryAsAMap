@@ -446,6 +446,7 @@ function setQuery(text) {
     return new RegExp(search.whole ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body, "iu");
   });
   state.query = search.terms.join(" ");
+  state.queryText = (text || "").trim(); // as typed, for the page address
 }
 
 /** Lower-cased texts to search, built once per event. */
@@ -495,28 +496,77 @@ function tagNames() {
   return names.join(state.tagMode === "all" ? " & " : " / ");
 }
 
-function tagsFromUrl() {
+// ----------------------------------------------------- filters in the URL
+// ?tag=176&tag=179&tagmode=all&cat=naval&q=napoleon&from=1805&to=1812 – so a
+// filtered map can be shared or bookmarked. A tag change is a new history entry
+// (Back undoes it); typing, dragging the slider or a category only update the
+// current one, so Back does not step through every keystroke.
+
+const URL_KEYS = ["tag", "tagmode", "cat", "q", "from", "to"];
+let restoringUrl = false; // while a link's filters are applied, do not rewrite it
+
+function filtersFromUrl() {
   const params = new URLSearchParams(window.location.search);
+  const year = (key) => (params.has(key) ? parseYearText(params.get(key)) : null);
+  const category = params.get("cat");
   return {
     ids: params.getAll("tag").map(Number).filter((id) => state.tagsById.has(id)),
     mode: params.get("tagmode") === "all" ? "all" : "any",
+    category: category && CATEGORY_LABELS[category] ? category : "all",
+    q: (params.get("q") || "").slice(0, 200),
+    from: year("from"),
+    to: year("to"),
   };
 }
 
-function syncTagUrl(push) {
+function syncUrl(push = false) {
+  if (restoringUrl) return;
   const url = new URL(window.location);
-  url.searchParams.delete("tag");
-  url.searchParams.delete("tagmode");
+  URL_KEYS.forEach((key) => url.searchParams.delete(key));
   state.tagIds.forEach((id) => url.searchParams.append("tag", id));
   if (state.tagMode === "all" && state.tagIds.length > 1) url.searchParams.set("tagmode", "all");
+  if (state.category !== "all") url.searchParams.set("cat", state.category);
+  if (state.queryText) url.searchParams.set("q", state.queryText);
+  const slider = document.getElementById("year-slider")?.noUiSlider;
+  if (slider) {
+    // Only years narrowed by hand: the slider's own range follows the tags and search.
+    const { min, max } = slider.options.range;
+    if (state.yearFrom > min) url.searchParams.set("from", state.yearFrom);
+    if (state.yearTo < max) url.searchParams.set("to", state.yearTo);
+  }
   if (url.href === window.location.href) return;
-  history[push ? "pushState" : "replaceState"]({ tags: state.tagIds, mode: state.tagMode }, "", url);
+  history[push ? "pushState" : "replaceState"](null, "", url);
+}
+
+/** Apply the filters of a link (on load, and when Back/Forward changes the address). */
+function applyUrlFilters(filters) {
+  restoringUrl = true;
+  try {
+    state.tagIds = filters.ids;
+    state.tagMode = filters.mode;
+    state.category = filters.category;
+    markCategory(filters.category);
+    ["search", "search-big"].forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = filters.q;
+    });
+    setQuery(filters.q);
+    renderTagChips();
+    refilter(); // also fits the year slider to the tags and search
+    const slider = document.getElementById("year-slider")?.noUiSlider;
+    if (slider && (filters.from !== null || filters.to !== null)) {
+      const { min, max } = slider.options.range;
+      slider.set([filters.from ?? min, filters.to ?? max]); // values outside the range are clamped
+    }
+  } finally {
+    restoringUrl = false;
+  }
 }
 
 function setTags(ids, { push = true } = {}) {
   state.tagIds = [...new Set(ids)].filter((id) => state.tagsById.has(id));
   renderTagChips();
-  syncTagUrl(push);
+  syncUrl(push);
   refilter();
 }
 
@@ -528,15 +578,11 @@ function setTagMode(mode) {
   if (mode === state.tagMode) return;
   state.tagMode = mode;
   renderTagChips();
-  syncTagUrl(true);
+  syncUrl(true);
   refilter();
 }
 
-window.addEventListener("popstate", () => {
-  const { ids, mode } = tagsFromUrl();
-  state.tagMode = mode;
-  setTags(ids, { push: false });
-});
+window.addEventListener("popstate", () => applyUrlFilters(filtersFromUrl()));
 
 /** A tag as a button: click shows only that tag, Ctrl/Shift-click adds it to the selection. */
 function tagButton(tag) {
@@ -650,6 +696,7 @@ function applyFilters() {
     if (tagMatch(event)) state.filtered.push(event);
   });
   updateTagOptions();
+  syncUrl();
 
   clusters.clearLayers();
   if (heatLayer) {
@@ -772,13 +819,13 @@ let yearsNarrowed = false;
 /**
  * With a tag or a search, the whole slider spans just the years of the matching
  * events (so years can be picked precisely); without them it spans all events.
- * Only acts when the tag, search or category changed, not when the years did.
+ * Only acts when the tags or the search changed – not the years or the category.
  */
 function rescaleYears() {
   const slider = document.getElementById("year-slider").noUiSlider;
   if (!slider) return;
-  const key = JSON.stringify([state.tagIds, state.tagMode, state.query, state.category, search.in, search.match,
-    search.whole]);
+  // The category is not part of it: switching it keeps the years someone set by hand.
+  const key = JSON.stringify([state.tagIds, state.tagMode, state.query, search.in, search.match, search.whole]);
   if (key === yearScopeKey) return;
   yearScopeKey = key;
   const scope = document.getElementById("year-scope");
@@ -863,15 +910,18 @@ function setupYearSlider(years) {
   });
 }
 
+function markCategory(category) {
+  document.querySelectorAll(".category-btn").forEach((b) => {
+    const active = b.dataset.category === category;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function setupCategoryButtons() {
-  const buttons = document.querySelectorAll(".category-btn");
-  buttons.forEach((button) => {
+  document.querySelectorAll(".category-btn").forEach((button) => {
     button.addEventListener("click", () => {
-      buttons.forEach((b) => {
-        const active = b === button;
-        b.classList.toggle("active", active);
-        b.setAttribute("aria-pressed", String(active));
-      });
+      markCategory(button.dataset.category);
       state.category = button.dataset.category;
       refilter();
     });
@@ -1234,12 +1284,8 @@ async function init() {
   } else {
     document.getElementById("year-slider").replaceChildren(el("p", "form-hint", "No events yet."));
   }
-  // Tags from the page address (?tag=…), e.g. a shared link.
-  const fromUrl = tagsFromUrl();
-  state.tagIds = fromUrl.ids;
-  state.tagMode = fromUrl.mode;
-  renderTagChips();
-  refilter();
+  // Filters from the page address (?tag=…&q=…&from=…), e.g. a shared link.
+  applyUrlFilters(filtersFromUrl());
 
   const requested = Number(new URLSearchParams(window.location.search).get("event"));
   if (requested && state.eventsById.has(requested)) showEvent(requested);
