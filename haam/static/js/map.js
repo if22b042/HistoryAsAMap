@@ -1,6 +1,7 @@
 // Map page: loads approved events from the API, shows them as clustered markers
 // (or a heatmap), filters by year/category/tag/text and lists them below the map.
 /* global L, noUiSlider */
+import { createTimeline } from "./timeline.js";
 
 const CATEGORY_LABELS = {
   military: "Military",
@@ -133,6 +134,14 @@ const clusters = L.markerClusterGroup({
 
 let heatLayer = null;
 
+// Pop-out timeline of the events shown (only while there are few of them).
+const timeline = createTimeline({
+  map,
+  limit: 150,
+  onSelect: (id) => showEvent(id, { zoom: 8 }),
+  colorFor: (item) => (state.colorByYear ? yearColor(item.year) : null),
+});
+
 const MARKER_ICON = { iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -9] };
 const categoryIcons = new Map();
 const hueIcons = new Map(); // at most HUE_SPAN + 1 icons, shared by all markers
@@ -239,7 +248,7 @@ async function loadDetails(id) {
   return detailsCache.get(id);
 }
 
-function showEvent(id, { fly = true } = {}) {
+function showEvent(id, { fly = true, zoom = 6 } = {}) {
   const event = state.eventsById.get(id);
   if (!event) return;
 
@@ -301,8 +310,9 @@ function showEvent(id, { fly = true } = {}) {
 
   if (fly) {
     map.closePopup();
-    map.flyTo([event.lat, event.lon], Math.max(map.getZoom(), 6), { duration: 0.8 });
+    map.flyTo([event.lat, event.lon], Math.max(map.getZoom(), zoom), { duration: 0.8 });
   }
+  timeline.setActive(id);
 }
 
 function closeSidebar() {
@@ -353,6 +363,10 @@ function applyFilters() {
   if (showLegend && !legend.getContainer()?.parentNode) legend.addTo(map);
   if (!showLegend && legend.getContainer()?.parentNode) legend.remove();
   if (showLegend) updateLegend();
+
+  timeline.update(state.filtered.map((e) => ({
+    id: e.id, year: e.year, title: e.title, label: e.date || e.display_year, category: e.category,
+  })));
 
   const total = state.events.length;
   document.getElementById("result-count").textContent =

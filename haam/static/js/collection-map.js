@@ -1,5 +1,6 @@
 // Map on a collection page: one marker per entry, linked to the list beside it.
 /* global L */
+import { createTimeline } from "./timeline.js";
 
 const dataTag = document.getElementById("collection-data");
 const mapElement = document.getElementById("collection-map");
@@ -20,6 +21,7 @@ if (dataTag && mapElement) {
   }).addTo(map);
 
   const markers = new Map();
+  const timeline = createTimeline({ map, limit: 500, onSelect: (id) => focusEntry(id, { zoom: 8, scrollToMap: false }) });
   entries.forEach((entry, index) => {
     const icon = L.divIcon({
       className: `marker marker-${entry.category}${entry.is_event ? "" : " marker-custom"}`,
@@ -40,7 +42,10 @@ if (dataTag && mapElement) {
       return box;
     };
     const marker = L.marker([entry.lat, entry.lon], { icon, title: entry.title }).bindPopup(popup).addTo(map);
-    marker.on("click", () => highlight(entry.id, false));
+    marker.on("click", () => {
+      highlight(entry.id, false);
+      timeline.setActive(entry.id);
+    });
     markers.set(entry.id, marker);
   });
 
@@ -56,15 +61,21 @@ if (dataTag && mapElement) {
     if (scroll) card.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  function focusEntry(id, { zoom = 6, scrollToMap = true } = {}) {
+    const marker = markers.get(id);
+    if (!marker) return;
+    highlight(id, false);
+    timeline.setActive(id);
+    map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), zoom), { duration: 0.7 });
+    map.once("moveend", () => marker.openPopup());
+    if (scrollToMap) mapElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   document.querySelectorAll("[data-entry-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = Number(button.dataset.entryId);
-      const marker = markers.get(id);
-      if (!marker) return;
-      highlight(id, false);
-      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 6), { duration: 0.7 });
-      marker.openPopup();
-      mapElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
+    button.addEventListener("click", () => focusEntry(Number(button.dataset.entryId)));
   });
+
+  timeline.update(entries.map((e) => ({
+    id: e.id, year: e.year, title: e.title, label: e.date || e.display_year, category: e.category,
+  })));
 }
