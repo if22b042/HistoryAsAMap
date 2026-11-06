@@ -390,6 +390,14 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
 let selectedId = null;
 let ringed = null; // the cluster or marker that carries the ring
 let standalone = null; // the selected marker, shown outside the clusters (heatmap, filtered out)
+let clustersLoading = false; // markers are still being added to the clusters in chunks
+
+function dropStandalone() {
+  if (standalone) {
+    map.removeLayer(standalone);
+    standalone = null;
+  }
+}
 
 function placeRing() {
   if (ringed) {
@@ -397,15 +405,17 @@ function placeRing() {
     ringed.setZIndexOffset?.(0);
     ringed = null;
   }
-  if (selectedId === null) return;
-  const marker = state.markersById.get(selectedId);
+  const marker = selectedId === null ? null : state.markersById.get(selectedId);
+  if (standalone && standalone !== marker) dropStandalone();
   if (!marker) return;
+  // Decided from the filters, not from clusters.hasLayer(): while the clusters are
+  // filling up in chunks that is false for markers not added yet, and a marker put on
+  // the map by hand that the clusters then also add would get lost when taken off again.
+  const inClusters = !state.heatmap && state.filtered.some((e) => e.id === selectedId);
   let layer;
-  if (clusters.hasLayer(marker)) {
-    if (standalone) {
-      map.removeLayer(standalone);
-      standalone = null;
-    }
+  if (inClusters) {
+    dropStandalone();
+    if (clustersLoading) return; // placed again once all markers are in
     layer = clusters.getVisibleParent(marker); // its cluster, or the marker itself
   } else {
     if (!map.hasLayer(marker)) marker.addTo(map);
@@ -422,6 +432,15 @@ function placeRing() {
 // Clusters change (and their icons are rebuilt) on zoom, pan and spiderfy.
 map.on("zoomend moveend", placeRing);
 clusters.on("animationend spiderfied unspiderfied", placeRing);
+// Large sets go into the clusters in chunks; the last call comes just before the
+// clusters are put on the map, so the ring is placed right after it.
+clusters.options.chunkProgress = (done, total) => {
+  if (done < total) return;
+  setTimeout(() => {
+    clustersLoading = false;
+    placeRing();
+  });
+};
 
 function showSelection(event) {
   selectedId = event.id;
@@ -430,10 +449,6 @@ function showSelection(event) {
 
 function releaseSelection() {
   selectedId = null;
-  if (standalone) {
-    map.removeLayer(standalone);
-    standalone = null;
-  }
   placeRing();
 }
 
@@ -738,10 +753,7 @@ function applyFilters() {
   updateTagOptions();
   syncUrl();
 
-  if (standalone) {  // it goes back into the clusters below (unless the heatmap is on)
-    map.removeLayer(standalone);
-    standalone = null;
-  }
+  dropStandalone(); // it goes back into the clusters below (unless the heatmap is on)
   clusters.clearLayers();
   if (heatLayer) {
     map.removeLayer(heatLayer);
@@ -756,13 +768,10 @@ function applyFilters() {
     state.filtered.forEach((e) => {
       state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
     });
+    clustersLoading = true; // until chunkProgress says all markers are in
     clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)));
   }
-  if (selectedId !== null) {
-    // Large sets are added to the clusters in chunks: place the ring once they are in.
-    placeRing();
-    setTimeout(placeRing, 250);
-  }
+  placeRing();
 
   const showLegend = state.colorByYear && !state.heatmap;
   if (showLegend && !legend.getContainer()?.parentNode) legend.addTo(map);
