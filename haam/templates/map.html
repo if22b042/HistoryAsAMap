@@ -48,7 +48,13 @@
 
     <div class="filter-group">
       <h3><label for="search">Search</label></h3>
-      <input id="search" class="form-input" type="search" placeholder="Title, description or year…" autocomplete="off">
+      <div class="search-row">
+        <input id="search" class="form-input" type="search" placeholder="Title, description or year…" autocomplete="off">
+        <button type="button" class="icon-btn search-expand" id="search-expand"
+                aria-label="Open the large search (shortcut: /)" title="Open the large search (shortcut: /)">
+          <i class="fas fa-expand-alt" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
 
     <div class="filter-group filter-actions">
@@ -68,6 +74,46 @@
   </button>
 
   <div id="map" class="map" role="region" aria-label="Map of historical events"></div>
+
+  <section class="search-panel" id="search-panel" role="dialog" aria-label="Search events" hidden>
+    <div class="search-panel-top">
+      <i class="fas fa-search" aria-hidden="true"></i>
+      <input id="search-big" class="search-big" type="search" autocomplete="off" spellcheck="false"
+             placeholder='Search events, e.g. Napoleon, "Battle of", 1805…' aria-describedby="search-help">
+      <button type="button" class="icon-btn" id="search-close" aria-label="Close search">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="search-options" role="group" aria-label="Search options">
+      <label>Search in
+        <select id="search-in" class="form-input">
+          <option value="all">Titles and descriptions</option>
+          <option value="title">Titles only</option>
+        </select>
+      </label>
+      <label>Words
+        <select id="search-match" class="form-input">
+          <option value="all">All words</option>
+          <option value="any">Any word</option>
+        </select>
+      </label>
+      <label>Sort
+        <select id="search-sort" class="form-input">
+          <option value="best">Best match</option>
+          <option value="oldest">Oldest first</option>
+          <option value="newest">Newest first</option>
+          <option value="title">A–Z</option>
+        </select>
+      </label>
+      <label class="search-check"><input type="checkbox" id="search-whole"> Whole words only</label>
+    </div>
+    <p class="search-help" id="search-help">
+      Several words narrow the search; put a phrase in quotes ("Battle of the"). The year, category and tag
+      filters still apply. <kbd>↑</kbd> <kbd>↓</kbd> to move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to close.
+    </p>
+    <p class="search-status" id="search-status" aria-live="polite"></p>
+    <ol class="search-results" id="search-results"></ol>
+  </section>
 
   <aside class="sidebar" id="sidebar" aria-label="Event details" hidden>
     <div class="sidebar-header">
