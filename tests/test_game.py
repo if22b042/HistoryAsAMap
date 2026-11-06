@@ -332,17 +332,26 @@ def test_hard_title(title, expected):
     assert game.hard_title(title) == expected
 
 
+@pytest.mark.parametrize("error, share", [
+    (0, 1), (50, 1 / 2), (100, 1 / 3), (200, 1 / 5), (500, 0), (2000, 0),
+    # Linear between the anchors.
+    (25, 3 / 4), (150, (1 / 3 + 1 / 5) / 2), (350, 1 / 10),
+])
+def test_year_share_anchors(error, share):
+    assert game.year_share(error) == pytest.approx(share)
+
+
 def test_year_scoring():
-    today = date(2026, 1, 1)
-    assert game.score_year(1813, 1813, today) == game.HARD_YEAR_POINTS
-    # Half points at 10% of the age: 21.3 years for 1813.
-    assert game.score_year(1834, 1813, today) == pytest.approx(game.HARD_YEAR_POINTS / 2, abs=10)
-    # Old events are more forgiving: 300 years off for 1000 BC is about half.
-    assert game.score_year(-1300, -1000, today) == pytest.approx(game.HARD_YEAR_POINTS / 2, abs=10)
-    # Recent events: at least YEAR_HALF_MIN years for half points.
-    assert game.score_year(2020, 2025, today) == pytest.approx(game.HARD_YEAR_POINTS / 2, abs=1)
-    errors = [game.score_year(1813 + d, 1813, today) for d in range(0, 300, 10)]
-    assert errors == sorted(errors, reverse=True)
+    full = game.HARD_YEAR_POINTS
+    assert game.score_year(1813, 1813) == full
+    assert game.score_year(1863, 1813) == full / 2
+    assert game.score_year(1713, 1813) == round(full / 3)
+    assert game.score_year(2013, 1813) == round(full / 5)
+    assert game.score_year(1313, 1813) == 0
+    # Years, not ages: the same error scores the same in any era.
+    assert game.score_year(-1050, -1000) == game.score_year(1863, 1813)
+    scores = [game.score_year(1813 + d, 1813) for d in range(0, 600, 10)]
+    assert scores == sorted(scores, reverse=True)
     # There is no year 0: 1 BC and AD 1 are one year apart.
     assert game.year_error(-1, 1) == 1 and game.year_error(-44, 1) == 44
 
