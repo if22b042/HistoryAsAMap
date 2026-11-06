@@ -1,5 +1,7 @@
-// Daily game: five events a day, the player pins where each happened.
-// Progress and the streak live in localStorage, so a reload keeps the game.
+// Game page: five events, the player pins where each happened.
+// Daily mode: the same five for everyone each day; progress and the streak live in
+// localStorage, so a reload keeps the game. Practice mode (?mode=practice): random
+// sets of five, optionally from one era or category; nothing is stored.
 /* global L */
 
 const STORAGE_KEY = "haam-game-v1";
@@ -87,6 +89,7 @@ function dayUrl(day) {
 
 // ---------------------------------------------------------------- state
 
+const PRACTICE = new URLSearchParams(window.location.search).get("mode") === "practice";
 const store = loadStore();
 let puzzle = null;
 let record = null; // this day's progress: { rounds, guesses }
@@ -279,6 +282,12 @@ function renderSummary() {
     list.append(item);
   });
 
+  $("summary-daily").hidden = PRACTICE;
+  $("practice-again").hidden = !PRACTICE;
+  if (PRACTICE) {
+    $("practice-again").focus({ preventScroll: true });
+    return;
+  }
   $("share-text").value = shareText();
   const streak = currentStreak();
   $("summary-streak").textContent = `Streak: ${streak} ${streak === 1 ? "day" : "days"}`
@@ -304,7 +313,7 @@ function showAllResults() {
 // ---------------------------------------------------------------- actions
 
 function finishDay() {
-  if (!puzzle.is_today) return;
+  if (PRACTICE || !puzzle.is_today) return;
   const { streak } = store;
   if (streak.last === puzzle.date) return;
   streak.current = streak.last === addDays(puzzle.date, -1) ? streak.current + 1 : 1;
@@ -319,17 +328,21 @@ async function submitGuess() {
   $("guess-btn-map").hidden = true;
   $("game-message").textContent = "";
   try {
-    const response = await fetch(ROOT.dataset.checkUrl, {
+    const guessed = { index: record.guesses.length, lat: pin[0], lon: pin[1] };
+    const body = PRACTICE
+      ? { ...guessed, seed: puzzle.seed, era: puzzle.era, category: puzzle.category }
+      : { ...guessed, date: puzzle.date };
+    const response = await fetch(PRACTICE ? ROOT.dataset.practiceCheckUrl : ROOT.dataset.checkUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: puzzle.date, index: record.guesses.length, lat: pin[0], lon: pin[1] }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const result = await response.json();
     const guess = { lat: pin[0], lon: pin[1], km: result.km, points: result.points, answer: result.answer };
     record.guesses.push(guess);
     if (record.guesses.length >= record.rounds.length) finishDay();
-    saveStore(store);
+    if (!PRACTICE) saveStore(store);
     if (guessMarker) {
       layer.removeLayer(guessMarker);
       guessMarker = null;
@@ -382,7 +395,65 @@ function renderHeader() {
   $("day-today").hidden = puzzle.is_today;
 }
 
+function renderModes() {
+  $("mode-daily").classList.toggle("active", !PRACTICE);
+  $("mode-practice").classList.toggle("active", PRACTICE);
+  $(PRACTICE ? "mode-practice" : "mode-daily").setAttribute("aria-current", "page");
+  $("practice-filters").hidden = !PRACTICE;
+}
+
+function resetBoard() {
+  showingResult = false;
+  pin = null;
+  guessMarker = null;
+  layer.clearLayers();
+  map.setView([30, 10], 2);
+}
+
+async function loadPractice() {
+  const params = new URLSearchParams();
+  if ($("practice-era").value) params.set("era", $("practice-era").value);
+  if ($("practice-category").value) params.set("category", $("practice-category").value);
+  $("game-message").textContent = "";
+  $("game-meta").textContent = "Loading a practice set…";
+  try {
+    const query = params.toString();
+    const response = await fetch(ROOT.dataset.practiceUrl + (query ? `?${query}` : ""));
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    puzzle = await response.json();
+  } catch (e) {
+    $("game-meta").textContent = "The practice set could not be loaded. Please try again.";
+    return;
+  }
+  $("game-meta").textContent = "Practice · random events, not counted for your streak";
+  resetBoard();
+  if (!puzzle.rounds.length) {
+    record = null;
+    $("game-progress").replaceChildren();
+    $("game-round").hidden = true;
+    $("game-summary").hidden = true;
+    $("guess-btn-map").hidden = true;
+    $("game-message").textContent = "No events match these filters. Try another era or category.";
+    return;
+  }
+  record = { rounds: puzzle.rounds, guesses: [] };
+  render();
+}
+
+$("practice-filters").addEventListener("submit", (e) => {
+  e.preventDefault();
+  loadPractice();
+});
+$("practice-era").addEventListener("change", loadPractice);
+$("practice-category").addEventListener("change", loadPractice);
+$("practice-again").addEventListener("click", loadPractice);
+
 async function init() {
+  renderModes();
+  if (PRACTICE) {
+    await loadPractice();
+    return;
+  }
   const requested = new URLSearchParams(window.location.search).get("date");
   const day = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : "today";
   try {

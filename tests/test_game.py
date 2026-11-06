@@ -202,3 +202,70 @@ def test_excerpt_hides_nationalities(app, make_event):
 
 def test_game_tiles_are_allowed_by_csp(client):
     assert "https://server.arcgisonline.com" in client.get("/game").headers["Content-Security-Policy"]
+
+
+# ---------------------------------------------------------------- practice
+
+def test_practice_set_hides_the_answers(client, events):
+    data = client.get("/api/game/practice").json
+    assert game.SEED_PATTERN.fullmatch(data["seed"])
+    assert len(data["rounds"]) == game.EVENTS_PER_DAY
+    raw = json.dumps(data)
+    for event in events:
+        assert event.wiki_url not in raw
+    for round_ in data["rounds"]:
+        assert set(round_) == {"index", "title", "date", "year", "excerpt", "category"}
+
+
+def test_practice_sets_are_random(client, events):
+    seeds = {client.get("/api/game/practice").json["seed"] for _ in range(3)}
+    assert len(seeds) == 3
+
+
+def test_practice_ranking_needs_the_secret_key(app):
+    """The pick is keyed with SECRET_KEY: the seed and the code alone do not give the set."""
+    seed = "0" * 32
+    ranks = [game._practice_rank(seed, event_id) for event_id in range(1, 50)]
+    assert ranks == [game._practice_rank(seed, event_id) for event_id in range(1, 50)]
+    app.config["SECRET_KEY"] = "another secret"
+    assert ranks != [game._practice_rank(seed, event_id) for event_id in range(1, 50)]
+
+
+def test_practice_filters(client, events):
+    data = client.get("/api/game/practice?category=naval").json
+    assert data["rounds"] and {r["category"] for r in data["rounds"]} == {"naval"}
+    data = client.get("/api/game/practice?era=0").json
+    assert data["rounds"] and all(r["year"] < 500 for r in data["rounds"])
+    data = client.get("/api/game/practice?era=0&category=scientific").json
+    assert data["rounds"] == []
+
+
+@pytest.mark.parametrize("query", ["era=9", "era=x", "category=pirates"])
+def test_practice_rejects_bad_filters(client, events, query):
+    assert client.get(f"/api/game/practice?{query}").status_code == 400
+
+
+def test_practice_check_scores_the_same_set(client, events):
+    data = client.get("/api/game/practice?category=naval").json
+    by_title = {e.title: e for e in events}
+    for round_ in data["rounds"]:
+        event = by_title[round_["title"]]
+        result = client.post("/api/game/practice/check", json={
+            "seed": data["seed"], "era": None, "category": "naval",
+            "index": round_["index"], "lat": event.lat, "lon": event.lon}).json
+        assert result["points"] == game.MAX_POINTS
+        assert result["answer"]["title"] == round_["title"]
+
+
+@pytest.mark.parametrize("body", [
+    {"index": 0, "lat": 0, "lon": 0},
+    {"seed": "not-a-seed", "index": 0, "lat": 0, "lon": 0},
+    {"seed": "a" * 32, "era": 7, "index": 0, "lat": 0, "lon": 0},
+    {"seed": "a" * 32, "category": "pirates", "index": 0, "lat": 0, "lon": 0},
+])
+def test_practice_check_rejects_bad_input(client, events, body):
+    assert client.post("/api/game/practice/check", json=body).status_code == 400
+
+
+def test_practice_route_is_not_a_day(client, events):
+    assert "seed" in client.get("/api/game/practice").json

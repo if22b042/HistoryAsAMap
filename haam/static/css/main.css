@@ -1212,3 +1212,32 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 }
 /* The game's tiles come in a dark version already: no darkening filter. */
 :root[data-theme="dark"] .page-game .leaflet-tile-pane { filter: none; }
+
+.game-modes {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1rem 0 0;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+.game-mode {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.game-mode:hover { color: var(--link); text-decoration: none; }
+.game-mode.active { background: var(--surface); color: var(--text-strong); box-shadow: var(--shadow-sm); }
+.game-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; margin: 0.75rem 0 0; }
+.game-filters[hidden] { display: none; }
+.game-filter { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 8rem; font-size: 0.75rem; color: var(--text-muted); }
+.game-filter .form-input { padding: 0.35rem 0.5rem; font-size: 0.9rem; }

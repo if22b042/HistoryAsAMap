@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import hashlib
 import math
+import hmac
 import random
 import re
+import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -27,7 +30,7 @@ from sqlalchemy.orm import selectinload
 
 from haam.data.place_words import COUNTRIES, NATIONALITIES
 from haam.extensions import db
-from haam.models import Event, Status, event_tags
+from haam.models import Category, Event, Status, event_tags
 
 EVENTS_PER_DAY = 5
 MAX_POINTS = 1000
@@ -118,6 +121,13 @@ def _rank(day: date, event_id: int) -> int:
     return int.from_bytes(digest[:8], "big")
 
 
+def _practice_rank(seed: str, event_id: int) -> int:
+    """Keyed with the app's secret: the seed alone does not reveal the events."""
+    key = current_app.config["SECRET_KEY"].encode()
+    digest = hmac.new(key, f"haam-practice:{seed}:{event_id}".encode(), hashlib.sha256).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
 def _era(year: int) -> int:
     for index, (start, end) in enumerate(ERAS):
         if (start is None or year >= start) and (end is None or year < end):
@@ -125,15 +135,24 @@ def _era(year: int) -> int:
     return len(ERAS) - 1
 
 
-def _candidates(day: date) -> list[_Candidate]:
+def _candidates(rank: Callable[[int], int], era: int | None = None,
+                category: Category | None = None) -> list[_Candidate]:
     tagged = exists().where(event_tags.c.event_id == Event.id).label("tagged")
     stmt = select(Event.id, Event.year, Event.lat, Event.lon, Event.category, tagged).where(
         Event.status == Status.APPROVED,
         func.length(Event.summary) >= MIN_SUMMARY_LENGTH,
     )
+    if era is not None:
+        start, end = ERAS[era]
+        if start is not None:
+            stmt = stmt.where(Event.year >= start)
+        if end is not None:
+            stmt = stmt.where(Event.year < end)
+    if category is not None:
+        stmt = stmt.where(Event.category == category)
     rows = db.session.execute(stmt).all()
     candidates = [
-        _Candidate(r.id, r.year, r.lat, r.lon, r.category.value, bool(r.tagged), _rank(day, r.id))
+        _Candidate(r.id, r.year, r.lat, r.lon, r.category.value, bool(r.tagged), rank(r.id))
         for r in rows
     ]
     # Events with a tag (part of a known war or period) come first.
@@ -141,9 +160,14 @@ def _candidates(day: date) -> list[_Candidate]:
     return candidates
 
 
-def _pick(candidates: list[_Candidate], day: date) -> list[int]:
+def _pick(candidates: list[_Candidate], seed: str) -> list[int]:
+    """Five events in play order, spread over eras, places and categories.
+
+    With a filter (one era, one category) the rules that cannot be met are
+    relaxed, so the set is still filled when enough events match.
+    """
     era_order = list(range(len(ERAS)))
-    random.Random(f"haam-game:{day.isoformat()}").shuffle(era_order)
+    random.Random(seed).shuffle(era_order)
     picked: list[_Candidate] = []
 
     def fits(c: _Candidate, era: int | None, apart: bool, per_category: bool) -> bool:
@@ -180,12 +204,45 @@ def daily_event_ids(day: date) -> list[int]:
     if day not in cache:
         if len(cache) > 64:
             cache.clear()
-        cache[day] = _pick(_candidates(day), day)
+        candidates = _candidates(lambda event_id: _rank(day, event_id))
+        cache[day] = _pick(candidates, f"haam-game:{day.isoformat()}")
     return cache[day]
 
 
 def daily_events(day: date) -> list[Event]:
-    ids = daily_event_ids(day)
+    return _load(daily_event_ids(day))
+
+
+# ---------------------------------------------------------------- practice
+
+# Practice sets are not stored: the client keeps the seed (and its filters) and
+# the server picks the same set again from them to check a guess.
+SEED_PATTERN = re.compile(r"[0-9a-f]{32}")
+ERA_LABELS = ("Before AD 500", "500–1500", "1500–1800", "1800–1914", "1914 onwards")
+
+
+def new_practice_seed() -> str:
+    return secrets.token_hex(16)
+
+
+def practice_event_ids(seed: str, era: int | None = None, category: Category | None = None) -> list[int]:
+    cache: dict[tuple, list[int]] = current_app.extensions.setdefault("haam_practice_cache", {})
+    key = (seed, era, category)
+    if key not in cache:
+        if len(cache) > 512:
+            cache.clear()
+        candidates = _candidates(lambda event_id: _practice_rank(seed, event_id), era, category)
+        # Untagged events are fine in practice: no tag-first ordering.
+        candidates.sort(key=lambda c: c.rank)
+        cache[key] = _pick(candidates, f"haam-practice:{seed}")
+    return cache[key]
+
+
+def practice_events(seed: str, era: int | None = None, category: Category | None = None) -> list[Event]:
+    return _load(practice_event_ids(seed, era, category))
+
+
+def _load(ids: list[int]) -> list[Event]:
     if not ids:
         return []
     stmt = select(Event).where(Event.id.in_(ids)).options(selectinload(Event.tags))
