@@ -1,5 +1,6 @@
 // Map on a collection page: one marker per entry, linked to the list beside it.
 /* global L */
+import { addBasemapSwitcher } from "./basemaps.js";
 import { createTimeline } from "./timeline.js";
 
 // Map zoom when an event is picked on the timeline (9 = about a city).
@@ -18,10 +19,7 @@ function el(tag, className, text) {
 if (dataTag && mapElement) {
   const entries = JSON.parse(dataTag.textContent);
   const map = L.map(mapElement, { worldCopyJump: true, minZoom: 2 });
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 18,
-  }).addTo(map);
+  addBasemapSwitcher(map);
 
   const markers = new Map();
   const timeline = createTimeline({ map, limit: 500, onSelect: (id) => focusEntry(id, { zoom: CLICK_ZOOM, scrollToMap: false }) });
