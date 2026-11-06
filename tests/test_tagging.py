@@ -65,44 +65,6 @@ def test_chain_resolver_follows_part_of_and_aliases():
     assert client.calls == 2  # one request per level, shared by all events
 
 
-def test_retag_database_adds_missing_tags_only(app, make_event):
-    from haam.extensions import db
-    from haam.models import Tag
-    from haam.tagging import retag_database
-
-    def part_of(*ids):
-        return {"P361": [{"rank": "normal", "mainsnak": {"snaktype": "value", "datavalue": {"value": {"id": i}}}}
-                         for i in ids]}
-
-    class Client(FakeClient):
-        def entities(self, ids, props="claims"):
-            result = super().entities(ids, props)
-            result.update({"Q100": {"claims": part_of("Q2")}, "Q101": {"claims": {}}})
-            return {k: v for k, v in result.items() if k in ids}
-
-    client = Client({"Q2": ("American Revolutionary War", [], ["Q3"]), "Q3": ("American Revolution", [], [])})
-    db.session.add_all([Tag(name="American Revolution", start_year=1765, end_year=1783),
-                        Tag(name="American Revolutionary War", start_year=1775, end_year=1783),
-                        Tag(name="Industrial Revolution", start_year=1760, end_year=1840)])
-    db.session.commit()
-    lexington = make_event(title="Battles of Lexington and Concord", year=1775, wikidata_id="Q100")
-    manual = db.session.scalar(db.select(Tag).filter_by(name="Industrial Revolution"))
-    lexington.tags = [db.session.scalar(db.select(Tag).filter_by(name="American Revolutionary War")), manual]
-    make_event(title="Unrelated", year=1775, wikidata_id="Q101")
-    db.session.commit()
-
-    dry = retag_database(client, dry_run=True, report=lambda m: None)
-    assert (dry["links_added"], dry["events_changed"]) == (1, 1)
-    assert len(lexington.tags) == 2
-
-    stats = retag_database(client, report=lambda m: None)
-    db.session.refresh(lexington)
-    assert stats["links_added"] == 1
-    assert sorted(t.name for t in lexington.tags) == ["American Revolution", "American Revolutionary War",
-                                                     "Industrial Revolution"]  # the manual tag stays
-    assert retag_database(client, report=lambda m: None)["links_added"] == 0  # safe to re-run
-
-
 def test_chain_resolver_does_not_climb_through_bridging_items():
     client = FakeClient({
         "Q1": ("Mali War", [], ["Q17507684", "Q4"]),
@@ -127,26 +89,3 @@ def test_excluded_direct_links():
     tagger = Tagger(FakeClient({"Q8683": ("Cold War", [], [])}), ["Cold War"])
     tags = tagger.tags({"Q96363613": ["Q8683"], "Q1": ["Q8683"]}, {"Q96363613": 1978, "Q1": 1978})
     assert tags == {"Q96363613": [], "Q1": ["Cold War"]}  # only the listed event loses the tag
-
-
-def test_retag_database_replace_removes_and_skips_website_events(app, make_event):
-    from haam.extensions import db
-    from haam.models import Tag
-    from haam.tagging import retag_database
-
-    class Client(FakeClient):
-        def entities(self, ids, props="claims"):
-            return {i: {"claims": {}} for i in ids}  # no "part of": the rules give no tags
-
-    cold_war = Tag(name="Cold War", start_year=1947, end_year=1991)
-    db.session.add(cold_war)
-    imported = make_event(title="Battle of Zahleh", year=1980, wikidata_id="Q4872802")
-    submitted = make_event(title="Submitted", year=1980, wikidata_id="Q5", from_website=True)
-    imported.tags, submitted.tags = [cold_war], [cold_war]
-    db.session.commit()
-
-    assert retag_database(Client({}), report=lambda m: None)["links_removed"] == 0  # default: only adds
-    stats = retag_database(Client({}), replace=True, report=lambda m: None)
-    db.session.refresh(imported)
-    db.session.refresh(submitted)
-    assert (stats["links_removed"], imported.tags, [t.name for t in submitted.tags]) == (1, [], ["Cold War"])

@@ -381,64 +381,139 @@ def _legacy_tag_names(value) -> list[str]:
     return [str(v) for v in value] if isinstance(value, list) else []
 
 
-# ------------------------------------------------------------------ removal
+# ---------------------------------------------------------- sync with the CSV
 
 @dataclass
-class RemoveStats:
-    listed: int = 0  # rows in the file that match
+class SyncStats:
+    added: int = 0
     removed: int = 0
-    not_found: int = 0  # not in the database (never imported, or already removed)
+    retagged: int = 0
+    unchanged: int = 0
+    adopted: int = 0  # older rows of the same article that now carry the Wikidata id
+    rejected: int = 0  # invalid rows in the file
     kept_in_collections: list[str] = field(default_factory=list)  # titles
 
-    def __str__(self) -> str:
-        return (f"listed={self.listed} removed={self.removed} not_found={self.not_found} "
-                f"kept_in_collections={len(self.kept_in_collections)}")
 
+def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
+                  chunk: int = 500) -> SyncStats:
+    """Make the imported Wikidata events match an exported CSV (no network access).
 
-def remove_listed(path: str, *, reason: str = "", dry_run: bool = False,
-                  report: Reporter = print, chunk: int = 500) -> RemoveStats:
-    """Delete the events whose ``wikidata_id`` is listed in a CSV, e.g. a rejected file.
+    * rows not in the database are added (with the file's status and tags);
+    * imported events (with a Wikidata id, not submitted on the website) that are
+      no longer in the file are deleted – unless a collection uses them;
+    * every imported event in the file gets exactly the file's tags;
+    * an event for the same article that was added without a Wikidata id (the
+      demo data) is adopted: it gets the id and is then treated like the others.
 
-    ``reason`` keeps only rows whose ``reason`` column starts with it. Events that
-    people put on the website, and events used in a collection, are never deleted;
-    the latter are reported so they can be handled by hand.
+    Website submissions are never changed. Safe to re-run: a second run changes nothing.
     """
     from haam.models import CollectionEntry, event_tags  # local: avoids a wider import cycle
 
-    stats = RemoveStats()
+    stats = SyncStats()
+    tags_by_name = {t.name.lower(): t for t in db.session.scalars(select(Tag))}
+    rows: dict[str, dict] = {}
     with open(path, newline="", encoding="utf-8") as handle:
-        rows = [r for r in csv.DictReader(handle)
-                if r.get("wikidata_id") and (r.get("reason") or "").startswith(reason)]
-    qids = sorted({r["wikidata_id"].strip() for r in rows})
-    stats.listed = len(qids)
+        for line_no, row in enumerate(csv.DictReader(handle), start=2):
+            qid = (row.get("wikidata_id") or "").strip()
+            if not qid:
+                report(f"line {line_no}: no wikidata_id, skipped")
+                stats.rejected += 1
+                continue
+            rows[qid] = row
 
-    found: list[tuple[int, str]] = []
-    for part in _chunks(qids, chunk):
-        found += db.session.execute(
-            select(Event.id, Event.title).where(Event.wikidata_id.in_(part), Event.from_website.is_(False))).all()
-    stats.not_found = stats.listed - len(found)
+    imported = {qid: event_id for event_id, qid in db.session.execute(
+        select(Event.id, Event.wikidata_id).where(Event.wikidata_id.is_not(None), Event.from_website.is_(False)))}
+    taken_qids = set(db.session.scalars(select(Event.wikidata_id).where(Event.wikidata_id.is_not(None))))
+    without_qid = {url: event_id for event_id, url in db.session.execute(
+        select(Event.id, Event.wiki_url).where(Event.wikidata_id.is_(None), Event.from_website.is_(False)))}
+    taken_urls = set(db.session.scalars(select(Event.wiki_url)))
 
-    ids = [event_id for event_id, _ in found]
-    used = set()
-    for part in _chunks(ids, chunk):
-        used |= set(db.session.scalars(select(CollectionEntry.event_id).where(CollectionEntry.event_id.in_(part))))
-    stats.kept_in_collections = sorted(title for event_id, title in found if event_id in used)
-    doomed = [event_id for event_id in ids if event_id not in used]
-
+    # 1. adopt older rows of the same article (the demo events)
+    adopt = {}
+    for qid, row in rows.items():
+        if qid in taken_qids:
+            continue
+        title = title_from_url(row.get("url", ""))
+        url = canonical_url(title) if title else None
+        if url in without_qid:
+            adopt[qid] = without_qid[url]
+    stats.adopted = len(adopt)
     if not dry_run:
-        for part in _chunks(doomed, chunk):
+        for qid, event_id in adopt.items():
+            db.session.execute(Event.__table__.update().where(Event.id == event_id).values(wikidata_id=qid))
+        db.session.commit()
+    imported.update(adopt)
+
+    # 2. remove imported events that are no longer in the file
+    gone = {qid: event_id for qid, event_id in imported.items() if qid not in rows}
+    used = set()
+    ids = list(gone.values())
+    for start in range(0, len(ids), chunk):
+        used |= set(db.session.scalars(
+            select(CollectionEntry.event_id).where(CollectionEntry.event_id.in_(ids[start:start + chunk]))))
+    if used:
+        stats.kept_in_collections = sorted(db.session.scalars(select(Event.title).where(Event.id.in_(used))))
+    doomed = [event_id for event_id in ids if event_id not in used]
+    stats.removed = len(doomed)
+    if not dry_run:
+        for start in range(0, len(doomed), chunk):
+            part = doomed[start:start + chunk]
             # Tag links first: SQLite does not enforce ON DELETE CASCADE by default.
             db.session.execute(event_tags.delete().where(event_tags.c.event_id.in_(part)))
             db.session.execute(Event.__table__.delete().where(Event.id.in_(part)))
             db.session.commit()
-            report(f"  {min(len(doomed), stats.removed + len(part))}/{len(doomed)} removed")
-            stats.removed += len(part)
-    else:
-        stats.removed = 0
-        report(f"  dry run: would remove {len(doomed)}")
+        if doomed:
+            report(f"  removed {len(doomed)} events that are no longer in the file")
+
+    # 3. set the tags of the imported events that stay
+    links: dict[int, set[int]] = {}
+    for event_id, tag_id in db.session.execute(select(event_tags.c.event_id, event_tags.c.tag_id)):
+        links.setdefault(event_id, set()).add(tag_id)
+    add_links, drop_links = [], []
+    for qid, event_id in imported.items():
+        if qid not in rows:
+            continue
+        target = {tags_by_name[n.strip().lower()].id for n in (rows[qid].get("tags") or "").split(";")
+                  if n.strip().lower() in tags_by_name}
+        have = links.get(event_id, set())
+        if target == have:
+            stats.unchanged += 1
+            continue
+        stats.retagged += 1
+        add_links += [{"event_id": event_id, "tag_id": t} for t in target - have]
+        drop_links += [(event_id, t) for t in have - target]
+    if not dry_run:
+        for start in range(0, len(drop_links), chunk):
+            part = drop_links[start:start + chunk]
+            db.session.execute(event_tags.delete().where(db.or_(*(
+                (event_tags.c.event_id == e) & (event_tags.c.tag_id == t) for e, t in part))))
+            db.session.commit()
+        for start in range(0, len(add_links), 1000):
+            db.session.execute(event_tags.insert(), add_links[start:start + 1000])
+            db.session.commit()
+
+    # 4. add the rows that are not in the database yet
+    pending = 0
+    for qid, row in rows.items():
+        if qid in imported or qid in taken_qids:
+            continue
+        problem, event = _event_from_row(row, Status.APPROVED, tags_by_name)
+        if problem:
+            report(f"{qid}: {problem}, skipped")
+            stats.rejected += 1
+            continue
+        if event.wiki_url in taken_urls:  # the same article, submitted on the website
+            continue
+        taken_urls.add(event.wiki_url)
+        stats.added += 1
+        if dry_run:
+            continue
+        db.session.add(event)
+        pending += 1
+        if pending >= chunk:
+            db.session.commit()
+            pending = 0
+            report(f"  {stats.added} added…")
+    if not dry_run:
+        db.session.commit()
     return stats
-
-
-def _chunks(items: list, size: int):
-    for start in range(0, len(items), size):
-        yield items[start:start + size]

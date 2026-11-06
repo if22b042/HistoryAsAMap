@@ -61,25 +61,18 @@ def import_csv_command(path, approve):
 
 
 @haam_cli.command("export-wikidata")
-@click.option("--out", default=None, help="CSV of accepted events.  [default: seed/wikidata_events_places.csv, "
-                                           "or seed/wikidata_events_undated.csv with --undated]")
-@click.option("--rejected", default=None, help="CSV of rejected candidates with the reason.  "
-                                               "[default: seed/wikidata_rejected_places.csv, or …_undated.csv]")
+@click.option("--out", default="seed/wikidata_events.csv", show_default=True, help="CSV of accepted events.")
+@click.option("--rejected", default="seed/wikidata_rejected.csv", show_default=True,
+              help="CSV of rejected candidates with the reason.")
 @click.option("--type", "type_ids", multiple=True, help="Only these Wikidata types (e.g. --type Q178561).")
 @click.option("--limit", type=int, default=None, help="At most this many candidates per type (for trial runs).")
 @click.option("--status", type=click.Choice(["approved", "pending"]), default="approved", show_default=True,
               help="Status written into the CSV for every accepted event.")
-@click.option("--undated", is_flag=True,
-              help="Only items without a point in time / start time on Wikidata; their date comes from "
-                   "their end time, inception, or the year in their Wikipedia title or first paragraph.")
-def export_wikidata_command(out, rejected, type_ids, limit, status, undated):
+def export_wikidata_command(out, rejected, type_ids, limit, status):
     """Export validated historical events from Wikidata to a CSV (no database changes).
 
-    Load the result with: flask --app haam haam import-csv seed/wikidata_events_places.csv
+    Load the result into a database with: flask --app haam haam sync-wikidata
     """
-    suffix = "undated" if undated else "places"
-    out = out or f"seed/wikidata_events_{suffix}.csv"
-    rejected = rejected or f"seed/wikidata_rejected_{suffix}.csv"
     from flask import current_app
     from sqlalchemy import select
 
@@ -91,7 +84,7 @@ def export_wikidata_command(out, rejected, type_ids, limit, status, undated):
     tag_names = db.session.scalars(select(Tag.name)).all()
     click.echo("Discovering candidates on Wikidata…")
     stats = export(client, out, rejected, type_ids=list(type_ids) or None, limit_per_type=limit,
-                   status=status, tag_names=tag_names, undated=undated, report=click.echo)
+                   status=status, tag_names=tag_names, report=click.echo)
     click.echo()
     click.echo(f"Accepted {stats.accepted} of {stats.candidates} candidates -> {out}")
     click.echo(f"Rejected {stats.rejected} -> {rejected}")
@@ -105,20 +98,23 @@ def export_wikidata_command(out, rejected, type_ids, limit, status, undated):
         raise SystemExit(1)
 
 
-@haam_cli.command("remove-events")
-@click.argument("path", type=click.Path(exists=True, dir_okay=False))
-@click.option("--reason", default="", help="Only rows whose reason column starts with this text.")
-@click.option("--dry-run", is_flag=True, help="Only count what would be removed.")
-def remove_events_command(path, reason, dry_run):
-    """Delete the events whose wikidata_id is listed in a CSV (e.g. a rejected file).
+@haam_cli.command("sync-wikidata")
+@click.argument("path", default="seed/wikidata_events.csv", type=click.Path(exists=True, dir_okay=False))
+@click.option("--dry-run", is_flag=True, help="Only show what would change.")
+def sync_wikidata_command(path, dry_run):
+    """Make the database's imported Wikidata events match the final CSV.
 
-    Example – the events placed at a country or region:
-    flask --app haam haam remove-events seed/wikidata_rejected_places.csv --reason "location is a country"
+    Adds events that are missing, removes imported events no longer in the file,
+    and sets every imported event's tags to the file's. Offline and safe to re-run.
+    Events submitted on the website, and events used in a collection, are never removed.
     """
-    stats = importer.remove_listed(path, reason=reason, dry_run=dry_run, report=click.echo)
-    click.echo(f"Done: {stats}")
+    stats = importer.sync_wikidata(path, dry_run=dry_run, report=click.echo)
+    prefix = "Would" if dry_run else "Done:"
+    click.echo(f"{prefix} add {stats.added}, remove {stats.removed}, re-tag {stats.retagged} events "
+               f"({stats.unchanged} already up to date; {stats.adopted} older rows linked to their Wikidata id)")
     if stats.kept_in_collections:
-        click.echo("Kept because they are used in a collection: " + "; ".join(stats.kept_in_collections))
+        click.echo("Kept although not in the file, because a collection uses them: "
+                   + "; ".join(stats.kept_in_collections))
 
 
 @haam_cli.command("retag-csv")
@@ -136,25 +132,6 @@ def retag_csv_command(paths):
         stats = retag_csv(client, path, report=click.echo)
         click.echo(f"  tagged {stats['tagged_before']} -> {stats['tagged_after']} of {stats['rows']} rows "
                    f"({stats['changed']} changed)")
-
-
-@haam_cli.command("retag-events")
-@click.option("--dry-run", is_flag=True, help="Only count what would change.")
-@click.option("--replace", is_flag=True,
-              help="Also remove tags the rules no longer give (imported events only; website submissions untouched).")
-def retag_events_command(dry_run, replace):
-    """Re-apply the tag rules to imported events with a Wikidata id (adds missing tags; --replace also removes)."""
-    from flask import current_app
-
-    from haam.tagging import retag_database
-    from haam.wikidata import WikidataClient
-
-    client = WikidataClient(current_app.config["HAAM_USER_AGENT"])
-    stats = retag_database(client, dry_run=dry_run, replace=replace, report=click.echo)
-    prefix = "Would change" if dry_run else "Changed"
-    click.echo(f"{prefix} {stats['events_changed']} events: +{stats['links_added']} tags, "
-               f"-{stats['links_removed']} tags; events with a tag: "
-               f"{stats['tagged_before']} -> {stats['tagged_after']} of {stats['events']}")
 
 
 @haam_cli.command("import-legacy")

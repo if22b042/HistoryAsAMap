@@ -395,13 +395,15 @@ def export(
     status: str = "approved",
     tag_names: Iterable[str] = (),
     batch_size: int = 500,
-    undated: bool = False,
+    undated: bool | None = None,
     report: Reporter = print,
 ) -> ExportStats:
     """Run the whole pipeline and write the two CSV files.
 
-    ``undated`` exports only the items without a point in time or start time,
-    which the normal export skips (see :meth:`WikidataClient.discover`).
+    By default both kinds of item are exported: those with a point in time or
+    start time, and those without one, dated from their end time, inception or
+    Wikipedia article. ``undated=False`` / ``True`` limits it to one kind (see
+    :meth:`WikidataClient.discover`).
     """
     stats = ExportStats()
     types = [t for t in EVENT_TYPES if not type_ids or t[0] in type_ids]
@@ -424,9 +426,12 @@ def export(
 
     # 1. discovery – the first type in EVENT_TYPES that finds an item wins
     candidates: dict[str, Candidate] = {}
+    kinds = [False, True] if undated is None else [undated]
     for qid, label, _ in types:
+        found = []
         try:
-            found = client.discover(qid, undated=undated)
+            for kind in kinds:
+                found += client.discover(qid, undated=kind)
         except (requests.RequestException, ValueError, KeyError) as exc:
             report(f"! {label}: discovery failed ({exc}); skipped")
             stats.failed_types.append(f"{label} ({qid})")
