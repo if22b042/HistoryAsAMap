@@ -593,6 +593,39 @@ function setTags(ids, { push = true } = {}) {
   renderTagChips();
   syncUrl(push);
   refilter();
+  zoomToTags();
+}
+
+// Choosing a tag flies the map to where its events are – but only for regional
+// tags (the Russo-Ukrainian War, the American Civil War), not worldwide ones
+// (World War II, the Cold War), where the whole map is the right view.
+const REGIONAL_LAT_SPAN = 30; // degrees: about a large country or a small continent
+const REGIONAL_LON_SPAN = 45;
+
+function quantile(sorted, q) {
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))];
+}
+
+function zoomToTags() {
+  if (!hasTags()) return;
+  const events = state.events.filter(tagMatch);
+  if (!events.length) return;
+  // The middle 80% of the events, so a few far-away ones (a strike abroad, an
+  // embassy treaty) don't make a regional war look worldwide.
+  const lats = events.map((e) => e.lat).sort((a, b) => a - b);
+  const lons = events.map((e) => e.lon).sort((a, b) => a - b);
+  const south = quantile(lats, 0.1);
+  const north = quantile(lats, 0.9);
+  const west = quantile(lons, 0.1);
+  const east = quantile(lons, 0.9);
+  if (north - south > REGIONAL_LAT_SPAN || east - west > REGIONAL_LON_SPAN) return; // worldwide
+  const filtersShown = !document.body.classList.contains("filters-hidden") && window.innerWidth > 768;
+  map.flyToBounds([[south, west], [north, east]], {
+    paddingTopLeft: [filtersShown ? 340 : 40, 40],
+    paddingBottomRight: [40, 60],
+    maxZoom: 7, // "vaguely": the region, not a street
+    duration: 0.9,
+  });
 }
 
 const addTag = (id) => setTags([...state.tagIds, id]);
