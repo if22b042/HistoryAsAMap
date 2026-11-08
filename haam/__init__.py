@@ -1,5 +1,6 @@
 """History As A Map – an interactive map of historical events from Wikipedia."""
 
+import hashlib
 import logging
 import os
 
@@ -31,9 +32,62 @@ def _config_name() -> str:
     return os.environ.get("HAAM_ENV", default)
 
 
+STATIC_MAX_AGE = 365 * 24 * 3600
+
+
+class HaamFlask(Flask):
+    """``url_for('static', ...)`` gives versioned URLs: /static/v/<build>/js/map.js.
+
+    The build id is a hash of every static file, so any change makes new URLs and
+    the files can be cached as immutable (by browsers and by Vercel's CDN). It is
+    part of the path, not a query string, so the relative imports between the
+    JavaScript modules (``./timeline.js``) stay on the same version.
+    """
+
+    static_build = ""
+
+    def url_for(self, endpoint, /, **values):
+        if endpoint == "static" and self.static_build:
+            endpoint = "versioned_static"
+            values["build"] = self.static_build
+        return super().url_for(endpoint, **values)
+
+
+def _static_build(folder: str) -> str:
+    digest = hashlib.sha1()
+    for root, dirs, files in sorted(os.walk(folder)):
+        dirs.sort()
+        for name in sorted(files):
+            path = os.path.join(root, name)
+            digest.update(os.path.relpath(path, folder).replace(os.sep, "/").encode())
+            with open(path, "rb") as file:
+                digest.update(file.read())
+    return digest.hexdigest()[:10]
+
+
+def _register_versioned_static(app: Flask) -> None:
+    from flask import send_from_directory
+
+    app.static_build = _static_build(app.static_folder)
+
+    # Any build id is accepted (an old page may still ask for its own): Vercel serves
+    # only the current files anyway, and the CDN caches each URL on its own.
+    @app.get("/static/v/<build>/<path:filename>", endpoint="versioned_static")
+    def versioned_static(build: str, filename: str):
+        response = send_from_directory(app.static_folder, filename, max_age=STATIC_MAX_AGE)
+        if build == app.static_build:
+            response.cache_control.public = True
+            response.cache_control.s_maxage = STATIC_MAX_AGE
+            response.cache_control.immutable = True
+        else:
+            response.cache_control.max_age = 0
+            response.cache_control.no_cache = True
+        return response
+
+
 def create_app(config_name: str | None = None) -> Flask:
     config = CONFIGS[config_name or _config_name()]
-    app = Flask(__name__, instance_path=str(INSTANCE_DIR))
+    app = HaamFlask(__name__, instance_path=str(INSTANCE_DIR))
     app.config.from_object(config)
 
     if not app.config.get("SECRET_KEY"):
@@ -62,6 +116,7 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(admin.bp)
     cli.register(app)
 
+    _register_versioned_static(app)
     _register_template_helpers(app)
     _register_error_pages(app)
     if app.config.get("AUTO_SETUP_DATABASE"):
