@@ -17,6 +17,17 @@ from haam.extensions import db
 from haam.dates import format_year
 
 
+EXCERPT_LENGTH = 140
+
+
+def make_excerpt(text: str | None) -> str:
+    """The first ``EXCERPT_LENGTH`` characters, cut at a word, with "…" when shortened."""
+    text = text or ""
+    if len(text) <= EXCERPT_LENGTH:
+        return text
+    return text[:EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -137,17 +148,14 @@ class Event(db.Model):
     def google_maps_url(self) -> str:
         return f"https://www.google.com/maps?q={self.lat},{self.lon}"
 
-    EXCERPT_LENGTH = 140
+    EXCERPT_LENGTH = EXCERPT_LENGTH
 
     @property
     def excerpt(self) -> str:
-        text = self.summary or ""
-        if len(text) <= self.EXCERPT_LENGTH:
-            return text
-        return text[: self.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+        return make_excerpt(self.summary)
 
     def to_list_dict(self) -> dict:
-        """Compact form for the map, which loads every approved event at once."""
+        """One event as an object: the old /api/events format (the map now uses haam.feed)."""
         return {
             "id": self.id,
             "title": self.title,
@@ -335,7 +343,7 @@ class CollectionEntry(db.Model):
     def to_map_dict(self) -> dict:
         """The shape of ``Event.to_list_dict`` (the main map's data), plus the full text and note."""
         summary = self.summary
-        excerpt = summary if len(summary) <= Event.EXCERPT_LENGTH else summary[:Event.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+        excerpt = make_excerpt(summary)
         return {
             "id": self.id,
             "title": self.title,

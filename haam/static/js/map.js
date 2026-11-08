@@ -1,7 +1,10 @@
 // Map page: loads approved events from the API, shows them as clustered markers
 // (or a heatmap), filters by year/category/tag/text and lists them below the map.
+// The events arrive in chunks (see events-data.js): the first one is drawn at
+// once and the others are added as they come in; everything works meanwhile.
 /* global L, noUiSlider */
 import { createTimeline } from "./timeline.js";
+import { chunkOrder, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
 
 // Map zoom when an event is picked in the search or on the timeline: 9 is twice
 // the scale of the earlier 8 (each zoom level doubles it), about a city.
@@ -17,7 +20,10 @@ const CATEGORY_LABELS = {
 };
 
 const state = {
-  events: [],
+  events: [], // loaded so far, sorted by year and title
+  total: 0, // events on the map once every chunk has arrived
+  loading: false, // chunks still on their way
+  textsLoading: false, // the short descriptions are still on their way
   eventsById: new Map(),
   markersById: new Map(),
   tagsById: new Map(),
@@ -60,13 +66,6 @@ function paintYearPill(pill, year) {
 
 // ------------------------------------------------------------------ helpers
 
-function formatYear(year) {
-  if (year === null || year === undefined) return "";
-  if (year < 0) return `${-year} BC`;
-  if (year < 1000) return `AD ${year}`;
-  return String(year);
-}
-
 /** Create an element with optional class and text (never parses HTML). */
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -85,12 +84,6 @@ function debounce(fn, ms) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), ms);
   };
-}
-
-async function getJson(url) {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
-  return response.json();
 }
 
 // ---------------------------------------------------------------------- map
@@ -262,7 +255,7 @@ function popupContent(event) {
   const box = el("div", "popup");
   box.append(el("strong", "popup-title", event.title));
   box.append(el("span", "popup-year", event.date || event.display_year));
-  box.append(el("p", "popup-summary", event.excerpt));
+  if (event.excerpt) box.append(el("p", "popup-summary", event.excerpt));
   const button = el("button", "popup-btn", "View details →");
   button.type = "button";
   button.addEventListener("click", () => showEvent(event.id));
@@ -744,7 +737,12 @@ function timelineRange() {
   };
 }
 
-function applyFilters() {
+/**
+ * Show the events that match the filters. ``added``: events that just arrived in a
+ * chunk while the filters stayed the same, so only their markers are added instead
+ * of rebuilding all of them.
+ */
+function applyFilters({ added = null } = {}) {
   // One pass: the events shown, and per tag how many events match the other filters.
   state.tagCounts = new Map();
   state.filtered = [];
@@ -756,12 +754,25 @@ function applyFilters() {
   updateTagOptions();
   syncUrl();
 
+  const colorRange = [state.colorFrom, state.colorTo];
+  updateColorRange();
+  const sameColors = !state.colorByYear || (colorRange[0] === state.colorFrom && colorRange[1] === state.colorTo);
+  if (added && !state.heatmap && sameColors) {
+    const markers = added.filter(matches).map((e) => {
+      const marker = state.markersById.get(e.id);
+      marker.setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
+      return marker;
+    });
+    clusters.addLayers(markers);
+    finishRender();
+    return;
+  }
+
   clusters.clearLayers();
   if (heatLayer) {
     map.removeLayer(heatLayer);
     heatLayer = null;
   }
-  updateColorRange();
   if (state.heatmap) {
     heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10 });
     heatLayer.addTo(map);
@@ -776,7 +787,11 @@ function applyFilters() {
     if (!map.hasLayer(selectedMarker)) selectedMarker.addTo(map);
     ringOn(selectedMarker);
   }
+  finishRender();
+}
 
+/** Everything around the markers: legend, timeline, count, list and search results. */
+function finishRender() {
   const showLegend = state.colorByYear && !state.heatmap;
   if (showLegend && !legend.getContainer()?.parentNode) legend.addTo(map);
   if (!showLegend && legend.getContainer()?.parentNode) legend.remove();
@@ -787,8 +802,10 @@ function applyFilters() {
   })), timelineRange());
 
   const total = state.events.length;
-  document.getElementById("result-count").textContent =
-    state.filtered.length === total ? `${total} events` : `${state.filtered.length} of ${total} events`;
+  const shown = state.filtered.length.toLocaleString();
+  let count = state.filtered.length === total ? `${total.toLocaleString()} events` : `${shown} of ${total.toLocaleString()} events`;
+  if (state.loading) count += " (still loading…)";
+  document.getElementById("result-count").textContent = count;
   renderList();
   renderSearchResults();
 }
@@ -801,7 +818,8 @@ function renderList() {
   const template = document.getElementById("event-card-template");
 
   if (!state.filtered.length) {
-    grid.replaceChildren(el("p", "empty-state", state.events.length ? "No events match the filters." : "No events yet."));
+    const empty = state.loading ? "Loading events…" : state.events.length ? "No events match the filters." : "No events yet.";
+    grid.replaceChildren(el("p", "empty-state", empty));
     return;
   }
 
