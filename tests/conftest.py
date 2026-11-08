@@ -1,3 +1,5 @@
+import importlib.util
+
 import pytest
 from sqlalchemy import text
 from werkzeug.security import generate_password_hash
@@ -8,6 +10,10 @@ from haam.models import Category, Event, Status, Tag
 from haam.wikipedia import Article, canonical_url
 
 ADMIN_PASSWORD = "correct horse battery staple"
+
+# The browser tests need pytest-playwright (requirements-e2e.txt); without it they are left out.
+if importlib.util.find_spec("pytest_playwright") is None:
+    collect_ignore = ["e2e"]
 
 
 class FakeWikipedia:

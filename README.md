@@ -255,3 +255,20 @@ The old tables (`entries`, `locations`, `tags`, `entry_tags`) are only read by
 Event text © Wikipedia contributors,
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Map data ©
 [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+
+## Browser tests (Playwright)
+
+`tests/e2e` drives the real app in Chromium: map filters, tags, search, event details and Back/Forward,
+collections, one round of the daily and the practice game, and approving an event as admin. A fixture builds a
+small SQLite database offline and serves the app on a free port; any browser console error fails a test.
+The pages still load Leaflet and friends from unpkg/cdnjs, so these tests need internet access; map tiles are stubbed.
+
+```bash
+pip install -r requirements-e2e.txt
+python -m playwright install chromium
+python -m pytest tests/e2e          # add --headed to watch, -m "not e2e" to skip them
+```
+
+Plain `pytest` leaves these tests out when pytest-playwright is not installed and skips them when Chromium is
+missing. CI runs them in the `e2e` job of `.github/workflows/tests.yml`. With little space on C:, set
+`PLAYWRIGHT_BROWSERS_PATH` (and `TEMP`/`TMP`) to another drive before installing and running.
