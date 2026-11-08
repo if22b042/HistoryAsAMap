@@ -1351,6 +1351,22 @@ async function init() {
 
   const requested = Number(new URLSearchParams(window.location.search).get("event"));
   if (requested && state.eventsById.has(requested)) showEvent(requested);
+  if (pendingShow !== null) showRequested(pendingShow);
 }
+
+// Other scripts (the welcome card) open an event with
+// document.dispatchEvent(new CustomEvent("haam:show-event", { detail: { id } })).
+// Before the events have loaded, the last request waits for them.
+let pendingShow = null;
+function showRequested(id) {
+  pendingShow = null;
+  if (state.eventsById.has(id)) showEvent(id, { zoom: 7 });
+}
+document.addEventListener("haam:show-event", (e) => {
+  const id = Number(e.detail?.id);
+  if (!id) return;
+  if (state.events.length) showRequested(id);
+  else pendingShow = id;
+});
 
 init();
