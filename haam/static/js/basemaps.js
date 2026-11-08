@@ -13,14 +13,11 @@ const MAX_ZOOM = 18;
 
 const isDark = () => document.documentElement.dataset.theme === "dark";
 const ESRI_CANVAS = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
-const grayCanvas = (layer) => () => `${ESRI_CANVAS}/World_${isDark() ? "Dark" : "Light"}_Gray_${layer}/MapServer/tile/{z}/{y}/{x}`;
-const ESRI_CANVAS_ATTRIBUTION = "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community";
 
-// url (and labels, an overlay with place names) may be a function of the theme:
-// those layers follow the theme toggle.
+// url may be a function of the theme: those layers follow the theme toggle.
 export const BASEMAPS = {
   street: {
-    label: "Street",
+    label: "Standard", // the site's original map
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     options: { attribution: OSM },
   },
@@ -39,23 +36,19 @@ export const BASEMAPS = {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     options: { attribution: "Imagery &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" },
   },
-  // Esri's light or dark gray canvas, with its place names on top.
-  minimal: {
-    label: "Minimal",
-    url: grayCanvas("Base"),
-    labels: grayCanvas("Reference"),
-    options: { maxNativeZoom: 16, attribution: ESRI_CANVAS_ATTRIBUTION },
-  },
-  // The same canvas without place names: the Game's map (which must not name
-  // the places the player is looking for), offered on the other maps too.
+  // Esri's light or dark gray canvas without place names: the Game's map (which
+  // must not name the places the player is looking for), offered everywhere.
   plain: {
     label: "Plain",
-    url: grayCanvas("Base"),
-    options: { maxNativeZoom: 16, attribution: ESRI_CANVAS_ATTRIBUTION },
+    url: () => `${ESRI_CANVAS}/World_${isDark() ? "Dark" : "Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+    options: {
+      maxNativeZoom: 16,
+      attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community",
+    },
   },
 };
 
-const DEFAULT_CHOICES = ["street", "terrain", "satellite", "minimal", "plain"];
+const DEFAULT_CHOICES = ["street", "terrain", "satellite", "plain"];
 
 function readChoice(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -71,16 +64,13 @@ function tileLayer(url, options) {
   return layer;
 }
 
-// The base map behind everything else, plus its label overlay if it has one.
 function createLayer(id) {
-  const { url, labels, options } = BASEMAPS[id];
-  const group = L.layerGroup([tileLayer(url, { ...options, zIndex: 0 })]);
-  if (labels) group.addLayer(tileLayer(labels, { ...options, attribution: "", zIndex: 1 }));
-  return group;
+  const { url, options } = BASEMAPS[id];
+  return tileLayer(url, options);
 }
 
 // Swatch colours that hint at each style in the menu.
-const SWATCH = { street: "#f2efe9", terrain: "#c9d8a6", satellite: "#3d5a3a", minimal: "#e5e7eb", plain: "#d4d4d4" };
+const SWATCH = { street: "#f2efe9", terrain: "#c9d8a6", satellite: "#3d5a3a", plain: "#d4d4d4" };
 
 const ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" '
   + 'stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="m2 13 10 5 10-5"/></svg>';
@@ -175,7 +165,7 @@ export function addBasemapSwitcher(map, { choices = DEFAULT_CHOICES, storageKey 
 
   // Theme-dependent styles switch to their light or dark tiles.
   new MutationObserver(() => {
-    Object.values(layers).forEach((group) => group.eachLayer((layer) => layer.followTheme?.()));
+    Object.values(layers).forEach((layer) => layer.followTheme?.());
   }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   return control;
