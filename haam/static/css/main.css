@@ -692,18 +692,73 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .danger-card { border-color: rgba(229, 62, 62, 0.4); }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1.5rem; }
 
-.manage-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.page.page-wide { max-width: 1280px; }
+/* Entries on the left; the add-forms and settings in a sticky column on the right. */
+.manage-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 1.25rem; align-items: start; }
+.manage-main { grid-column: 1; grid-row: 1; }
+.manage-side {
+  grid-column: 2;
+  grid-row: 1;
+  position: sticky;
+  top: calc(var(--nav-height) + 1rem);
+  max-height: calc(100vh - var(--nav-height) - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.fold { padding: 0; }
+.fold > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: "\25B8"; color: var(--text-muted); transition: transform 0.15s; }
+.fold[open] > summary::after { transform: rotate(90deg); }
+.fold > summary h2 { margin: 0; font-size: 1.05rem; }
+.fold > :not(summary) { margin-left: 1.25rem; margin-right: 1.25rem; }
+.fold > :last-child { margin-bottom: 1.25rem; }
+
+.entries-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+.entries-toolbar[hidden] { display: none; }
+.entries-filter { flex: 1 1 220px; }
+.entries-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-left: auto; }
+.entries-select { font-size: 0.85rem; color: var(--text-muted); }
+.entries-hint { margin: 0 0 0.25rem; }
+.entries-status { min-height: 1.3rem; margin: 0 0 0.25rem; font-size: 0.88rem; color: var(--text-muted); }
+.entries-status.success { color: var(--cat-scientific); }
+.entries-status.error { color: var(--cat-military); font-weight: 600; }
 .manage-entries { list-style: none; margin: 0; padding: 0; }
 .manage-entry {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 0.6rem;
-  padding: 0.75rem 0;
+  padding: 0.6rem 0.25rem;
   border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 .manage-entry:first-child { border-top: 0; }
+.manage-entry[hidden] { display: none; }
+.manage-entry:has(.entry-check:checked) { background: var(--accent-soft); }
+.manage-entry.is-busy { opacity: 0.45; pointer-events: none; }
+.manage-entry.is-dragging { opacity: 0.4; outline: 2px dashed var(--accent); }
+.drag-handle { cursor: grab; color: var(--text-muted); padding: 0.3rem 0.15rem; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
+.entry-check { width: 1.1rem; height: 1.1rem; flex: none; cursor: pointer; }
+.entry-number { min-width: 2ch; color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; text-align: right; }
+.entry-body { flex: 1; min-width: 0; }
+.entry-body .form-hint { margin: 0.2rem 0 0; }
+.entry-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.35rem; }
+.entry-actions .icon-btn { width: 30px; height: 30px; font-size: 0.8rem; }
+
+/* The one-tag search box (tag-combobox.js) */
+.tag-combo { position: relative; }
+.tag-combo-list { max-height: 18rem; }
+.tag-combo-chosen { margin: 0.35rem 0 0; }
+.tag-combo-chosen.chosen { color: var(--text-strong); font-weight: 600; }
 .picker-map { height: 260px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 0.5rem; z-index: 1; }
 .event-results { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; max-height: 16rem; overflow-y: auto; }
 .event-result {
@@ -769,6 +824,11 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
   }
   .form-row { grid-template-columns: 1fr; gap: 0; }
   .collection-layout, .manage-grid { grid-template-columns: 1fr; }
+  .manage-side, .manage-main { grid-column: 1; grid-row: auto; }
+  .manage-side { position: static; max-height: none; overflow: visible; }
+  .manage-entry { flex-wrap: wrap; }
+  .entry-body { flex-basis: calc(100% - 6rem); }
+  .entry-actions { flex-basis: 100%; }
   .collection-map { position: relative; top: 0; height: 50vh; }
   h1 { font-size: 1.6rem; }
 }

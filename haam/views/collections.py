@@ -32,11 +32,18 @@ def _collection_or_404(view_token: str):
     return collection
 
 
+def _wants_json() -> bool:
+    """A fetch() from the manage page (it asks for JSON) rather than a plain form submission."""
+    return request.accept_mimetypes.best_match(["text/html", "application/json"]) == "application/json"
+
+
 def _editable_or_redirect(view_token: str):
-    """The collection, if this browser may edit it; otherwise ``(None, redirect)``."""
+    """The collection, if this browser may edit it; otherwise ``(None, redirect)`` (403 for fetch)."""
     collection = _collection_or_404(view_token)
     if service.can_edit(collection):
         return collection, None
+    if _wants_json():
+        return None, (jsonify(error="Open the collection's edit link to change it."), 403)
     flash("Open the collection's edit link to change it.", "error")
     return None, redirect(url_for("collections.view", view_token=view_token))
 
@@ -57,7 +64,16 @@ def _tag_choices(first: str) -> list[tuple[int, str]]:
         .where(Event.status == Status.APPROVED).group_by(event_tags.c.tag_id)).all())
     tags = [t for t in db.session.scalars(select(Tag)) if counts.get(t.id)]
     tags.sort(key=lambda t: (t.sort_year, t.name))
-    return [(0, first)] + [(t.id, f"{t.name} ({t.display_range}) – {counts[t.id]:,} events") for t in tags]
+    # The extra attributes feed the searchable tag picker (tag-combobox.js); the label is for
+    # the plain <select> that is left without JavaScript.
+    return [(0, first, {})] + [
+        (t.id, f"{t.name} ({t.display_range}) – {_events(counts[t.id])}",
+         {"data-name": t.name, "data-range": t.display_range, "data-count": counts[t.id]})
+        for t in tags]
+
+
+def _events(count: int) -> str:
+    return f"{count:,} event{'' if count == 1 else 's'}"
 
 
 def _tag_message(result, tag_name: str) -> tuple[str, str]:
@@ -306,18 +322,96 @@ def edit_entry(view_token: str, entry_id: int):
                            form=form), 400 if form.errors else 200
 
 
+def _entries_done(view_token: str, message: str, collection, *, anchor_id: int | None = None, **data):
+    """Answer a change to the entry list: JSON for fetch(), else flash and back to the list."""
+    if _wants_json():
+        return jsonify(message=message, count=len(collection.entries), **data)
+    flash(message, "success")
+    anchor = f"entry-{anchor_id}" if anchor_id else "entries"
+    return redirect(url_for("collections.manage", view_token=view_token, _anchor=anchor))
+
+
+def _entries_error(view_token: str, message: str, status: int = 400):
+    if _wants_json():
+        return jsonify(error=message), status
+    flash(message, "error")
+    return redirect(url_for("collections.manage", view_token=view_token, _anchor="entries"))
+
+
+def _next_entry_id(collection, removed_ids: set[int]) -> int | None:
+    """The first entry after the first removed one that stays – where the no-JS page jumps back to."""
+    seen_removed = False
+    for entry in collection.entries:
+        if entry.id in removed_ids:
+            seen_removed = True
+        elif seen_removed:
+            return entry.id
+    return None
+
+
+def _remove(view_token: str, collection, entry_ids: list[int]):
+    if not ActionForm().validate_on_submit():
+        return _entries_error(view_token, "The form expired – reload the page and try again.")
+    anchor_id = _next_entry_id(collection, set(entry_ids))
+    # Read titles and ids now: removed rows can't be read after the commit.
+    chosen = [(entry.id, entry.title) for entry in collection.entries if entry.id in set(entry_ids)]
+    if not chosen:
+        return _entries_error(view_token, "Select the entries to remove first.")
+    service.remove_entries(collection, [entry_id for entry_id, _ in chosen])
+    message = f"Removed “{chosen[0][1]}”." if len(chosen) == 1 else f"Removed {len(chosen)} entries."
+    return _entries_done(view_token, message, collection, anchor_id=anchor_id,
+                         removed=[entry_id for entry_id, _ in chosen])
+
+
 @bp.post("/<view_token>/entries/<int:entry_id>/delete")
 def delete_entry(view_token: str, entry_id: int):
     collection, denied = _editable_or_redirect(view_token)
     if denied:
         return denied
+    if service.get_entry(collection, entry_id) is None:
+        abort(404)
+    return _remove(view_token, collection, [entry_id])
+
+
+@bp.post("/<view_token>/entries/remove")
+def remove_entries(view_token: str):
+    """Remove several entries at once (the checkboxes on the manage page)."""
+    collection, denied = _editable_or_redirect(view_token)
+    if denied:
+        return denied
+    return _remove(view_token, collection, request.form.getlist("entry_id", type=int))
+
+
+@bp.post("/<view_token>/entries/order")
+def reorder_entries(view_token: str):
+    """Save a new order (drag and drop): ``entry_id`` lists every entry once, first to last."""
+    collection, denied = _editable_or_redirect(view_token)
+    if denied:
+        return denied
+    if not ActionForm().validate_on_submit():
+        return _entries_error(view_token, "The form expired – reload the page and try again.")
+    try:
+        service.reorder_entries(collection, request.form.getlist("entry_id", type=int))
+    except CollectionError as error:
+        return _entries_error(view_token, error.message, 409)
+    return _entries_done(view_token, "Order saved.", collection)
+
+
+@bp.post("/<view_token>/entries/<int:entry_id>/move")
+def move_entry(view_token: str, entry_id: int):
+    """Move one entry a place up or down (the arrow buttons, also without JavaScript)."""
+    collection, denied = _editable_or_redirect(view_token)
+    if denied:
+        return denied
     entry = service.get_entry(collection, entry_id)
-    if entry is None or not ActionForm().validate_on_submit():
-        abort(400)
-    title = entry.title
-    service.remove_entry(entry)
-    flash(f"Removed “{title}”.", "success")
-    return redirect(url_for("collections.manage", view_token=view_token, _anchor="entries"))
+    if entry is None:
+        abort(404)
+    step = {"up": -1, "down": 1}.get(request.form.get("direction", ""))
+    if step is None or not ActionForm().validate_on_submit():
+        return _entries_error(view_token, "Choose up or down.")
+    service.move_entry_by(entry, step)
+    return _entries_done(view_token, f"Moved “{entry.title}” {request.form['direction']}.", collection,
+                         anchor_id=entry.id, position=entry.position)
 
 
 @bp.post("/<view_token>/delete")
