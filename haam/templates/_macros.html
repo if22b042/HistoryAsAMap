@@ -132,7 +132,7 @@
 {% macro tag_fields(form) %}
   <div class="form-group {{ 'has-error' if form.tag_id.errors }}">
     <label class="form-label" for="{{ form.tag_id.id }}"><i class="fas fa-tag" aria-hidden="true"></i> {{ form.tag_id.label.text }}</label>
-    {{ form.tag_id(class_='form-input') }}
+    {{ form.tag_id(class_='form-input', **{'data-tag-combobox': ''}) }}
     {{ field_errors(form.tag_id) }}
   </div>
   <div class="form-row">
