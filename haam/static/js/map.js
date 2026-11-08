@@ -1,6 +1,7 @@
 // Map page: loads approved events from the API, shows them as clustered markers
 // (or a heatmap), filters by year/category/tag/text and lists them below the map.
 /* global L, noUiSlider */
+import { createCollectionAdder } from "./collection-add.js";
 import { createTimeline } from "./timeline.js";
 
 // Map zoom when an event is picked in the search or on the timeline: 9 is twice
@@ -287,6 +288,8 @@ const detailsCache = new Map();
 const MAP_ELEMENT = document.getElementById("map");
 const EVENTS_URL = MAP_ELEMENT.dataset.eventsUrl || "/api/events";
 const FULL_TEXT = MAP_ELEMENT.dataset.fullText === "1";
+// "Add to collection": only on the main map (a collection's map has no URL for it).
+const collectionAdder = createCollectionAdder(MAP_ELEMENT.dataset.collectionsUrl);
 
 const safeWebUrl = (url) => (/^https?:\/\//.test(url || "") ? url : null);
 
@@ -370,6 +373,8 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   maps.rel = "noopener";
   actions.append(maps);
   parts.push(actions);
+  const adder = collectionAdder.control(id);
+  if (adder) parts.push(adder);
 
   state.openId = id;
   showSelection(event);
@@ -1172,6 +1177,11 @@ function renderSearchResults() {
     button.append(meta, title, excerpt);
     button.addEventListener("click", () => openResult(event.id));
     li.append(button);
+    const adder = collectionAdder.control(event.id, { compact: true });
+    if (adder) {
+      li.className = "search-item";
+      li.append(adder);
+    }
     return li;
   });
   if (results.length > resultsLimit) {
@@ -1316,6 +1326,7 @@ function setupFilterPanelToggle() {
 // -------------------------------------------------------------------- start
 
 async function init() {
+  collectionAdder.load();
   setupCategoryButtons();
   setupSearch();
   setupHeatmapToggle();

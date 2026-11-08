@@ -460,6 +460,49 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 .detail-summary { white-space: pre-line; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
 
+/* "Add to collection" (details panel and big-search results) */
+.collection-add { margin-top: 0.75rem; }
+.collection-menu {
+  display: grid;
+  margin-top: 0.4rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.collection-menu-label { margin: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.collection-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  color: var(--text);
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+.collection-menu-item:hover:not([disabled]), .collection-menu-item:focus-visible { background: var(--surface-alt); }
+.collection-menu-item[disabled] { cursor: default; color: var(--text-muted); }
+.collection-menu-item span:first-of-type { flex: 1; overflow-wrap: anywhere; }
+.collection-menu-note { font-size: 0.75rem; }
+.collection-menu-new { border-top: 1px solid var(--border); border-radius: 0 0 0.4rem 0.4rem; margin-top: 0.2rem; }
+.collection-in { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--text-muted); }
+.collection-add-status { margin: 0.35rem 0 0; font-size: 0.85rem; color: var(--success); }
+.collection-add-status:empty { display: none; }
+.collection-add-status.is-error { color: var(--error); }
+.search-item { display: grid; grid-template-columns: 1fr auto; align-items: start; column-gap: 0.25rem; }
+.collection-add-compact { display: contents; }
+.collection-add-compact .collection-add-toggle { margin-top: 0.45rem; }
+.collection-add-compact .collection-add-toggle.is-in { color: var(--success); }
+.collection-add-compact .collection-menu, .collection-add-compact .collection-add-status { grid-column: 1 / -1; margin: 0 0.6rem 0.4rem; }
+
 .scroll-to-list {
   position: absolute;
   left: 50%;
@@ -1285,3 +1328,6 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .game-year-scale { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.7rem; color: var(--text-muted); }
 .game-breakdown { margin: 0.1rem 0 0.3rem; font-size: 0.85rem; color: var(--text-muted); }
 .game-breakdown[hidden], .game-distance[hidden] { display: none; }
+
+/* "New collection with this event" */
+.first-entry { margin: 0 0 1rem; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); background: var(--accent-soft); }

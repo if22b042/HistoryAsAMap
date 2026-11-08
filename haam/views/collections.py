@@ -1,11 +1,12 @@
 """Map collections: gallery, creation, sharing and editing via secret links."""
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask_wtf.csrf import generate_csrf
 from sqlalchemy import func, select
 
 from haam import collections_service as service
 from haam.auth import is_admin
-from haam.collections_service import CollectionError, CustomEntryData
+from haam.collections_service import CollectionError, CustomEntryData, DuplicateEntry
 from haam.dates import format_year
 from haam.extensions import db
 from haam.forms import (ActionForm, CollectionForm, CustomEntryForm, EntryEventEditForm, EventEntryForm,
@@ -100,18 +101,48 @@ def index():
 def new():
     form = NewCollectionForm()
     form.tag_id.choices = _tag_choices("No – start empty")
+    # "New collection with this event" on the map links here with ?event=<id>.
+    first_event = db.session.get(Event, request.values.get("event", type=int) or 0)
+    if first_event is not None and first_event.status != Status.APPROVED:
+        first_event = None
     if form.validate_on_submit():
         collection, edit_token = service.create_collection(
             form.title.data, form.description.data or "", form.is_public.data)
         service.remember(collection, edit_token)
         flash("Collection created. Save your edit link somewhere safe – it is the only way to edit "
               "this collection from another browser.", "success")
+        if first_event is not None:
+            service.add_event(collection, first_event.id, "")
         tag = db.session.get(Tag, form.tag_id.data) if form.tag_id.data else None
         if tag is not None:
             result = service.add_tag_events(collection, tag.id, form.year_from.year, form.year_to.year)
             flash(*_tag_message(result, tag.name))
         return redirect(url_for("collections.manage", view_token=collection.view_token))
-    return render_template("collections/new.html", form=form), 400 if form.errors else 200
+    return render_template("collections/new.html", form=form, first_event=first_event),         400 if form.errors else 200
+
+
+@bp.get("/mine.json")
+def mine():
+    """The collections this browser may edit, for the map's "Add to collection" button."""
+    collections = service.my_collections()
+    event_ids = service.my_event_ids(collections)
+    response = jsonify({
+        # Only for browsers that can edit something: others get no session cookie from the map.
+        "csrf_token": generate_csrf() if collections else None,
+        "new_url": url_for("collections.new"),
+        "collections": [_mine_dict(c, event_ids[c.id]) for c in collections],
+    })
+    response.cache_control.no_store = True
+    return response
+
+
+def _mine_dict(collection, event_ids: list[int]) -> dict:
+    return {
+        "title": collection.title,
+        "url": url_for("collections.view", view_token=collection.view_token),
+        "add_url": url_for("collections.add_event_json", view_token=collection.view_token),
+        "event_ids": event_ids,
+    }
 
 
 @bp.errorhandler(410)
@@ -227,6 +258,28 @@ def add_event(view_token: str):
         return _render_manage(collection, event_form=form, status=400)
     flash(f"Added “{entry.title}”.", "success")
     return redirect(url_for("collections.manage", view_token=view_token, _anchor="entries"))
+
+
+@bp.post("/<view_token>/entries/event.json")
+def add_event_json(view_token: str):
+    """Add a main-map event from the map's details panel: ``{"event_id": 123}``.
+
+    CSRF is checked like every POST (the page sends the token in ``X-CSRFToken``).
+    """
+    collection = _collection_or_404(view_token)
+    if not service.can_edit(collection):
+        return jsonify(error="Open the collection's edit link to change it."), 403
+    event_id = (request.get_json(silent=True) or {}).get("event_id")
+    if not isinstance(event_id, int) or isinstance(event_id, bool):
+        return jsonify(error="Say which event to add."), 400
+    try:
+        entry = service.add_event(collection, event_id, "")
+    except DuplicateEntry as error:
+        return jsonify(error=error.message), 409
+    except CollectionError as error:
+        return jsonify(error=error.message), 400
+    return jsonify(message=f"Added “{entry.title}” to “{collection.title}”.",
+                   collection=_mine_dict(collection, service.my_event_ids([collection])[collection.id])), 201
 
 
 @bp.post("/<view_token>/entries/tag")
