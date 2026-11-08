@@ -521,7 +521,6 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 /* Satellite imagery keeps its colours and the gray canvas has a dark version:
    no darkening filter in dark mode. */
 :root[data-theme="dark"] .basemap-satellite .leaflet-tile-pane,
-:root[data-theme="dark"] .basemap-minimal .leaflet-tile-pane,
 :root[data-theme="dark"] .basemap-plain .leaflet-tile-pane { filter: none; }
 /* On satellite imagery a dark outline keeps markers and clusters readable. */
 .basemap-satellite .marker,
