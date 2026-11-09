@@ -75,7 +75,8 @@ def _register_versioned_static(app: Flask) -> None:
     @app.get("/static/v/<build>/<path:filename>", endpoint="versioned_static")
     def versioned_static(build: str, filename: str):
         response = send_from_directory(app.static_folder, filename, max_age=STATIC_MAX_AGE)
-        if build == app.static_build:
+        # Not while developing: the build id is taken at start-up, and edited files must show.
+        if build == app.static_build and app.config.get("STATIC_IMMUTABLE", True):
             response.cache_control.public = True
             response.cache_control.s_maxage = STATIC_MAX_AGE
             response.cache_control.immutable = True
