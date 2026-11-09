@@ -353,3 +353,68 @@ def test_article_problem(title, summary, problem):
     from haam.wikidata import article_problem
     result = article_problem(title, summary)
     assert (result is None) if problem is None else (problem in result)
+
+
+# ------------------------------------------------ the map's chunked feed (haam.feed)
+
+def _manifest(client):
+    import html
+    import re
+    page = client.get("/").get_data(as_text=True)
+    return json.loads(html.unescape(re.search(r"data-manifest='([^']*)'", page).group(1)))
+
+
+def test_feed_chunks_hold_every_approved_event_once(client, make_event):
+    from haam import feed
+    titles = [f"Battle {n}" for n in range(45)]
+    for n, title in enumerate(titles):
+        make_event(title=title, year=1000 + n, summary="word " * 50)
+    make_event(title="Pending", status=Status.PENDING)
+    manifest = _manifest(client)
+    assert manifest["total"] == 45 and manifest["years"] == [1000, 1044]
+    assert len(manifest["core"]) == len(manifest["text"]) == feed.CHUNKS
+    seen, excerpts = [], {}
+    for url in manifest["core"]:
+        chunk = client.get(url).json
+        assert chunk["year"] == sorted(chunk["year"])
+        assert all(w == "" for w in chunk["wiki"])  # the article is named like the event
+        seen += chunk["title"]
+    for url in manifest["text"]:
+        chunk = client.get(url).json
+        excerpts.update(zip(chunk["id"], chunk["excerpt"]))
+    assert sorted(seen) == sorted(titles)
+    assert len(excerpts) == 45 and all(e.endswith("…") and len(e) <= 141 for e in excerpts.values())
+
+
+def test_feed_is_immutable_until_the_events_change(client, make_event):
+    event = make_event()
+    manifest = _manifest(client)
+    url = manifest["core"][feed_chunk(manifest, event.id)]
+    response = client.get(url)
+    assert "immutable" in response.headers["Cache-Control"] and "s-maxage" in response.headers["Cache-Control"]
+    assert client.get(url, headers={"If-None-Match": response.headers["ETag"]}).status_code == 304
+
+    event.title = "Battle of Hastings (1066)"
+    from haam.extensions import db
+    db.session.commit()
+    changed = _manifest(client)
+    assert changed["version"] != manifest["version"]
+    stale = client.get(url)  # an old page asking for the old version: current data, not cached
+    assert "immutable" not in stale.headers["Cache-Control"]
+    assert stale.json["title"] == ["Battle of Hastings (1066)"]
+
+
+def feed_chunk(manifest, event_id):
+    residue = event_id % manifest["modulus"]
+    bounds = manifest["bounds"]
+    return next(i for i in range(len(bounds) - 1) if bounds[i] <= residue < bounds[i + 1])
+
+
+def test_static_files_get_versioned_immutable_urls(client):
+    page = client.get("/").get_data(as_text=True)
+    assert "/static/v/" in page
+    import re
+    url = re.search(r'src="(/static/v/[^"]+/js/map\.js)"', page).group(1)
+    response = client.get(url)
+    assert response.status_code == 200 and "immutable" in response.headers["Cache-Control"]
+    assert client.get("/static/js/map.js").status_code == 200  # old links keep working

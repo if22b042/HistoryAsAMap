@@ -1,8 +1,8 @@
 """Pages for visitors: the map, the about page and the submission flow."""
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, url_for
 
-from haam import events
+from haam import events, feed
 from haam.dates import format_year
 from haam.events import EventData, EventError
 from haam.forms import EventForm, LinkForm
@@ -13,7 +13,8 @@ bp = Blueprint("public", __name__)
 
 @bp.get("/")
 def index():
-    return render_template("map.html")
+    # The map starts loading its chunks straight away, without asking for the manifest.
+    return render_template("map.html", manifest=feed.manifest(url_for))
 
 
 @bp.get("/about")
