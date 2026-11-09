@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_badges, collection_badges, category_badge, copy_field %}
 {% block title %}{{ collection.title }}{% endblock %}
+{% block description %}{{ (collection.description or 'A personal map of history: ' ~ collection.entries|length ~ ' entries' ~ (', ' ~ collection.year_span if collection.year_span else '') ~ '.')|describe }}{% endblock %}
 
 {% block head %}
   <meta name="robots" content="noindex, nofollow">

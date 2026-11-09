@@ -48,10 +48,15 @@ class Config:
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
 
+    # Public address used in canonical links, share previews and the sitemap.
+    # Empty means "the address of the current request".
+    SITE_URL = os.environ.get("SITE_URL", "https://history-as-a-map.vercel.app").rstrip("/")
+
 
 class DevelopmentConfig(Config):
     SECRET_KEY = Config.SECRET_KEY or "dev-only-secret-key"
     SESSION_COOKIE_SECURE = False
+    SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
 
 
 class TestingConfig(Config):
@@ -64,6 +69,7 @@ class TestingConfig(Config):
     SESSION_COOKIE_SECURE = False
     GEOCODING_ENABLED = False
     AUTO_SETUP_DATABASE = False  # tests build their own schema
+    SITE_URL = "https://haam.test"
 
 
 CONFIGS = {
