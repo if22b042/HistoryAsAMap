@@ -182,7 +182,7 @@ def test_migration_moves_listed_events_and_downgrades(tmp_path, monkeypatch):
         upgrade(directory=str(MIGRATIONS))
         assert categories() == {"fire": "disaster", "massacre": "violence", "own": "natural",
                                 "edited": "military", "website": "natural"}
-        downgrade(directory=str(MIGRATIONS), revision="c3f1d2a4b5e6")
+        downgrade(directory=str(MIGRATIONS), revision="d4e5f6a7b8c9")
         assert categories() == {"fire": "natural", "massacre": "other", "own": "natural",
                                 "edited": "military", "website": "natural"}
         db.session.remove()
