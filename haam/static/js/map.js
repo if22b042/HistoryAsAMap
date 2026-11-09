@@ -364,11 +364,18 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   actions.append(maps);
   parts.push(actions);
 
+  const newEvent = state.openId !== id;
   state.openId = id;
   showSelection(event);
   sidebarContent.replaceChildren(...parts);
+  const wasHidden = sidebar.hidden;
   sidebar.hidden = false;
   document.body.classList.add("sidebar-open");
+  if (isPhone()) {
+    setFiltersOpen(false);
+    if (newEvent) sidebarContent.scrollTop = 0;
+    openSheet(wasHidden);
+  }
 
   const url = new URL(window.location);
   url.searchParams.set("event", id);
@@ -376,7 +383,7 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
 
   if (fly) {
     map.closePopup();
-    map.flyTo([event.lat, event.lon], Math.max(map.getZoom(), zoom), { duration: 0.8 });
+    flyToVisible([event.lat, event.lon], Math.max(map.getZoom(), zoom), { duration: 0.8 });
   }
   timeline.setActive(id);
 }
@@ -421,6 +428,7 @@ function closeSidebar() {
   state.openId = null;
   sidebar.hidden = true;
   document.body.classList.remove("sidebar-open");
+  resetSheet();
   const url = new URL(window.location);
   url.searchParams.delete("event");
   history.replaceState(null, "", url);
@@ -428,8 +436,230 @@ function closeSidebar() {
 
 document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !e.defaultPrevented && !sidebar.hidden) closeSidebar();
+  if (e.key !== "Escape" || e.defaultPrevented) return;
+  if (isPhone() && document.body.classList.contains("filters-open")) setFiltersOpen(false);
+  else if (!sidebar.hidden) closeSidebar();
 });
+
+// ------------------------------------------------------------ phone layout
+// Up to 860px wide the filters are a drawer over the map and the details a bottom
+// sheet: "peek" shows the date and title, "full" the whole text. The sheet has a
+// fixed height and slides with a transform; the map flies so the event lands in
+// the part of the map the sheet leaves free.
+
+const phoneQuery = window.matchMedia("(max-width: 860px)");
+const isPhone = () => phoneQuery.matches;
+const FAB_SPACE = 56; // px at the top of the map taken by the floating buttons
+const sheet = { state: "closed" }; // "closed" | "peek" | "full"
+
+const sheetHeight = () => sidebar.offsetHeight;
+
+/** Height of the peek: the sheet down to just below the event's title. */
+function peekHeight() {
+  const title = sidebarContent.querySelector(".detail-title");
+  if (!title) return Math.min(120, sheetHeight());
+  const below = title.getBoundingClientRect().bottom - sidebar.getBoundingClientRect().top;
+  return Math.min(sheetHeight(), Math.round(below + 12));
+}
+
+function sheetOffset(stateName) {
+  if (stateName === "full") return 0;
+  if (stateName === "peek") return sheetHeight() - peekHeight();
+  return sheetHeight();
+}
+
+function placeSheet(y, animate) {
+  sidebar.classList.toggle("sheet-animating", animate);
+  sidebar.style.transform = typeof y === "number" ? `translateY(${Math.round(y)}px)` : `translateY(${y})`;
+}
+
+// Relative to the sheet's own height, which grows when the full text arrives.
+const SHEET_POSITION = { full: "0px", peek: () => `calc(100% - ${peekHeight()}px)`, closed: "100%" };
+
+function setSheet(stateName, { animate = true } = {}) {
+  sheet.state = stateName;
+  sidebar.classList.toggle("sheet-peek", stateName === "peek");
+  const position = SHEET_POSITION[stateName];
+  placeSheet(typeof position === "function" ? position() : position, animate);
+  // The zoom buttons and the timeline move up above the peek.
+  MAP_ELEMENT.style.setProperty("--sheet-covered", `${peekHeight()}px`);
+}
+
+/** Show the sheet for a newly shown event: slide in to the peek, or keep its state. */
+function openSheet(fromClosed) {
+  if (fromClosed || sheet.state === "closed") {
+    placeSheet("100%", false);
+    void sidebar.offsetHeight; // start the slide from below the screen
+    setSheet("peek");
+  } else {
+    setSheet(sheet.state, { animate: false });
+  }
+}
+
+function resetSheet() {
+  sheet.state = "closed";
+  sidebar.classList.remove("sheet-peek", "sheet-animating");
+  sidebar.style.transform = "";
+  MAP_ELEMENT.style.removeProperty("--sheet-covered");
+}
+
+/** Pixels at the bottom of the map hidden by the sheet or the filter drawer. */
+function coveredBottom() {
+  if (!isPhone()) return 0;
+  let visible = 0;
+  if (!sidebar.hidden && sheet.state !== "closed") visible = sheet.state === "full" ? sheetHeight() : peekHeight();
+  if (document.body.classList.contains("filters-open")) {
+    visible = Math.max(visible, document.getElementById("filters").offsetHeight);
+  }
+  const rect = MAP_ELEMENT.getBoundingClientRect();
+  const covered = rect.bottom - (window.innerHeight - visible);
+  return Math.max(0, Math.min(covered, rect.height - FAB_SPACE - 40));
+}
+
+/** flyTo, but on a phone the target lands in the middle of the part of the map that is free. */
+function flyToVisible(latlng, zoom, options) {
+  const shift = isPhone() ? (coveredBottom() - FAB_SPACE) / 2 : 0;
+  if (!shift) {
+    map.flyTo(latlng, zoom, options);
+    return;
+  }
+  const point = map.project(latlng, zoom).add([0, shift]);
+  map.flyTo(map.unproject(point, zoom), zoom, options);
+}
+
+/** After the sheet changed size: pan, if needed, so the open event stays in sight. */
+function keepOpenEventVisible() {
+  const event = state.openId !== null && state.eventsById.get(state.openId);
+  if (!event) return;
+  const point = map.latLngToContainerPoint([event.lat, event.lon]);
+  const bottom = MAP_ELEMENT.clientHeight - coveredBottom();
+  if (point.y >= FAB_SPACE && point.y <= bottom - 24) return;
+  map.panBy([0, point.y - (FAB_SPACE + bottom) / 2], { duration: 0.3 });
+}
+
+function changeSheet(stateName) {
+  if (stateName === "closed") {
+    const closing = state.openId;
+    placeSheet("100%", true);
+    setTimeout(() => { if (state.openId === closing) closeSidebar(); }, 280);
+    return;
+  }
+  setSheet(stateName);
+  keepOpenEventVisible();
+}
+
+// Drag the sheet by its handle (or anywhere while it only peeks); a flick or the
+// nearest position decides where it settles. A tap on the peek opens it fully.
+let drag = null;
+let suppressClick = false;
+const DRAG_START = 6; // px before a touch counts as a drag
+const FLICK = 0.5; // px per ms
+
+sidebar.addEventListener("pointerdown", (e) => {
+  if (!isPhone() || sheet.state === "closed" || (e.pointerType === "mouse" && e.button !== 0)) return;
+  const onHeader = Boolean(e.target.closest(".sidebar-header"));
+  if (!onHeader && sheet.state !== "peek") return; // the full sheet scrolls its text instead
+  if (e.target.closest("button, a, input, select")) return;
+  const offset = sheetOffset(sheet.state);
+  drag = { id: e.pointerId, startY: e.clientY, offset, y: offset, lastY: e.clientY, lastT: e.timeStamp, v: 0, moved: false };
+});
+
+window.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dy = e.clientY - drag.startY;
+  if (!drag.moved) {
+    if (Math.abs(dy) < DRAG_START) return;
+    drag.moved = true;
+    sidebar.setPointerCapture(e.pointerId);
+  }
+  const dt = Math.max(1, e.timeStamp - drag.lastT);
+  drag.v = (e.clientY - drag.lastY) / dt;
+  drag.lastY = e.clientY;
+  drag.lastT = e.timeStamp;
+  drag.y = Math.max(0, drag.offset + dy);
+  placeSheet(drag.y, false);
+});
+
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const { moved, y, v } = drag;
+  drag = null;
+  if (!moved) return;
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 0);
+  if (e.type === "pointercancel") {
+    setSheet(sheet.state);
+    return;
+  }
+  const positions = { full: 0, peek: sheetOffset("peek"), closed: sheetHeight() };
+  let target;
+  if (v > FLICK) target = y < positions.peek ? "peek" : "closed";
+  else if (v < -FLICK) target = "full";
+  else {
+    target = Object.keys(positions).reduce((best, name) =>
+      (Math.abs(positions[name] - y) < Math.abs(positions[best] - y) ? name : best), "full");
+  }
+  changeSheet(target);
+}
+// On the window: a mouse that leaves the sheet before the drag starts is not captured yet.
+window.addEventListener("pointerup", endDrag);
+window.addEventListener("pointercancel", endDrag);
+
+sidebar.addEventListener("click", (e) => {
+  if (suppressClick) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if (!isPhone() || e.target.closest("button, a, input, select")) return;
+  if (sheet.state === "peek") changeSheet("full");
+  else if (sheet.state === "full" && e.target.closest(".sidebar-header")) changeSheet("peek");
+}, true);
+
+function setFiltersOpen(open) {
+  document.body.classList.toggle("filters-open", open);
+  document.querySelector(".filters-fab")?.setAttribute("aria-expanded", String(open));
+}
+
+// A tap on the free part of the map closes the drawer.
+map.on("click", () => { if (isPhone()) setFiltersOpen(false); });
+
+// Popups pan clear of the floating buttons (read when a popup opens, from the defaults).
+function updatePopupPadding() {
+  L.Popup.prototype.options.autoPanPaddingTopLeft = isPhone() ? L.point(5, FAB_SPACE + 5) : null;
+}
+updatePopupPadding();
+
+// Turning the phone or resizing the window: put the sheet where it belongs.
+phoneQuery.addEventListener("change", () => {
+  updatePopupPadding();
+  setFiltersOpen(false);
+  if (!isPhone()) resetSheet();
+  else if (!sidebar.hidden) openSheet(true);
+});
+window.addEventListener("resize", debounce(() => {
+  if (isPhone() && !sidebar.hidden && sheet.state !== "closed") setSheet(sheet.state, { animate: false });
+}, 150));
+
+/** The phone's Filters button says how many filters are on; the drawer's button how many events. */
+function updateFilterSummary() {
+  const slider = document.getElementById("year-slider")?.noUiSlider;
+  let active = 0;
+  if (state.category !== "all") active += 1;
+  if (state.tagIds.length) active += 1;
+  if (state.queryText) active += 1;
+  if (slider) {
+    const { min, max } = slider.options.range;
+    if (state.yearFrom > min || state.yearTo < max) active += 1;
+  }
+  const fab = document.querySelector(".filters-fab");
+  if (fab) {
+    fab.querySelector("[data-filters-label]").textContent = active ? `Filters (${active} active)` : "Filters";
+    fab.classList.toggle("has-active", active > 0);
+  }
+  const count = document.querySelector("[data-filters-done-count]");
+  if (count) count.textContent = state.filtered.length === 1 ? "1 event" : `${state.filtered.length} events`;
+}
 
 // -------------------------------------------------------------- filtering
 
@@ -613,10 +843,10 @@ function zoomToTags() {
   const west = quantile(lons, 0.1);
   const east = quantile(lons, 0.9);
   if (north - south > REGIONAL_LAT_SPAN || east - west > REGIONAL_LON_SPAN) return; // worldwide
-  const filtersShown = !document.body.classList.contains("filters-hidden") && window.innerWidth > 768;
+  const filtersShown = !document.body.classList.contains("filters-hidden") && !isPhone();
   map.flyToBounds([[south, west], [north, east]], {
-    paddingTopLeft: [filtersShown ? 340 : 40, 40],
-    paddingBottomRight: [40, 60],
+    paddingTopLeft: [filtersShown ? 340 : 40, isPhone() ? FAB_SPACE : 40],
+    paddingBottomRight: [40, 60 + coveredBottom()],
     maxZoom: 7, // "vaguely": the region, not a street
     duration: 0.9,
   });
@@ -807,6 +1037,7 @@ function finishRender() {
   let count = state.filtered.length === total ? `${total.toLocaleString()} events` : `${shown} of ${total.toLocaleString()} events`;
   if (state.loading) count += " (still loading…)";
   document.getElementById("result-count").textContent = count;
+  updateFilterSummary();
   renderList();
   renderSearchResults();
 }
@@ -1355,6 +1586,10 @@ function setupColorToggle() {
 function setupFilterPanelToggle() {
   document.querySelectorAll("[data-toggle-filters]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (isPhone()) {
+        setFiltersOpen(!document.body.classList.contains("filters-open"));
+        return;
+      }
       document.body.classList.toggle("filters-hidden");
       setTimeout(() => map.invalidateSize(), 310);
     });
