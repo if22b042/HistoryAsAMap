@@ -247,6 +247,13 @@
     <div class="tag-selection tag-selection-wide" data-tag-chips hidden aria-live="polite"></div>
     <p class="tag-search-hint">Click a tag on an event to show only that tag; Ctrl- or Shift-click adds it.</p>
   </div>
+  <div class="list-sort" role="group" aria-label="Sort the events">
+    <span class="list-sort-label">Sort</span>
+    <button type="button" class="list-sort-btn active" data-sort="oldest" aria-pressed="true">
+      <i class="fas fa-arrow-up-1-9" aria-hidden="true"></i> Oldest first</button>
+    <button type="button" class="list-sort-btn" data-sort="newest" aria-pressed="false">
+      <i class="fas fa-arrow-down-9-1" aria-hidden="true"></i> Newest first</button>
+  </div>
   <div class="events-grid" id="events-grid" aria-live="polite">
     <p class="empty-state">Loading events…</p>
   </div>
