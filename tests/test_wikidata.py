@@ -319,7 +319,7 @@ def test_event_list_is_compact_and_details_are_separate(client, make_event):
     event = make_event(summary="word " * 100)
     pending = make_event(title="Pending", status=Status.PENDING)
     item = client.get("/api/events").json[0]
-    assert "summary" not in item and len(item["excerpt"]) <= 141 and item["excerpt"].endswith("…")
+    assert "summary" not in item and len(item["excerpt"]) <= Event.EXCERPT_LENGTH + 1 and item["excerpt"].endswith("…")
     assert client.get(f"/api/events/{event.id}").json["summary"].startswith("word word")
     assert client.get(f"/api/events/{pending.id}").status_code == 404
 
@@ -368,7 +368,7 @@ def test_feed_chunks_hold_every_approved_event_once(client, make_event):
     from haam import feed
     titles = [f"Battle {n}" for n in range(45)]
     for n, title in enumerate(titles):
-        make_event(title=title, year=1000 + n, summary="word " * 50)
+        make_event(title=title, year=1000 + n, summary="word " * 100)
     make_event(title="Pending", status=Status.PENDING)
     manifest = _manifest(client)
     assert manifest["total"] == 45 and manifest["years"] == [1000, 1044]
@@ -383,7 +383,7 @@ def test_feed_chunks_hold_every_approved_event_once(client, make_event):
         chunk = client.get(url).json
         excerpts.update(zip(chunk["id"], chunk["excerpt"]))
     assert sorted(seen) == sorted(titles)
-    assert len(excerpts) == 45 and all(e.endswith("…") and len(e) <= 141 for e in excerpts.values())
+    assert len(excerpts) == 45 and all(e.endswith("…") and len(e) <= Event.EXCERPT_LENGTH + 1 for e in excerpts.values())
 
 
 def test_feed_is_immutable_until_the_events_change(client, make_event):
