@@ -3,6 +3,7 @@
 // The events arrive in chunks (see events-data.js): the first one is drawn at
 // once and the others are added as they come in; everything works meanwhile.
 /* global L, noUiSlider */
+import { createCollectionAdder } from "./collection-add.js";
 import { createTimeline } from "./timeline.js";
 import { chunkOrder, compareEvents, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
 
@@ -280,6 +281,8 @@ const detailsCache = new Map();
 const MAP_ELEMENT = document.getElementById("map");
 const EVENTS_URL = MAP_ELEMENT.dataset.eventsUrl || "/api/events";
 const FULL_TEXT = MAP_ELEMENT.dataset.fullText === "1";
+// "Add to collection": only on the main map (a collection's map has no URL for it).
+const collectionAdder = createCollectionAdder(MAP_ELEMENT.dataset.collectionsUrl);
 
 const safeWebUrl = (url) => (/^https?:\/\//.test(url || "") ? url : null);
 
@@ -363,6 +366,8 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   maps.rel = "noopener";
   actions.append(maps);
   parts.push(actions);
+  const adder = collectionAdder.control(id);
+  if (adder) parts.push(adder);
 
   const newEvent = state.openId !== id;
   state.openId = id;
@@ -1451,6 +1456,11 @@ function renderSearchResults() {
     button.append(meta, title, excerpt);
     button.addEventListener("click", () => openResult(event.id));
     li.append(button);
+    const adder = collectionAdder.control(event.id, { compact: true });
+    if (adder) {
+      li.className = "search-item";
+      li.append(adder);
+    }
     return li;
   });
   if (results.length > resultsLimit) {
@@ -1743,6 +1753,7 @@ async function loadSingle() {
 }
 
 async function init() {
+  collectionAdder.load();
   setupCategoryButtons();
   setupSearch();
   setupHeatmapToggle();
