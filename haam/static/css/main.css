@@ -745,28 +745,7 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
   .nav-link { justify-content: center; padding: 0.75rem; width: 100%; }
   .nav-form .nav-link { width: 100%; }
 
-  .map-layout { height: auto; min-height: 0; display: flex; flex-direction: column; }
-  .map { position: relative; height: 60vh; order: 1; }
-  .filters {
-    position: static;
-    order: 2;
-    width: auto;
-    margin: 1rem;
-    box-shadow: var(--shadow-sm);
-    transform: none !important;
-  }
-  .filters-close, .show-filters-btn, .scroll-to-list { display: none; }
-  .sidebar {
-    position: fixed;
-    top: auto;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: auto;
-    max-height: 70vh;
-    border-radius: var(--radius) var(--radius) 0 0;
-    z-index: 1200;
-  }
+  /* the map page's phone layout is at the end of this file */
   .form-row { grid-template-columns: 1fr; gap: 0; }
   .collection-layout, .manage-grid { grid-template-columns: 1fr; }
   .collection-map { position: relative; top: 0; height: 50vh; }
@@ -1285,3 +1264,135 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .game-year-scale { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.7rem; color: var(--text-muted); }
 .game-breakdown { margin: 0.1rem 0 0.3rem; font-size: 0.85rem; color: var(--text-muted); }
 .game-breakdown[hidden], .game-distance[hidden] { display: none; }
+
+/* ------------------------------------------------- map page on a phone */
+/* The map fills the screen; the filters are a drawer that slides up from the bottom,
+   and the event details are a bottom sheet with a short "peek" state (date and title)
+   that can be dragged up or swiped away. map.js places the sheet. */
+.filters-fab, .filters-done, .sheet-handle { display: none; }
+
+@media (max-width: 860px) {
+  .map-layout { height: calc(100vh - var(--nav-height)); height: calc(100dvh - var(--nav-height)); min-height: 360px; }
+
+  /* floating over the map: Filters top left, All events top right, Timeline bottom left */
+  .show-filters-btn { display: none; }
+  .filters-fab {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    height: 40px;
+    padding: 0 0.95rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-strong);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  .filters-fab i { color: var(--accent); }
+  .filters-fab.has-active { background: var(--accent); color: #fff; }
+  .filters-fab.has-active i { color: #fff; }
+  .scroll-to-list,
+  .timeline-open .scroll-to-list {
+    display: inline-flex;
+    top: 0.75rem;
+    right: 0.75rem;
+    bottom: auto;
+    left: auto;
+    height: 40px;
+    padding: 0 0.95rem;
+    font-size: 0.9rem;
+    transform: none;
+  }
+  .scroll-to-list:hover { transform: none; }
+
+  /* Bottom controls and the timeline stay above the sheet's peek. */
+  .page-map .map .leaflet-bottom { bottom: var(--sheet-covered, 0px); }
+  .page-map .map.has-timeline .leaflet-bottom { bottom: calc(var(--timeline-height, 0px) + var(--sheet-covered, 0px) + 0.5rem); }
+  .page-map .timeline-toggle,
+  .page-map:not(.filters-hidden) .timeline-toggle { left: 0.75rem; bottom: calc(var(--sheet-covered, 0px) + 0.75rem); }
+  .page-map .timeline-panel,
+  .page-map:not(.filters-hidden) .timeline-panel { left: 0.5rem; right: 0.5rem; bottom: calc(var(--sheet-covered, 0px) + 0.5rem); }
+
+  /* the filter drawer */
+  .filters,
+  .filters-hidden .filters {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1250;
+    width: auto;
+    max-height: 75vh;
+    max-height: 75dvh;
+    padding-bottom: 0;
+    border-bottom: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+    overscroll-behavior: contain;
+    transform: translateY(105%);
+    visibility: hidden;
+    transition: transform 0.3s ease, visibility 0s linear 0.3s;
+  }
+  body.filters-open .filters { transform: none; visibility: visible; transition: transform 0.3s ease; }
+  .filters-close i { transform: rotate(-90deg); }
+  .filters-done {
+    display: block;
+    position: sticky;
+    bottom: 0;
+    width: calc(100% + 2.2rem);
+    margin: 0.25rem -1.1rem 0;
+    padding: 0.9rem 1rem;
+    border-radius: 0;
+  }
+
+  /* the details sheet */
+  .sidebar {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1200;
+    width: auto;
+    max-height: 70vh;
+    max-height: 70dvh;
+    border-bottom: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+    transform: translateY(100%);
+  }
+  .sidebar.sheet-animating { transition: transform 0.28s ease; }
+  .sidebar-header {
+    position: relative;
+    justify-content: flex-end;
+    padding: 0.55rem 0.6rem 0;
+    background: var(--surface);
+    color: var(--text);
+    cursor: grab;
+    touch-action: none;
+  }
+  .sidebar-header h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sheet-handle {
+    display: block;
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    width: 40px;
+    height: 5px;
+    margin-left: -20px;
+    border-radius: 3px;
+    background: var(--border);
+  }
+  .sidebar-content { padding-top: 0; overscroll-behavior: contain; }
+  .sidebar.sheet-peek .sidebar-content { overflow: hidden; touch-action: none; cursor: pointer; }
+}
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .filters, .filters-hidden .filters, body.filters-open .filters, .sidebar.sheet-animating { transition: none; }
+}
