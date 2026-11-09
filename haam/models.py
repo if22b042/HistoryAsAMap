@@ -17,7 +17,7 @@ from haam.extensions import db
 from haam.dates import format_year, month_day
 
 
-EXCERPT_LENGTH = 140
+EXCERPT_LENGTH = 300  # chosen from the analysis on branch analysis/excerpt-length-eval
 
 
 def make_excerpt(text: str | None) -> str:
