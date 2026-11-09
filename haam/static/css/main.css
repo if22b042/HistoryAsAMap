@@ -1430,15 +1430,26 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
   0% { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.3), 0 0 0 3px color-mix(in srgb, var(--ring-color) 55%, transparent); }
   100% { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.3), 0 0 0 18px color-mix(in srgb, var(--ring-color) 0%, transparent); }
 }
-/* main map, event still bundled: its cluster pulses (`scale` leaves Leaflet's transform alone) */
-.leaflet-marker-icon.cluster-selected { animation: cluster-selected-pulse 1.4s ease-in-out infinite; }
+/* main map, event still bundled: a ring around its cluster pulses. The ring is a
+   pseudo-element: scaling the cluster itself (`scale` or `transform`) would also
+   scale Leaflet's translate3d position, flinging the cluster across the map. */
+.leaflet-marker-icon.cluster-selected { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 3px #111; }
+.leaflet-marker-icon.cluster-selected::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 3px solid rgba(17, 17, 17, 0.6);
+  pointer-events: none;
+  animation: cluster-selected-pulse 1.4s ease-out infinite;
+}
 @keyframes cluster-selected-pulse {
-  0%, 100% { scale: 1; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(17, 17, 17, 0.45); }
-  50% { scale: 1.2; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 8px rgba(17, 17, 17, 0); }
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .leaflet-marker-icon.marker-selected::after { animation: none; }
-  .leaflet-marker-icon.cluster-selected { animation: none; outline: 3px solid #111; outline-offset: 3px; }
+  .leaflet-marker-icon.cluster-selected::after { animation: none; }
 }
 
 /* Game hard mode: the switch and the year picker */
