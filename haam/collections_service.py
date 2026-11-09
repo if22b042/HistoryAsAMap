@@ -36,6 +36,10 @@ class CollectionError(Exception):
         self.message = message
 
 
+class DuplicateEntry(CollectionError):
+    """The event is already in the collection."""
+
+
 @dataclass
 class CustomEntryData:
     title: str
@@ -102,6 +106,18 @@ def my_collections() -> list[Collection]:
         return []
     found = db.session.scalars(select(Collection).where(Collection.id.in_(ids))).all()
     return sorted((c for c in found if can_edit(c)), key=lambda c: c.updated_at, reverse=True)
+
+
+def my_event_ids(collections: list[Collection]) -> dict[int, list[int]]:
+    """{collection id: ids of the main-map events in it}, in one query."""
+    found: dict[int, list[int]] = {c.id: [] for c in collections}
+    if found:
+        rows = db.session.execute(
+            select(CollectionEntry.collection_id, CollectionEntry.event_id)
+            .where(CollectionEntry.collection_id.in_(found), CollectionEntry.event_id.is_not(None)))
+        for collection_id, event_id in rows:
+            found[collection_id].append(event_id)
+    return found
 
 
 # ----------------------------------------------------------------- queries
@@ -185,7 +201,7 @@ def add_event(collection: Collection, event_id: int, note: str) -> CollectionEnt
     if event is None or event.status != Status.APPROVED:
         raise CollectionError("Only events that are on the main map can be added.")
     if any(entry.event_id == event.id for entry in collection.entries):
-        raise CollectionError(f"“{event.title}” is already in this collection.")
+        raise DuplicateEntry(f"“{event.title}” is already in this collection.")
     _ensure_room(collection)
     entry = CollectionEntry(event=event, note=note.strip(), position=len(collection.entries))
     collection.entries.append(entry)
