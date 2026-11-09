@@ -4,7 +4,7 @@
 // once and the others are added as they come in; everything works meanwhile.
 /* global L, noUiSlider */
 import { createTimeline } from "./timeline.js";
-import { chunkOrder, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
+import { chunkOrder, compareEvents, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
 
 // Map zoom when an event is picked in the search or on the timeline: 9 is twice
 // the scale of the earlier 8 (each zoom level doubles it), about a city.
@@ -469,7 +469,8 @@ function setQuery(text) {
 
 /** Lower-cased texts to search, built once per event. */
 function searchText(event) {
-  if (event._title === undefined) {
+  if (event._title === undefined || event._excerpt !== event.excerpt) {
+    event._excerpt = event.excerpt;
     event._title = event.title.toLowerCase();
     event._text = `${event.excerpt} ${event.display_year} ${event.date} ${event.year}`.toLowerCase();
   }
@@ -895,6 +896,30 @@ function matchesIgnoringYears(event) {
 
 let yearScopeKey = "";
 let yearsNarrowed = false;
+let yearsTouched = false; // the years were changed by hand (not by a link or a tag)
+
+/**
+ * A chunk arrived while the slider is fitted to a tag or search: widen it to the
+ * matching events loaded now, keeping ends someone moved inward by hand.
+ */
+function widenYearScope() {
+  const slider = document.getElementById("year-slider").noUiSlider;
+  if (!slider || !yearsNarrowed) return;
+  const years = state.events.filter(matchesIgnoringYears).map((e) => e.year);
+  if (!years.length) return;
+  let min = years[0];
+  let max = years[0];
+  years.forEach((y) => { if (y < min) min = y; if (y > max) max = y; });
+  const what = [hasTags() ? tagNames() : null,
+    search.terms.length ? `“${search.terms.join(" ")}”` : null].filter(Boolean).join(" + ");
+  document.getElementById("year-scope").textContent =
+    `Slider fitted to ${what}: ${years.length.toLocaleString()} event${years.length === 1 ? "" : "s"}`;
+  const range = slider.options.range;
+  if (min >= range.min && max <= range.max) return;
+  const [from, to] = slider.get().map(Number);
+  slider.updateOptions({ range: sliderRange(Math.min(min, range.min), Math.max(max, range.max)) }, false);
+  slider.set([from <= range.min ? min : from, to >= range.max ? max : to]);
+}
 
 /**
  * With a tag or a search, the whole slider spans just the years of the matching
@@ -949,6 +974,7 @@ function setupYearSlider(years) {
   });
 
   const update = debounce(refilter, 120);
+  slider.noUiSlider.on("start", () => { yearsTouched = true; });
   slider.noUiSlider.on("update", ([from, to]) => {
     if (document.activeElement !== fromInput) fromInput.value = formatYear(from);
     if (document.activeElement !== toInput) toInput.value = formatYear(to);
@@ -959,6 +985,7 @@ function setupYearSlider(years) {
 
   // Typing a year: Enter or leaving the box applies it, a wrong entry goes back.
   const apply = (input, index) => {
+    yearsTouched = true;
     const year = parseYearText(input.value);
     const values = slider.noUiSlider.get().map(Number);
     if (year === null) {
@@ -1009,9 +1036,10 @@ function setupCategoryButtons() {
 }
 
 function setupTagFilter(tags) {
+  // Every tag: while chunks are loading it is not known yet which ones are used.
+  // Tags without matching events are hidden by updateTagOptions anyway.
   const select = document.getElementById("tag-filter");
-  const used = new Set(state.events.flatMap((e) => e.tags));
-  tags.filter((t) => used.has(t.id)).forEach((tag) => {
+  tags.forEach((tag) => {
     const option = el("option", null, `${tag.name} (${tag.display_range})`);
     option.value = tag.id;
     select.append(option);
@@ -1020,7 +1048,7 @@ function setupTagFilter(tags) {
     if (select.value) addTag(Number(select.value));
     select.value = "";
   });
-  setupTagSearch(tags.filter((t) => used.has(t.id)));
+  setupTagSearch(tags);
 }
 
 // ------------------------------------------------------------- tag search
@@ -1163,11 +1191,13 @@ function renderSearchResults() {
   const status = document.getElementById("search-status");
   const results = sortedResults();
   const total = state.events.length;
+  const loadingNote = state.loading ? " (more are still loading)" : state.textsLoading && search.in === "all"
+    ? " (descriptions are still loading)" : "";
   const filtersOn = state.category !== "all" || hasTags() || state.filtered.length < total && !search.terms.length;
   status.textContent = !search.terms.length
     ? `Type to search ${total.toLocaleString()} events${filtersOn ? " (filters apply)" : ""}.`
     : results.length
-      ? `${results.length.toLocaleString()} event${results.length === 1 ? "" : "s"} match`
+      ? `${results.length.toLocaleString()} event${results.length === 1 ? "" : "s"} match${loadingNote}`
       : "No events match. Try “Any word”, fewer words, or clear the year, category and tag filters.";
 
   if (!search.terms.length) {
@@ -1333,6 +1363,150 @@ function setupFilterPanelToggle() {
 
 // -------------------------------------------------------------------- start
 
+const progressBox = document.getElementById("map-progress");
+
+function showProgress(loaded, total, text) {
+  if (!progressBox) return;
+  progressBox.hidden = false;
+  progressBox.querySelector(".map-progress-text").textContent =
+    text || `Loading ${loaded.toLocaleString()} of ${total.toLocaleString()} events…`;
+  progressBox.querySelector(".map-progress-bar span").style.width = `${total ? Math.round((100 * loaded) / total) : 0}%`;
+}
+
+function hideProgress() {
+  if (progressBox) progressBox.hidden = true;
+}
+
+function loadFailed() {
+  hideProgress();
+  document.getElementById("events-grid").replaceChildren(
+    el("p", "empty-state", "Could not load events. Please reload the page."));
+}
+
+/** Add one chunk of events (already in event-object form) to the loaded ones. */
+function addEvents(events) {
+  events.sort(compareEvents);
+  events.forEach((event) => {
+    state.eventsById.set(event.id, event);
+    state.markersById.set(event.id, createMarker(event));
+  });
+  state.events = mergeSorted(state.events, events);
+}
+
+// ?event=id opens that event as soon as its chunk is there (it is loaded first).
+const requestedId = Number(new URLSearchParams(window.location.search).get("event")) || null;
+let requestedShown = false;
+
+function openRequested() {
+  if (requestedShown || !requestedId || !state.eventsById.has(requestedId)) return;
+  requestedShown = true;
+  showEvent(requestedId);
+}
+
+/** Tags, the year slider and the filters of the link, once the first events are there. */
+function start(tags, years) {
+  tags.forEach((tag) => state.tagsById.set(tag.id, tag));
+  setupTagFilter(tags);
+  if (years.length && years[0] !== null) {
+    setupYearSlider(years);
+  } else {
+    document.getElementById("year-slider").replaceChildren(el("p", "form-hint", "No events yet."));
+  }
+  // Filters from the page address (?tag=…&q=…&from=…), e.g. a shared link.
+  applyUrlFilters(filtersFromUrl());
+  openRequested();
+}
+
+/** The main map: the chunks listed in the manifest the page carries (haam/feed.py). */
+async function loadChunked(manifest) {
+  state.total = manifest.total;
+  state.loading = true;
+  state.textsLoading = true;
+  const urlYears = filtersFromUrl();
+  const order = chunkOrder(manifest, requestedId);
+  showProgress(0, manifest.total);
+
+  // The first chunk alone (so it has the whole connection), then the others together.
+  let tags;
+  let firstChunk;
+  try {
+    [tags, firstChunk] = await Promise.all([getJsonRetry(manifest.tags), getJsonRetry(manifest.core[order[0]])]);
+  } catch (error) {
+    console.error(error);
+    loadFailed();
+    return;
+  }
+  addEvents(decodeCore(firstChunk));
+  start(tags, manifest.years);
+  showProgress(state.events.length, manifest.total);
+  performance.mark("haam:first-markers");
+
+  const results = await Promise.allSettled(order.slice(1).map((n) => getJsonRetry(manifest.core[n]).then((chunk) => {
+    const events = decodeCore(chunk);
+    addEvents(events);
+    showProgress(state.events.length, manifest.total);
+    if (yearsNarrowed) widenYearScope();
+    applyFilters({ added: events });
+    openRequested();
+  })));
+  state.loading = false;
+  const failed = results.filter((r) => r.status === "rejected");
+  failed.forEach((r) => console.error(r.reason));
+
+  // Years from the link that the first chunk's events could not hold yet.
+  const slider = document.getElementById("year-slider").noUiSlider;
+  if (slider && !yearsTouched && (urlYears.from !== null || urlYears.to !== null)) {
+    const { min, max } = slider.options.range;
+    slider.set([urlYears.from ?? min, urlYears.to ?? max]);
+  }
+  finishRender(); // the count without "still loading"
+  performance.mark("haam:all-markers");
+
+  // The short descriptions: popups, the list and searching in descriptions.
+  showProgress(state.events.length, manifest.total, "Loading descriptions…");
+  const texts = await Promise.allSettled(manifest.text.map((url) => getJsonRetry(url).then((chunk) => {
+    chunk.id.forEach((id, i) => {
+      const event = state.eventsById.get(id);
+      if (event) event.excerpt = chunk.excerpt[i];
+    });
+  })));
+  state.textsLoading = false;
+  texts.filter((r) => r.status === "rejected").forEach((r) => console.error(r.reason));
+  if (failed.length) {
+    showProgress(state.events.length, manifest.total,
+      `Loaded ${state.events.length.toLocaleString()} of ${manifest.total.toLocaleString()} events – reload for the rest`);
+  } else {
+    hideProgress();
+  }
+  // A search in descriptions now finds more; the list and popups get their text.
+  if (search.terms.length && search.in === "all") {
+    if (yearsNarrowed) widenYearScope();
+    applyFilters();
+  } else {
+    renderList();
+    renderSearchResults();
+  }
+  if (state.openId !== null && !sidebar.hidden) showEvent(state.openId, { fly: false });
+}
+
+/** A collection's map: one small list that already carries the full text. */
+async function loadSingle() {
+  let events;
+  let tags;
+  try {
+    [events, tags] = await Promise.all([getJson(EVENTS_URL), getJson("/api/tags")]);
+  } catch (error) {
+    console.error(error);
+    loadFailed();
+    return;
+  }
+  events.forEach((event) => { event.display_year = event.display_year || formatYear(event.year); });
+  addEvents(events);
+  state.total = events.length;
+  const years = events.map((e) => e.year);
+  start(tags, years.length ? [Math.min(...years), Math.max(...years)] : []);
+}
+
 async function init() {
   setupCategoryButtons();
   setupSearch();
@@ -1340,35 +1514,8 @@ async function init() {
   setupColorToggle();
   setupFilterPanelToggle();
 
-  let events;
-  let tags;
-  try {
-    [events, tags] = await Promise.all([getJson(EVENTS_URL), getJson("/api/tags")]);
-  } catch (error) {
-    console.error(error);
-    document.getElementById("events-grid").replaceChildren(
-      el("p", "empty-state", "Could not load events. Please reload the page."));
-    return;
-  }
-
-  state.events = events;
-  events.forEach((event) => {
-    state.eventsById.set(event.id, event);
-    state.markersById.set(event.id, createMarker(event));
-  });
-  tags.forEach((tag) => state.tagsById.set(tag.id, tag));
-
-  setupTagFilter(tags);
-  if (events.length) {
-    setupYearSlider(events.map((e) => e.year));
-  } else {
-    document.getElementById("year-slider").replaceChildren(el("p", "form-hint", "No events yet."));
-  }
-  // Filters from the page address (?tag=…&q=…&from=…), e.g. a shared link.
-  applyUrlFilters(filtersFromUrl());
-
-  const requested = Number(new URLSearchParams(window.location.search).get("event"));
-  if (requested && state.eventsById.has(requested)) showEvent(requested);
+  const manifest = MAP_ELEMENT.dataset.manifest ? JSON.parse(MAP_ELEMENT.dataset.manifest) : null;
+  if (manifest) await loadChunked(manifest); else await loadSingle();
 }
 
 init();

@@ -51,6 +51,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     SECRET_KEY = Config.SECRET_KEY or "dev-only-secret-key"
+    STATIC_IMMUTABLE = False  # static files are edited while the server runs
     SESSION_COOKIE_SECURE = False
 
 
