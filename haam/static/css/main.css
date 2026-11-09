@@ -1285,3 +1285,53 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .game-year-scale { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.7rem; color: var(--text-muted); }
 .game-breakdown { margin: 0.1rem 0 0.3rem; font-size: 0.85rem; color: var(--text-muted); }
 .game-breakdown[hidden], .game-distance[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- event pages */
+.event-article { display: grid; gap: 1rem; }
+.event-article h1 { margin: 0.5rem 0 0; font-size: 1.9rem; color: var(--text-strong); line-height: 1.2; }
+.event-article-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0; color: var(--text-muted); font-size: 0.9rem; }
+.event-summary p { margin: 0 0 0.75rem; line-height: 1.65; }
+.event-attribution { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+.event-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+a.tag-pill { text-decoration: none; }
+
+/* A static map from OpenStreetMap tiles, centred on the event; works without JavaScript. */
+.tile-map {
+  position: relative;
+  height: 280px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #aad3df;
+}
+.tile-map-inner { position: absolute; }
+.tile-map-inner img { position: absolute; width: 256px; height: 256px; max-width: none; }
+:root[data-theme="dark"] .tile-map-inner { filter: brightness(0.8) contrast(1.1); }
+.tile-map-marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), var(--shadow);
+}
+.tile-map-credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 0.1rem 0.4rem;
+  background: rgba(255, 255, 255, 0.85);
+  color: #333;
+  font-size: 0.7rem;
+}
+.tile-map-credit a { color: #0b5394; }
+
+.related-events { margin-top: 1rem; }
+.related-events h2 { margin-top: 0; font-size: 1.15rem; }
+.related-events ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.related-events li { display: flex; align-items: baseline; gap: 0.5rem; }
+.related-events .year-pill { flex: none; min-width: 4.5rem; text-align: center; }

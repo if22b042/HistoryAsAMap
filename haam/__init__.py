@@ -53,13 +53,14 @@ def create_app(config_name: str | None = None) -> Flask:
     csrf.init_app(app)
 
     from haam import cli
-    from haam.views import admin, api, collections, game, public
+    from haam.views import admin, api, collections, game, public, seo
 
     app.register_blueprint(public.bp)
     app.register_blueprint(collections.bp)
     app.register_blueprint(api.bp)
     app.register_blueprint(game.bp)
     app.register_blueprint(admin.bp)
+    app.register_blueprint(seo.bp)
     cli.register(app)
 
     _register_template_helpers(app)
@@ -130,11 +131,20 @@ def _only_haam_tables(obj, name, type_, reflected, compare_to) -> bool:
 
 
 def _register_template_helpers(app: Flask) -> None:
+    from haam import seo
     from haam.auth import is_admin
     from haam.dates import format_year
     from haam.models import Category
 
     app.jinja_env.filters["year"] = format_year
+    app.jinja_env.filters["describe"] = seo.describe
+    app.jinja_env.globals.update(
+        absolute_url=seo.absolute,
+        external_url=seo.external_url,
+        event_path=seo.event_path,
+        site_name=seo.SITE_NAME,
+        default_description=seo.DEFAULT_DESCRIPTION,
+    )
 
     @app.context_processor
     def inject_globals():
