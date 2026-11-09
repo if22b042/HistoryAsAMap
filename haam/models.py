@@ -37,7 +37,9 @@ class Category(enum.Enum):
     DIPLOMATIC = "diplomatic"
     NAVAL = "naval"
     SCIENTIFIC = "scientific"
-    NATURAL = "natural"  # earthquakes, eruptions, storms, floods, fires
+    NATURAL = "natural"  # earthquakes, eruptions, storms, floods, wildfires
+    DISASTER = "disaster"  # human-made: fires, explosions, accidents, collapses
+    VIOLENCE = "violence"  # massacres, assassinations, terrorist attacks
     OTHER = "other"
 
     @property

@@ -118,6 +118,42 @@ def sync_wikidata_command(path, dry_run):
                    + "; ".join(stats.kept_in_collections))
 
 
+@haam_cli.command("recategorize")
+@click.option("--csv", "csv_path", default="seed/wikidata_events.csv", show_default=True,
+              help="Also update the category column of this exported CSV ('' to skip).")
+@click.option("--dry-run", is_flag=True, help="Only show what would change.")
+def recategorize_command(csv_path, dry_run):
+    """Re-derive the categories of imported events from their Wikidata classes (P31).
+
+    Splits "natural" into natural and human-made disasters and moves massacres,
+    assassinations and terrorist attacks into "violence". Events submitted on the
+    website keep the category their author picked.
+    """
+    import os
+
+    from flask import current_app
+
+    from haam.recategorize import recategorize
+    from haam.wikidata import WikidataClient
+
+    if csv_path and not os.path.exists(csv_path):
+        raise click.BadParameter(f"{csv_path} does not exist", param_hint="--csv")
+    client = WikidataClient(current_app.config["HAAM_USER_AGENT"])
+    stats = recategorize(client, csv_path=csv_path or None, dry_run=dry_run, report=click.echo)
+    prefix = "Would move" if dry_run else "Moved"
+    for (old, new), count in sorted(stats.moves.items(), key=lambda kv: -kv[1]):
+        click.echo(f"  {prefix} {count:5d}  {old} -> {new}")
+    if stats.missing:
+        click.echo(f"  {stats.missing} events have no classes on Wikidata any more and were left alone")
+    if csv_path:
+        click.echo(f"  {'Would change' if dry_run else 'Changed'} {stats.csv_changed} rows of {csv_path}")
+    if not dry_run:
+        click.echo("Approved events per category (before -> after):")
+        for category in Category:
+            click.echo(f"  {category.value:11s} {stats.before.get(category.value, 0):6d} -> "
+                       f"{stats.after.get(category.value, 0):6d}")
+
+
 @haam_cli.command("retag-csv")
 @click.argument("paths", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
 def retag_csv_command(paths):
