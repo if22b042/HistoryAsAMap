@@ -178,6 +178,46 @@
     <div class="sidebar-content" id="sidebar-content"></div>
   </aside>
 
+  {% if not collection %}
+  <button type="button" class="welcome-open" id="welcome-open" aria-controls="welcome" aria-expanded="false"
+          title="On this day, today's game and featured collections">
+    <i class="fas fa-calendar-day" aria-hidden="true"></i> <span>Today</span>
+    <span class="welcome-dot" id="welcome-dot" hidden><span class="sr-only">(new)</span></span>
+  </button>
+  <section class="welcome" id="welcome" role="dialog" aria-modal="false" aria-labelledby="welcome-title"
+           tabindex="-1" data-url="{{ url_for('api.welcome_card') }}" hidden>
+    <header class="welcome-header">
+      <h2 id="welcome-title">Welcome to History As A Map</h2>
+      <button type="button" class="icon-btn" id="welcome-close" aria-label="Close">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="welcome-body">
+      <p class="welcome-intro">Thousands of historical events from Wikipedia, placed where and when they happened.
+        Zoom in, narrow the years or pick a tag, and click a dot to read more.</p>
+
+      <h3 class="welcome-heading"><i class="fas fa-calendar-day" aria-hidden="true"></i>
+        On this day<span id="welcome-day"></span></h3>
+      <ol class="welcome-events" id="welcome-events" aria-live="polite">
+        <li class="welcome-empty">Loading…</li>
+      </ol>
+
+      <a class="welcome-game" href="{{ url_for('game.page') }}">
+        <i class="fas fa-gamepad" aria-hidden="true"></i>
+        <span><strong>Today's Game<span id="welcome-game-number"></span></strong>
+          <span>Place five events on the map. A new game every day.</span></span>
+        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+      </a>
+
+      <div id="welcome-collections-box" hidden>
+        <h3 class="welcome-heading"><i class="fas fa-layer-group" aria-hidden="true"></i> Featured collections</h3>
+        <ul class="welcome-collections" id="welcome-collections"></ul>
+        <a class="welcome-more" href="{{ url_for('collections.index') }}">All collections</a>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <a class="scroll-to-list btn btn-primary" href="#events"><i class="fas fa-list" aria-hidden="true"></i> All events</a>
 </section>
 
@@ -232,4 +272,5 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js" crossorigin="anonymous"></script>
   <script type="module" src="{{ url_for('static', filename='js/map.js') }}"></script>
+  {% if not collection %}<script type="module" src="{{ url_for('static', filename='js/welcome.js') }}"></script>{% endif %}
 {% endblock %}

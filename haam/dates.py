@@ -268,3 +268,28 @@ def parse_wikidata_time(value: dict) -> ParsedDate | None:
     else:
         label = format_year(year)
     return ParsedDate(year, label)
+
+
+# Days per month, with 29 for February: "on this day" includes 29 February.
+_DAYS_IN_MONTH = (31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+_LABEL_DAY_MONTH = re.compile(rf"^\s*(?P<day>\d{{1,2}})(?:\s*[–-]\s*\d{{1,2}})?\s+(?P<month>{MONTHS})\b")
+_LABEL_MONTH_DAY = re.compile(rf"^\s*(?P<month>{MONTHS})\s+(?P<day>\d{{1,2}})(?:\s*[–-]\s*\d{{1,2}})?(?:,|\s*$)")
+
+
+def valid_month_day(month: int, day: int) -> bool:
+    return 1 <= month <= 12 and 1 <= day <= _DAYS_IN_MONTH[month - 1]
+
+
+def month_day(label: str | None) -> tuple[int, int] | None:
+    """The day and month a date label states: ``"8 November 1592"`` → ``(11, 8)``.
+
+    Only labels precise to the day count; ``"November 1592"`` or ``"1592"`` give
+    ``None``. A range (``"8–10 November 1592"``) gives its first day.
+    """
+    text = label or ""
+    m = (_DAY_MONTH_YEAR.search(text) or _MONTH_DAY_YEAR.search(text)
+         or _LABEL_DAY_MONTH.match(text) or _LABEL_MONTH_DAY.match(text))
+    if not m:
+        return None
+    month, day = _MONTH_NAMES.index(m.group("month")) + 1, int(m.group("day"))
+    return (month, day) if valid_month_day(month, day) else None

@@ -1438,6 +1438,132 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
   /* the filter drawer */
   .filters,
   .filters-hidden .filters {
+
+/* welcome card on the map: on this day, today's game, featured collections */
+.welcome-open {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 560;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 40px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.welcome-open i { color: var(--accent); }
+.welcome-open:hover { border-color: var(--accent); }
+.welcome-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.welcome-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cat-military); }
+.welcome-dot[hidden] { display: none; }
+.sidebar-open .welcome-open, .welcome-shown .welcome-open { display: none; }
+
+.welcome {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 650;
+  width: 360px;
+  max-height: calc(100% - 2rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.welcome[hidden] { display: none; }
+.welcome:focus { outline: none; }
+.welcome:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.welcome-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem 0.75rem 1.1rem;
+  background: var(--nav-bg);
+  color: #fff;
+}
+.welcome-header h2 { margin: 0; font-size: 1rem; color: #fff; }
+.welcome-body { padding: 0.85rem 1.1rem 1rem; overflow-y: auto; overscroll-behavior: contain; }
+.welcome-intro { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
+.welcome-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.9rem 0 0.3rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.welcome-heading i { color: var(--accent); }
+.welcome-events, .welcome-collections { list-style: none; margin: 0; padding: 0; }
+.welcome-event {
+  display: grid;
+  grid-template-columns: 3.4rem auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+.welcome-event:hover, .welcome-event:focus-visible { background: var(--surface-alt); border-color: var(--border); }
+.welcome-event:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.welcome-event-year { font-weight: 700; color: var(--text-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.welcome-event-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome-empty { padding: 0.4rem 0.45rem; font-size: 0.85rem; color: var(--text-muted); }
+.welcome-game {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+.welcome-game:hover { text-decoration: none; background: var(--surface-alt); }
+.welcome-game > i:first-child { font-size: 1.3rem; color: var(--accent); }
+.welcome-game > span { flex: 1; display: grid; font-size: 0.82rem; color: var(--text-muted); }
+.welcome-game strong { font-size: 0.95rem; color: var(--text-strong); }
+.welcome-game > i:last-child { color: var(--text-muted); }
+.welcome-collection {
+  display: grid;
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.welcome-collection:hover { background: var(--surface-alt); text-decoration: none; }
+.welcome-collection strong { font-size: 0.9rem; color: var(--link); }
+.welcome-collection span { color: var(--text-muted); }
+.welcome-more { display: inline-block; margin: 0.3rem 0.45rem 0; font-size: 0.85rem; }
+
+@media (max-width: 860px) {
+  .welcome-open { top: 0.6rem; right: 0.6rem; height: 36px; }
+  .welcome {
     position: fixed;
     top: auto;
     left: 0;
@@ -1562,3 +1688,10 @@ a.tag-pill { text-decoration: none; }
 .related-events ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
 .related-events li { display: flex; align-items: baseline; gap: 0.5rem; }
 .related-events .year-pill { flex: none; min-width: 4.5rem; text-align: center; }
+
+    width: auto;
+    max-height: 75vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    z-index: 1250;
+  }
+}

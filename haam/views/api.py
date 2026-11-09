@@ -4,7 +4,7 @@ import gzip
 
 from flask import Blueprint, abort, jsonify, request, url_for
 
-from haam import events, feed
+from haam import events, feed, welcome
 from haam.models import Category, Status
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -110,3 +110,13 @@ def list_tags():
 @bp.get("/categories")
 def list_categories():
     return jsonify([{"value": c.value, "label": c.label} for c in Category])
+
+
+@bp.get("/welcome")
+def welcome_card():
+    """The map's welcome card for the visitor's local day (``?month=11&day=8``)."""
+    month, day = welcome.requested_day(request.args.get("month"), request.args.get("day"))
+    response = jsonify(welcome.payload(month, day))
+    response.cache_control.public = True
+    response.cache_control.max_age = 300
+    return response

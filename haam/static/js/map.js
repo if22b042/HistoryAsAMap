@@ -1649,6 +1649,8 @@ const requestedId = Number(new URLSearchParams(window.location.search).get("even
 let requestedShown = false;
 
 function openRequested() {
+  // An event the welcome card asked for before its chunk had arrived.
+  if (pendingShow !== null && state.eventsById.has(pendingShow)) showRequested(pendingShow);
   if (requestedShown || !requestedId || !state.eventsById.has(requestedId)) return;
   requestedShown = true;
   showEvent(requestedId);
@@ -1769,5 +1771,21 @@ async function init() {
   const manifest = MAP_ELEMENT.dataset.manifest ? JSON.parse(MAP_ELEMENT.dataset.manifest) : null;
   if (manifest) await loadChunked(manifest); else await loadSingle();
 }
+
+// Other scripts (the welcome card) open an event with
+// document.dispatchEvent(new CustomEvent("haam:show-event", { detail: { id } })).
+// Before its events have loaded, the last request waits for them (see openRequested).
+let pendingShow = null;
+function showRequested(id) {
+  pendingShow = null;
+  if (state.eventsById.has(id)) showEvent(id, { zoom: 7 });
+}
+document.addEventListener("haam:show-event", (e) => {
+  const id = Number(e.detail?.id);
+  if (!id) return;
+  // With chunked loading the event may not be here yet: it then opens when its chunk arrives.
+  if (state.eventsById.has(id)) showRequested(id);
+  else pendingShow = id;
+});
 
 init();
