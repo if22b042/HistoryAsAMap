@@ -19,6 +19,18 @@ def seed_tags_command():
     click.echo(f"Added {importer.seed_tags()} tags.")
 
 
+@haam_cli.command("check-on-this-day")
+def check_on_this_day_command():
+    """Check that every calendar day (29 February too) has an "On this day" event."""
+    from haam.welcome import MONTH_NAMES, days_without_events
+
+    missing = days_without_events()
+    if missing:
+        click.echo("No event on: " + ", ".join(f"{d} {MONTH_NAMES[m - 1]}" for m, d in missing))
+        raise SystemExit(1)
+    click.echo("Every one of the 366 days has at least one event.")
+
+
 @haam_cli.command("hash-password")
 @click.password_option()
 def hash_password_command(password):

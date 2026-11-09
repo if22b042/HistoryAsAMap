@@ -11,10 +11,10 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import Enum, ForeignKey, Index, String, Text, false
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from haam.extensions import db
-from haam.dates import format_year
+from haam.dates import format_year, month_day
 
 
 EXCERPT_LENGTH = 140
@@ -109,12 +109,18 @@ class Event(db.Model):
     """A historical event shown on the map."""
 
     __tablename__ = "haam_events"
-    __table_args__ = (Index("ix_haam_events_status_year", "status", "year"),)
+    __table_args__ = (
+        Index("ix_haam_events_status_year", "status", "year"),
+        Index("ix_haam_events_month_day", "month", "day"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(300))
     year: Mapped[int]  # negative = BC
     date_label: Mapped[str] = mapped_column(String(120), default="")
+    # Month and day of a day-precise ``date_label`` ("On this day"); set from it, else None.
+    month: Mapped[int | None]
+    day: Mapped[int | None]
     summary: Mapped[str] = mapped_column(Text)
     wiki_url: Mapped[str] = mapped_column(String(500), unique=True)
     wiki_page_id: Mapped[int | None] = mapped_column(unique=True)
@@ -139,6 +145,11 @@ class Event(db.Model):
     collection_entries: Mapped[list["CollectionEntry"]] = relationship(
         back_populates="event", cascade="all, delete-orphan"
     )
+
+    @validates("date_label")
+    def _set_month_day(self, _key: str, label: str | None) -> str | None:
+        self.month, self.day = month_day(label) or (None, None)
+        return label
 
     @property
     def display_year(self) -> str:
