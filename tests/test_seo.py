@@ -62,7 +62,7 @@ def test_event_page_renders_server_side(client, make_event):
     assert meta(html, "og:type") == "article"
     assert meta(html, "og:title") == "Battle of Zama (202 BC)"
     assert meta(html, "og:description") == "The Battle of Zama was fought in 202 BC."
-    assert meta(html, "og:image") == f"{SITE}/static/img/og-card.png"
+    assert re.fullmatch(rf"{re.escape(SITE)}/static/(v/[0-9a-f]+/)?img/og-card\.png", meta(html, "og:image"))
     assert meta(html, "twitter:card") == "summary_large_image"
 
 
@@ -114,7 +114,7 @@ def test_map_has_meta_and_canonical(client):
     html = client.get("/").get_data(as_text=True)
     assert f'<link rel="canonical" href="{SITE}/">' in html
     assert meta(html, "og:title") == "Interactive map of historical events"
-    assert meta(html, "og:image") == f"{SITE}/static/img/og-card.png"
+    assert re.fullmatch(rf"{re.escape(SITE)}/static/(v/[0-9a-f]+/)?img/og-card\.png", meta(html, "og:image"))
     assert meta(html, "description") == seo.DEFAULT_DESCRIPTION
 
 
@@ -139,7 +139,7 @@ def test_game_has_title_description_and_structured_data(client):
     assert "<title>Where did it happen? Daily history geography game · History As A Map</title>" in html
     assert "daily history geography game" in meta(html, "description")
     assert f'<link rel="canonical" href="{SITE}/game">' in html
-    assert meta(html, "og:image") == f"{SITE}/static/img/og-game.png"
+    assert re.fullmatch(rf"{re.escape(SITE)}/static/(v/[0-9a-f]+/)?img/og-game\.png", meta(html, "og:image"))
     data = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.S).group(1))
     assert "VideoGame" in data["@type"]
     assert data["url"] == f"{SITE}/game"
