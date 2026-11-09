@@ -11,6 +11,11 @@
 
   <form class="card" method="post" novalidate>
     {{ form.csrf_token }}
+    {% if first_event %}
+      <input type="hidden" name="event" value="{{ first_event.id }}">
+      <p class="first-entry"><i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+        <strong>{{ first_event.title }}</strong> ({{ first_event.display_year }}) will be its first entry.</p>
+    {% endif %}
     {{ text_field(form.title, icon='heading', placeholder='e.g. Battles of the Roman Republic', autofocus=True) }}
     {{ text_field(form.description, icon='align-left', rows=5, placeholder='What is this collection about?') }}
     <div class="form-group checkbox-group">
@@ -27,4 +32,8 @@
     <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-layer-group" aria-hidden="true"></i> Create collection</button>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  <script type="module" src="{{ url_for('static', filename='js/tag-combobox.js') }}"></script>
 {% endblock %}

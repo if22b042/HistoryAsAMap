@@ -11,10 +11,21 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import Enum, ForeignKey, Index, String, Text, false
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from haam.extensions import db
-from haam.dates import format_year
+from haam.dates import format_year, month_day
+
+
+EXCERPT_LENGTH = 140
+
+
+def make_excerpt(text: str | None) -> str:
+    """The first ``EXCERPT_LENGTH`` characters, cut at a word, with "…" when shortened."""
+    text = text or ""
+    if len(text) <= EXCERPT_LENGTH:
+        return text
+    return text[:EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
 
 
 def _utcnow() -> datetime:
@@ -100,12 +111,18 @@ class Event(db.Model):
     """A historical event shown on the map."""
 
     __tablename__ = "haam_events"
-    __table_args__ = (Index("ix_haam_events_status_year", "status", "year"),)
+    __table_args__ = (
+        Index("ix_haam_events_status_year", "status", "year"),
+        Index("ix_haam_events_month_day", "month", "day"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(300))
     year: Mapped[int]  # negative = BC
     date_label: Mapped[str] = mapped_column(String(120), default="")
+    # Month and day of a day-precise ``date_label`` ("On this day"); set from it, else None.
+    month: Mapped[int | None]
+    day: Mapped[int | None]
     summary: Mapped[str] = mapped_column(Text)
     wiki_url: Mapped[str] = mapped_column(String(500), unique=True)
     wiki_page_id: Mapped[int | None] = mapped_column(unique=True)
@@ -131,6 +148,11 @@ class Event(db.Model):
         back_populates="event", cascade="all, delete-orphan"
     )
 
+    @validates("date_label")
+    def _set_month_day(self, _key: str, label: str | None) -> str | None:
+        self.month, self.day = month_day(label) or (None, None)
+        return label
+
     @property
     def display_year(self) -> str:
         return format_year(self.year)
@@ -139,17 +161,14 @@ class Event(db.Model):
     def google_maps_url(self) -> str:
         return f"https://www.google.com/maps?q={self.lat},{self.lon}"
 
-    EXCERPT_LENGTH = 140
+    EXCERPT_LENGTH = EXCERPT_LENGTH
 
     @property
     def excerpt(self) -> str:
-        text = self.summary or ""
-        if len(text) <= self.EXCERPT_LENGTH:
-            return text
-        return text[: self.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+        return make_excerpt(self.summary)
 
     def to_list_dict(self) -> dict:
-        """Compact form for the map, which loads every approved event at once."""
+        """One event as an object: the old /api/events format (the map now uses haam.feed)."""
         return {
             "id": self.id,
             "title": self.title,
@@ -337,7 +356,7 @@ class CollectionEntry(db.Model):
     def to_map_dict(self) -> dict:
         """The shape of ``Event.to_list_dict`` (the main map's data), plus the full text and note."""
         summary = self.summary
-        excerpt = summary if len(summary) <= Event.EXCERPT_LENGTH else summary[:Event.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
+        excerpt = make_excerpt(summary)
         return {
             "id": self.id,
             "title": self.title,

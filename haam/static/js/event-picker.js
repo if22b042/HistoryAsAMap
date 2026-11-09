@@ -1,5 +1,6 @@
 // "Add an event from the main map": search approved events and pick one.
 // Fills the hidden event_id input of a <form data-event-picker>.
+import { formatYear, loadAllEvents, loadManifest } from "./events-data.js";
 
 const form = document.querySelector("form[data-event-picker]");
 
@@ -10,12 +11,6 @@ function el(tag, className, text) {
   return node;
 }
 
-function formatYear(year) {
-  if (year < 0) return `${-year} BC`;
-  if (year < 1000) return `AD ${year}`;
-  return String(year);
-}
-
 if (form) {
   const search = form.querySelector("#event-search");
   const results = form.querySelector(".event-results");
@@ -23,10 +18,15 @@ if (form) {
   const chosen = form.querySelector(".chosen-event");
   let events = null;
 
+  // The same cached chunks as the map (titles and years are all that is needed).
   async function load() {
-    if (events) return events;
-    const response = await fetch("/api/events", { headers: { Accept: "application/json" } });
-    events = response.ok ? await response.json() : [];
+    if (!events) {
+      events = loadManifest().then(loadAllEvents).catch((error) => {
+        console.error(error);
+        events = null;
+        return [];
+      });
+    }
     return events;
   }
 

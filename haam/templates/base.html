@@ -3,8 +3,35 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{% endblock %}{% if self.title() %} · {% endif %}History As A Map</title>
-  <meta name="description" content="An interactive map of historical events from Wikipedia.">
+  <title>{% block title %}{% endblock %}{% if self.title() %} · {% endif %}{{ site_name }}</title>
+  {#- Share previews (Open Graph, Twitter) and search snippets. Pages override the blocks
+      below; the share title defaults to the page title without the site name. -#}
+  {%- set meta_description = self.description()|trim or default_description %}
+  {%- set share_title = self.share_title()|trim or self.title()|trim or site_name %}
+  {%- set share_url = self.share_url()|trim or self.canonical()|trim or absolute_url(request.full_path.rstrip('?')) %}
+  {%- set share_image = self.share_image()|trim or absolute_url(url_for('static', filename='img/og-card.png')) %}
+  <meta name="description" content="{{ meta_description }}">
+  {% if self.canonical()|trim %}<link rel="canonical" href="{{ self.canonical()|trim }}">{% endif %}
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:title" content="{{ share_title }}">
+  <meta property="og:description" content="{{ meta_description }}">
+  <meta property="og:url" content="{{ share_url }}">
+  <meta property="og:image" content="{{ share_image }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{% block share_image_alt %}History As A Map: historical events on a world map{% endblock %}">
+  <meta property="og:locale" content="en_GB">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ share_title }}">
+  <meta name="twitter:description" content="{{ meta_description }}">
+  <meta name="twitter:image" content="{{ share_image }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ url_for('seo.favicon') }}" sizes="48x48">
+  <link rel="apple-touch-icon" href="{{ url_for('seo.apple_touch_icon') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+  <meta name="theme-color" content="#2b6cb0">
+  {%- if false %}{% block description %}{% endblock %}{% block share_title %}{% endblock %}{% block share_url %}{% endblock %}{% block share_image %}{% endblock %}{% block canonical %}{% endblock %}{% endif %}
   {# Applies the saved theme before first paint, so there is no light flash. #}
   <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
