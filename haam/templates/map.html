@@ -88,10 +88,19 @@
       </button>
       <p class="result-count" id="result-count" aria-live="polite"></p>
     </div>
+
+    {# phone only: the filters are a drawer over the map, closed with this button #}
+    <button type="button" class="btn btn-primary filters-done" data-toggle-filters>
+      Show <span data-filters-done-count>the events</span> on the map
+    </button>
   </aside>
 
   <button class="show-filters-btn" type="button" aria-label="Show filters" data-toggle-filters>
     <i class="fas fa-sliders-h" aria-hidden="true"></i>
+  </button>
+  {# phone only: opens the filter drawer #}
+  <button class="filters-fab" type="button" aria-controls="filters" aria-expanded="false" data-toggle-filters>
+    <i class="fas fa-sliders-h" aria-hidden="true"></i> <span data-filters-label>Filters</span>
   </button>
 
   <div id="map" class="map" role="region" aria-label="Map of historical events"
@@ -139,6 +148,7 @@
 
   <aside class="sidebar" id="sidebar" aria-label="Event details" hidden>
     <div class="sidebar-header">
+      <span class="sheet-handle" aria-hidden="true"></span>
       <h2><i class="fas fa-info-circle" aria-hidden="true"></i> Event details</h2>
       <button class="icon-btn" type="button" id="sidebar-close" aria-label="Close details">
         <i class="fas fa-times" aria-hidden="true"></i>
