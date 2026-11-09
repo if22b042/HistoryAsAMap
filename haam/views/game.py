@@ -33,7 +33,15 @@ def _day(value: str) -> date:
 
 @bp.get("/game")
 def page():
-    return render_template("game.html", eras=game.ERA_LABELS)
+    # A shared result links to /game?date=…; its preview names that day's game.
+    shared_day = None
+    try:
+        day = date.fromisoformat(request.args.get("date", ""))
+    except ValueError:
+        day = None
+    if day is not None and game.is_playable(day):
+        shared_day = {"date": day, "number": game.game_number(day), "hard": _hard_arg()}
+    return render_template("game.html", eras=game.ERA_LABELS, shared_day=shared_day)
 
 
 def _hard_arg() -> bool:
