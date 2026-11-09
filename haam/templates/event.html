@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_macros.html" import category_badge %}
+{% set canonical_url = absolute_url(event_path(event)) %}
+{% block title %}{{ event.title }} ({{ event.display_year }}){% endblock %}
+{% block description %}{{ event.summary|describe }}{% endblock %}
+{% block canonical %}{{ canonical_url }}{% endblock %}
+{% block og_type %}article{% endblock %}
+
+{% block head %}
+  <script type="application/ld+json">{{ {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {"@type": "ListItem", "position": 1, "name": "Map", "item": external_url('public.index')},
+      {"@type": "ListItem", "position": 2, "name": event.title, "item": canonical_url},
+    ],
+  }|tojson }}</script>
+{% endblock %}
+
+{% block content %}
+<div class="page narrow event-page">
+  <nav class="eyebrow" aria-label="Breadcrumb">
+    <a href="{{ url_for('public.index') }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Map</a>
+  </nav>
+
+  <article class="card event-article">
+    <header class="event-article-header">
+      <p class="event-article-meta">
+        <span class="year-pill">{{ event.display_year }}</span>
+        {{ category_badge(event.category) }}
+        {% if event.date_label and event.date_label != event.display_year %}<span>{{ event.date_label }}</span>{% endif %}
+        {% if event.country %}<span><i class="fas fa-map-marker-alt" aria-hidden="true"></i> {{ event.country }}</span>{% endif %}
+      </p>
+      <h1>{{ event.title }}</h1>
+    </header>
+
+    <figure class="tile-map" aria-label="Location of {{ event.title }}">
+      <div class="tile-map-inner" style="left: calc(50% - {{ tile_map.point_x }}px); top: calc(50% - {{ tile_map.point_y }}px); width: {{ tile_map.width }}px; height: {{ tile_map.height }}px;">
+        {% for tile in tile_map.tiles %}
+          <img src="{{ tile.url }}" alt="" width="256" height="256" loading="lazy" decoding="async"
+               style="left: {{ tile.left }}px; top: {{ tile.top }}px;">
+        {% endfor %}
+      </div>
+      <span class="tile-map-marker dot-{{ event.category.value }}" aria-hidden="true"></span>
+      <figcaption class="tile-map-credit">© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors</figcaption>
+    </figure>
+
+    <div class="event-summary">
+      {% for paragraph in event.summary.split('\n') if paragraph.strip() %}<p>{{ paragraph }}</p>{% endfor %}
+    </div>
+    <p class="event-attribution">
+      Text from the Wikipedia article <a href="{{ event.wiki_url }}" rel="noopener">{{ event.title }}</a>
+      by Wikipedia contributors, licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license">CC BY-SA 4.0</a>.
+    </p>
+
+    {% if event.tags %}
+      <div class="event-tags">
+        <h2 class="sr-only">Tags</h2>
+        {% for tag in event.tags %}
+          <a class="tag-pill" href="{{ url_for('public.index', tag=tag.id) }}" title="{{ tag.display_range }}">{{ tag.name }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="button-row">
+      <a class="btn btn-primary" href="{{ url_for('public.index', event=event.id) }}">
+        <i class="fas fa-map" aria-hidden="true"></i> Open on the map</a>
+      <a class="btn btn-secondary" href="{{ event.wiki_url }}" rel="noopener">
+        <i class="fab fa-wikipedia-w" aria-hidden="true"></i> Read on Wikipedia</a>
+      <a class="btn btn-secondary" href="{{ event.google_maps_url }}" rel="noopener">
+        <i class="fas fa-map-marker-alt" aria-hidden="true"></i> Google Maps</a>
+    </div>
+  </article>
+
+  {% if related %}
+    <section class="card related-events">
+      <h2>More from {{ related_tag.name }}</h2>
+      <ul>
+        {% for other in related %}
+          <li><span class="year-pill">{{ other.display_year }}</span> <a href="{{ event_path(other) }}">{{ other.title }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}
