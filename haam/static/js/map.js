@@ -4,6 +4,7 @@
 // once and the others are added as they come in; everything works meanwhile.
 /* global L, noUiSlider */
 import { createCollectionAdder } from "./collection-add.js";
+import { addBasemapSwitcher } from "./basemaps.js";
 import { createTimeline } from "./timeline.js";
 import { chunkOrder, compareEvents, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
 
@@ -100,12 +101,10 @@ const map = L.map("map", {
   maxBoundsViscosity: 0.8,
   zoomControl: false, // re-added bottom-right so the filter panel doesn't cover it
 });
+// The base map switcher first: it then sits left of the zoom buttons instead of
+// above them, so the corner stays low enough beside the open timeline.
+addBasemapSwitcher(map);
 L.control.zoom({ position: "bottomright" }).addTo(map);
-
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  maxZoom: 18,
-}).addTo(map);
 
 const clusters = L.markerClusterGroup({
   showCoverageOnHover: false,

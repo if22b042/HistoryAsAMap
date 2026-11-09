@@ -586,6 +586,64 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 }
 :root[data-theme="dark"] .leaflet-tile-pane { filter: brightness(0.75) contrast(1.1) saturate(0.8); }
 :root[data-theme="dark"] .leaflet-control-attribution { background: rgba(35, 41, 55, 0.8); color: var(--text-muted); }
+/* Satellite imagery keeps its colours and the gray canvas has a dark version:
+   no darkening filter in dark mode. */
+:root[data-theme="dark"] .basemap-satellite .leaflet-tile-pane,
+:root[data-theme="dark"] .basemap-plain .leaflet-tile-pane { filter: none; }
+/* On satellite imagery a dark outline keeps markers and clusters readable. */
+.basemap-satellite .marker,
+.basemap-satellite .cluster { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.5); }
+
+/* base map switcher (basemaps.js), bottom right. No clear: on the main map it
+   floats left of the zoom buttons rather than adding a row above them. */
+.basemap-switcher { position: relative; background: var(--surface); }
+.leaflet-right .basemap-switcher { clear: none; }
+.leaflet-touch .basemap-switcher.leaflet-bar { border-color: rgba(0, 0, 0, 0.2); }
+.basemap-toggle {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+.leaflet-touch .basemap-toggle { width: 30px; height: 30px; }
+.basemap-toggle:hover, .basemap-toggle[aria-expanded="true"] { background: var(--surface-alt); }
+.basemap-menu {
+  position: absolute;
+  right: calc(100% + 6px);
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 8.5rem;
+  padding: 0.3rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.basemap-menu[hidden] { display: none; }
+.basemap-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.basemap-option:hover { background: var(--surface-alt); }
+.basemap-option[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.basemap-swatch { flex: none; width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0, 0, 0, 0.2); }
 
 /* ------------------------------------------------------- events list */
 
