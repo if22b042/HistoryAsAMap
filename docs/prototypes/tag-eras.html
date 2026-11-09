@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tag eras prototype</title>
+<!-- Throwaway prototype for docs/tag-ux-design.md (idea 5). Real data: the 139 tags that have events
+     in seed/wikidata_events.csv, with event counts and the proposed parent links. Not app code. -->
+<style>
+:root{--bg:#fff;--fg:#1d2433;--mute:#6b7385;--line:#e3e6ee;--bar:#3b6fd8;--bar2:#9db5ec;--sel:#fff3c4}
+@media (prefers-color-scheme:dark){:root{--bg:#141821;--fg:#e8ebf2;--mute:#97a0b3;--line:#2a3140;--bar:#7aa2ff;--bar2:#3f5590;--sel:#4a4220}}
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+header{display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:sticky;top:0;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line);z-index:2}
+#q{flex:1;min-width:160px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+nav{display:flex;gap:4px;flex-wrap:wrap;width:100%}
+nav a{font-size:12px;color:var(--mute);text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:2px 8px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:18px 0 4px;display:flex;justify-content:space-between}
+ol{list-style:none;margin:0;padding:0}
+li{display:grid;grid-template-columns:minmax(0,1fr) 46px minmax(90px,38%);gap:8px;align-items:center;padding:3px 6px;border-radius:4px;cursor:pointer}
+li.child .name{padding-left:16px}
+li.child .name::before{content:"\2514  ";color:var(--mute)}
+li:hover,li.active{background:var(--sel)}
+.name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.yrs{color:var(--mute);font-size:12px}
+.n{text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
+.track{position:relative;height:8px;background:var(--line);border-radius:4px}
+.bar{position:absolute;top:0;height:8px;background:var(--bar);border-radius:4px;min-width:3px}
+.bar.more::after{content:"";position:absolute;right:-6px;top:-2px;border:6px solid transparent;border-left-color:var(--bar);border-right:0}
+.gantt{position:relative;border-left:1px solid var(--line)}
+.gantt .row{position:relative;height:16px}
+.gantt .g{position:absolute;height:12px;top:2px;background:var(--bar2);border-radius:3px;font-size:10px;line-height:12px;overflow:hidden;white-space:nowrap;padding:0 3px;color:var(--fg)}
+.note{color:var(--mute);font-size:12px}
+</style></head><body><div class="wrap">
+<header>
+  <input id="q" type="search" placeholder="Filter tags..." aria-label="Filter tags">
+  <label><input type="radio" name="v" value="list" checked> List + bars</label>
+  <label><input type="radio" name="v" value="gantt"> Bars only</label>
+  <nav id="nav"></nav>
+</header>
+<p class="note">Click = select (here it only highlights). Up/Down move. Children are nested under their parent. Each era has its own axis.</p>
+<main id="out"></main>
+</div>
+<script>
+const TAGS = [["Bronze Age", -3300, -1200, 1, null], ["Late Bronze Age", -1550, -1200, 1, null], ["Bronze Age Collapse", -1200, -1150, 2, null], ["Spring and Autumn Period", -770, -476, 1, null], ["Warring States Period", -475, -221, 4, null], ["Five Dynasties and Ten Kingdoms", 907, 979, 1, null], ["Greco-Persian Wars", -499, -449, 11, null], ["Peloponnesian War", -431, -404, 25, null], ["Corinthian War", -395, -387, 4, null], ["Sacred Wars", -595, -338, 2, null], ["Wars of the Diadochi", -322, -275, 23, null], ["Punic Wars", -264, -146, 80, null], ["Second Punic War", -218, -201, 54, "Punic Wars"], ["Third Punic War", -149, -146, 4, "Punic Wars"], ["Roman Civil Wars", -49, -30, 25, null], ["Crisis of the Third Century", 235, 284, 13, null], ["Migration Period", 300, 700, 1, null], ["Fall of the Western Roman Empire", 476, 476, 1, null], ["Muromachi Period", 1336, 1573, 5, null], ["Abbasid Caliphate", 750, 1258, 1, null], ["Reconquista", 718, 1492, 182, null], ["Norman Conquest of England", 1066, 1075, 4, null], ["Investiture Controversy", 1075, 1122, 4, null], ["Crusades", 1096, 1291, 175, null], ["First Crusade", 1096, 1099, 9, "Crusades"], ["Second Crusade", 1147, 1149, 10, "Crusades"], ["Third Crusade", 1189, 1192, 7, "Crusades"], ["Fourth Crusade", 1202, 1204, 3, "Crusades"], ["Northern Crusades", 1198, 1290, 21, "Crusades"], ["Albigensian Crusade", 1209, 1229, 15, "Crusades"], ["Hundred Years' War", 1337, 1453, 95, null], ["Hussite Wars", 1419, 1434, 31, null], ["Wars of the Roses", 1455, 1487, 21, null], ["Protestant Reformation", 1517, 1648, 2, null], ["French Wars of Religion", 1562, 1598, 34, null], ["Dutch Revolt", 1568, 1648, 1, null], ["Thirty Years' War", 1618, 1648, 118, null], ["English Civil War", 1642, 1651, 78, null], ["Mughal Empire", 1526, 1857, 5, null], ["Great Turkish War", 1683, 1699, 37, null], ["Glorious Revolution", 1688, 1689, 7, null], ["Great Northern War", 1700, 1721, 66, null], ["War of the Spanish Succession", 1701, 1714, 109, null], ["Seven Years' War", 1756, 1763, 135, null], ["American Revolution", 1765, 1783, 244, null], ["American Revolutionary War", 1775, 1783, 241, "American Revolution"], ["French Revolution", 1789, 1799, 288, null], ["Reign of Terror", 1793, 1794, 1, "French Revolution"], ["Napoleonic Era", 1799, 1815, 484, null], ["Napoleonic Wars", 1803, 1815, 409, "Napoleonic Era"], ["Peninsular War", 1807, 1814, 157, "Napoleonic Wars"], ["Greek War of Independence", 1821, 1829, 51, null], ["Revolutions of 1848", 1848, 1849, 33, null], ["Crimean War", 1853, 1856, 27, null], ["American Civil War", 1861, 1865, 580, null], ["German Unification", 1864, 1871, 93, null], ["Scramble for Africa", 1881, 1914, 42, null], ["Boer Wars", 1880, 1902, 9, null], ["First Boer War", 1880, 1881, 9, "Boer Wars"], ["Second Boer War", 1899, 1902, 42, "Boer Wars"], ["Boxer Rebellion", 1899, 1901, 7, null], ["Mali Empire", 1235, 1600, 1, null], ["Spanish Empire", 1492, 1976, 19, null], ["French Colonial Empire", 1534, 1980, 18, null], ["Italian Wars", 1494, 1559, 47, null], ["War of the League of Cambrai", 1508, 1516, 18, "Italian Wars"], ["Ottoman-Safavid War", 1514, 1555, 2, null], ["Anglo-Spanish War", 1585, 1604, 36, null], ["Eighty Years' War", 1568, 1648, 191, null], ["Smolensk War", 1632, 1634, 3, null], ["Khmelnytsky Uprising", 1648, 1657, 20, null], ["Northern Wars", 1655, 1721, 48, null], ["Franco-Dutch War", 1672, 1678, 46, null], ["Nine Years' War", 1688, 1697, 68, null], ["War of Jenkins' Ear", 1739, 1748, 13, null], ["Carnatic Wars", 1746, 1763, 7, null], ["Second Anglo-Maratha War", 1803, 1805, 13, null], ["Third Anglo-Maratha War", 1817, 1818, 3, null], ["First Anglo-Mysore War", 1767, 1769, 1, null], ["Second Anglo-Mysore War", 1780, 1784, 6, null], ["Third Anglo-Mysore War", 1790, 1792, 7, null], ["Fourth Anglo-Mysore War", 1799, 1799, 2, null], ["Haitian Revolution", 1791, 1804, 18, null], ["Latin American Wars of Independence", 1808, 1833, 100, null], ["Mexican War of Independence", 1810, 1821, 19, "Latin American Wars of Independence"], ["First Anglo-Afghan War", 1839, 1842, 4, null], ["Taiping Rebellion", 1850, 1864, 11, null], ["Second Opium War", 1856, 1860, 11, null], ["Second Schleswig War", 1864, 1864, 9, "German Unification"], ["Franco-Prussian War", 1870, 1871, 56, "German Unification"], ["Paris Commune", 1871, 1871, 5, null], ["Zulu War", 1879, 1879, 10, null], ["First Sino-Japanese War", 1894, 1895, 9, null], ["Spanish-American War", 1898, 1898, 18, null], ["Philippine-American War", 1899, 1902, 24, null], ["Russo-Japanese War", 1904, 1905, 18, null], ["Mexican Revolution", 1910, 1920, 25, null], ["Xinhai Revolution", 1911, 1912, 4, null], ["Balkan Wars", 1912, 1913, 33, null], ["First Balkan War", 1912, 1913, 27, "Balkan Wars"], ["Second Balkan War", 1913, 1913, 5, "Balkan Wars"], ["World War I", 1914, 1918, 523, null], ["Gallipoli Campaign", 1915, 1916, 14, "World War I"], ["Russian Revolution", 1917, 1917, 6, null], ["Russian Civil War", 1917, 1923, 57, null], ["Irish War of Independence", 1919, 1921, 11, null], ["Irish Civil War", 1922, 1923, 3, null], ["Chinese Civil War", 1927, 1949, 27, null], ["Spanish Civil War", 1936, 1939, 73, null], ["Second Sino-Japanese War", 1937, 1945, 45, null], ["World War II", 1939, 1945, 1032, null], ["Pacific War", 1941, 1945, 215, "World War II"], ["Battle of Stalingrad", 1942, 1943, 3, "World War II"], ["Holocaust", 1941, 1945, 7, null], ["Indian Independence Movement", 1857, 1947, 2, null], ["First Arab-Israeli War", 1948, 1949, 23, null], ["Korean War", 1950, 1953, 85, "Cold War"], ["Algerian War of Independence", 1954, 1962, 12, "Cold War"], ["Vietnam War", 1955, 1975, 100, "Cold War"], ["Hungarian Revolution of 1956", 1956, 1956, 1, "Cold War"], ["Cuban Revolution", 1953, 1959, 8, null], ["Cold War", 1947, 1991, 328, null], ["Six-Day War", 1967, 1967, 2, null], ["Yom Kippur War", 1973, 1973, 20, null], ["Iranian Revolution", 1978, 1979, 2, null], ["Soviet-Afghan War", 1979, 1989, 14, "Cold War"], ["Falklands War", 1982, 1982, 21, null], ["Lebanese Civil War", 1975, 1990, 22, null], ["Gulf War", 1990, 1991, 17, null], ["Dissolution of Yugoslavia", 1991, 2008, 148, null], ["Yugoslav Wars", 1991, 2001, 146, "Dissolution of Yugoslavia"], ["Rwandan Genocide", 1994, 1994, 3, null], ["First Congo War", 1996, 1997, 2, null], ["Second Congo War", 1998, 2003, 3, null], ["War on Terror", 2001, null, 193, null], ["Iraq War", 2003, 2011, 58, "War on Terror"], ["Arab Spring", 2010, 2012, 69, null], ["Syrian Civil War", 2011, null, 173, null], ["Russo-Ukrainian War", 2014, null, 138, null]].map(([name, start, end, count, parent]) => ({ name, start, end, count, parent }));
+const NOW = 2026;
+const ERAS = [["Ancient", -3300, 499], ["Medieval", 500, 1499], ["Early modern", 1500, 1799],
+  ["1800s", 1800, 1899], ["1900s", 1900, 1999], ["Today", 2000, NOW]];
+const fmt = (y) => (y < 0 ? -y + " BC" : String(y));
+const eraOf = (y) => Math.max(0, ERAS.findIndex(([, a, b]) => y >= a && y <= b));
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+
+function render() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const view = document.querySelector("input[name=v]:checked").value;
+  const out = document.getElementById("out");
+  const nav = document.getElementById("nav");
+  out.replaceChildren();
+  nav.replaceChildren();
+  ERAS.forEach(([era, a, b], i) => {
+    const tags = TAGS.filter((t) => eraOf(t.start) === i && (!q || t.name.toLowerCase().includes(q)));
+    if (!tags.length) return;
+    const lo = Math.min(a, ...tags.map((t) => t.start));
+    const x = (y) => Math.max(0, Math.min(100, ((y - lo) / (b - lo)) * 100));
+    const h = el("h2");
+    h.id = "era-" + i;
+    h.append(el("span", null, era + " · " + fmt(lo) + "–" + (i === 5 ? "today" : fmt(b))), el("span", null, tags.length + " tags"));
+    out.append(h);
+    const link = el("a", null, era + " " + tags.length);
+    link.href = "#era-" + i;
+    nav.append(link);
+
+    if (view === "gantt") {
+      const g = el("div", "gantt");
+      const lanes = [];
+      const placed = tags.slice().sort((p, r) => p.start - r.start).map((t) => {
+        const end = t.end ?? NOW;
+        let lane = lanes.findIndex((e) => e < t.start);
+        if (lane < 0) { lane = lanes.length; lanes.push(end); } else lanes[lane] = end;
+        return [t, lane];
+      });
+      lanes.forEach((_, l) => {
+        const row = el("div", "row");
+        placed.filter(([, lane]) => lane === l).forEach(([t]) => {
+          const s = el("span", "g", t.name);
+          s.style.left = x(t.start) + "%";
+          s.style.width = Math.max(0.6, x(t.end ?? NOW) - x(t.start)) + "%";
+          s.title = t.name + " · " + fmt(t.start) + "–" + (t.end === null ? "present" : fmt(t.end)) + " · " + t.count + " events";
+          row.append(s);
+        });
+        g.append(row);
+      });
+      out.append(g);
+      return;
+    }
+
+    const ol = el("ol");
+    const inEra = new Set(tags.map((t) => t.name));
+    const nested = (t) => !q && t.parent && inEra.has(t.parent);
+    const order = (p, r) => p.start - r.start || (r.end ?? NOW) - (p.end ?? NOW);
+    const rows = [];
+    const add = (t, depth) => {
+      rows.push([t, depth]);
+      if (!q) tags.filter((c) => c.parent === t.name).sort(order).forEach((c) => add(c, depth + 1));
+    };
+    tags.filter((t) => !nested(t)).sort(order).forEach((t) => add(t, 0));
+    rows.forEach(([t, depth]) => {
+      const li = el("li", depth ? "child" : "");
+      const name = el("span", "name", t.name + " ");
+      if (depth > 1) name.style.paddingLeft = 16 * depth + "px";
+      name.append(el("span", "yrs", fmt(t.start) + "–" + (t.end === null ? "present" : fmt(t.end))));
+      const track = el("span", "track");
+      const end = t.end ?? NOW;
+      const bar = el("span", "bar" + (end > b ? " more" : ""));
+      bar.style.left = x(t.start) + "%";
+      bar.style.width = x(Math.min(end, b)) - x(t.start) + "%";
+      track.append(bar);
+      li.append(name, el("span", "n", t.count.toLocaleString()), track);
+      li.title = t.parent ? t.parent + " › " + t.name : t.name;
+      li.onclick = () => {
+        document.querySelectorAll("li.active").forEach((n) => n.classList.remove("active"));
+        li.classList.add("active");
+      };
+      ol.append(li);
+    });
+    out.append(ol);
+  });
+}
+
+document.getElementById("q").oninput = render;
+document.querySelectorAll("input[name=v]").forEach((r) => { r.onchange = render; });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const items = [...document.querySelectorAll("li")];
+  if (!items.length) return;
+  e.preventDefault();
+  const i = items.findIndex((n) => n.classList.contains("active"));
+  const j = Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+  items[j].click();
+  items[j].scrollIntoView({ block: "nearest" });
+});
+render();
+</script></body></html>
