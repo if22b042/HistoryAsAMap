@@ -27,8 +27,9 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from haam.data.event_types import (AREA_ROOTS, EARTH, EVENT_TYPES, NOT_EVENT_ROOTS, NOT_EVENTS,
-                                   ORGANISATION_ROOTS, ORGANISATION_TYPES, PLACE_ROOTS)
+from haam.data.event_types import (AREA_ROOTS, CATEGORY_CLASS_EXCLUSIONS, CATEGORY_CLASSES, EARTH, EVENT_TYPES, NOT_EVENT_ROOTS,
+                                   NOT_EVENTS, ORGANISATION_ROOTS, ORGANISATION_TYPES, PLACE_ROOTS,
+                                   REFINED_CATEGORIES)
 from haam.dates import ParsedDate, article_date, parse_wikidata_time
 from haam.tagging import Tagger
 from haam.wikipedia import canonical_url
@@ -43,6 +44,7 @@ P_INSTANCE_OF, P_POINT_IN_TIME, P_START_TIME = "P31", "P585", "P580"
 P_END_TIME, P_INCEPTION = "P582", "P571"
 WIKIDATA_DATE_PROPS = (P_POINT_IN_TIME, P_START_TIME, P_END_TIME, P_INCEPTION)
 P_COORDINATES, P_COUNTRY, P_PART_OF = "P625", "P17", "P361"
+P_HAS_CAUSE, P_IMMEDIATE_CAUSE = "P828", "P1478"
 LOCATION_PROPS = ("P276", "P1071", "P740")  # location, location of creation, location of formation
 MIN_PRECISION = 9  # Wikidata time precision: 9 = year, 10 = month, 11 = day
 
@@ -214,6 +216,55 @@ def validate(candidate: Candidate, *, today: date | None = None,
                    lat=round(coords[0], 6), lon=round(coords[1], 6), coord_source=coord_source)
 
 
+# --------------------------------------------------------------- categories
+
+def refine_category(base: str, types: Iterable[str], causes: Iterable[str],
+                    classes: dict[str, set[str]]) -> str:
+    """The category of an item, from its broad category and its P31 classes.
+
+    ``base`` comes from the discovery type (or is the current category);
+    ``types`` are the item's P31 classes, ``causes`` its P828 / P1478 values;
+    ``classes`` maps each group of ``CATEGORY_CLASSES`` to its classes and all
+    their subclasses (see :func:`category_classes`). The rules and their order
+    are documented next to ``CATEGORY_CLASSES``.
+    """
+    if base not in REFINED_CATEGORIES:
+        return base
+    types = set(types)
+
+    def has(group: str) -> bool:
+        return bool(types & classes.get(group, set()))
+
+    if has("violence"):
+        return "violence"
+    if base == "other":
+        return base
+    if has("natural"):
+        return "natural"
+    if has("human_made"):
+        return "disaster"
+    if has("wildfire"):
+        return "disaster" if set(causes) & classes.get("human_cause", set()) else "natural"
+    if has("fire"):
+        return "disaster"
+    return base
+
+
+def category_classes(client: "WikidataClient") -> dict[str, set[str]]:
+    """Every group of ``CATEGORY_CLASSES`` with all subclasses of its classes."""
+    result = {}
+    for group, roots in CATEGORY_CLASSES.items():
+        classes = set().union(*(client.subclasses(root) for root in roots))
+        for excluded in CATEGORY_CLASS_EXCLUSIONS.get(group, {}):
+            classes -= client.subclasses(excluded)
+        result[group] = classes
+    return result
+
+
+def item_causes(claims: dict) -> list[str]:
+    return item_ids(claims, P_HAS_CAUSE) + item_ids(claims, P_IMMEDIATE_CAUSE)
+
+
 # ------------------------------------------------------------------- client
 
 @dataclass
@@ -284,6 +335,26 @@ class WikidataClient:
         """The class itself and all its subclasses (e.g. every kind of fictional entity)."""
         rows = self._sparql(f"SELECT ?c WHERE {{ ?c wdt:P279* wd:{root} }}")
         return {r["c"]["value"].rsplit("/", 1)[1] for r in rows}
+
+    def statements(self, ids: Iterable[str], props: Iterable[str] = (P_INSTANCE_OF, P_HAS_CAUSE,
+                                                                     P_IMMEDIATE_CAUSE)) -> dict[str, dict[str, list[str]]]:
+        """``item → property → [item ids]`` for a few item-valued properties, via SPARQL.
+
+        Much lighter than :meth:`entities` when only a couple of properties are needed.
+        """
+        result: dict[str, dict[str, list[str]]] = {}
+        wanted = " ".join(f"wdt:{p}" for p in props)
+        for chunk in chunks(sorted(set(ids)), 400):
+            values = " ".join(f"wd:{qid}" for qid in chunk)
+            rows = self._sparql(f"""
+            SELECT ?item ?p ?v WHERE {{
+              VALUES ?item {{ {values} }} VALUES ?p {{ {wanted} }}
+              ?item ?p ?v . FILTER(isIRI(?v))
+            }}""")
+            for row in rows:
+                item, prop, value = (row[k]["value"].rsplit("/", 1)[1] for k in ("item", "p", "v"))
+                result.setdefault(item, {}).setdefault(prop, []).append(value)
+        return result
 
     def entities(self, ids: list[str], props: str = "claims") -> dict:
         result = {}
@@ -423,6 +494,7 @@ def export(
     place_classes = set().union(*(client.subclasses(root) for root in PLACE_ROOTS))
     area_classes = set().union(*(client.subclasses(root) for root in AREA_ROOTS))
     report(f"  locations: {len(place_classes)} kinds of specific place, {len(area_classes)} kinds of area")
+    refine_classes = category_classes(client)
 
     # 1. discovery – the first type in EVENT_TYPES that finds an item wins
     candidates: dict[str, Candidate] = {}
@@ -459,7 +531,7 @@ def export(
         for number, batch in enumerate(chunks(ids, batch_size), start=1):
             _process_batch(client, [candidates[i] for i in batch], events_csv, rejected_csv, stats,
                            categories, labels_by_type, tagger, status, blocked_types,
-                           place_classes, area_classes, organisation_types)
+                           place_classes, area_classes, organisation_types, refine_classes)
             events_file.flush()
             rejected_file.flush()
             done = min(number * batch_size, len(ids))
@@ -473,7 +545,8 @@ def _has_wikidata_date(claims: dict) -> bool:
 
 
 def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, labels_by_type,
-                   tagger, status, blocked_types, place_classes, area_classes, organisation_types):
+                   tagger, status, blocked_types, place_classes, area_classes, organisation_types,
+                   refine_classes=None):
     entities = client.entities([c.qid for c in batch])
     for candidate in batch:
         candidate.claims = entities.get(candidate.qid, {}).get("claims", {})
@@ -544,7 +617,9 @@ def _process_batch(client, batch, events_csv, rejected_csv, stats, categories, l
             "lat": verdict.lat,
             "lon": verdict.lon,
             "country": next((c for c in countries if c), ""),
-            "category": categories[candidate.event_type],
+            "category": refine_category(categories[candidate.event_type],
+                                        item_ids(candidate.claims, P_INSTANCE_OF),
+                                        item_causes(candidate.claims), refine_classes or {}),
             # Dated only by "inception": often an organisation or project rather than an
             # event (Project Artichoke, Barents Region), so it waits for review.
             "status": "pending" if verdict.date_source == P_INCEPTION else status,

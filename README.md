@@ -161,8 +161,15 @@ An item becomes an event only if it passes all of these checks
 7. that article is not a list, timeline or disambiguation page.
 
 Everything rejected goes to `seed/wikidata_rejected.csv` with the reason. The
-first matching type decides the category (naval battle → naval, treaty →
-diplomatic, …), and events dated only by an inception go in as pending. Options:
+first matching type decides the broad category (naval battle → naval, treaty →
+diplomatic, …); for natural, fire and "other" items it is then refined from the
+item's own P31 classes (`CATEGORY_CLASSES` in `haam/data/event_types.py`):
+massacres, assassinations and terrorist attacks → violence; earthquakes,
+eruptions, storms and floods → natural; fires, explosions, accidents and
+collapses → disaster; wildfires stay natural unless Wikidata names a human cause
+(arson, slash-and-burn…). Events dated only by an inception go in as pending.
+`flask --app haam haam recategorize` applies the same rules to the database and
+the CSV (`--dry-run` to preview). Options:
 `--type Q178561` (only some types), `--limit 20` (trial run), `--status pending`
 (send everything through the review queue).
 
@@ -199,6 +206,7 @@ flask --app haam haam sync-wikidata
 | `flask --app haam haam import-region --lat 35 70 --lon -10 40 --max-new 100` | Find dated events by geosearch in a lat/lon box |
 | `flask --app haam haam export-wikidata` | Rebuild `seed/wikidata_events.csv` from Wikidata |
 | `flask --app haam haam sync-wikidata` | Make the database's Wikidata events match `seed/wikidata_events.csv` |
+| `flask --app haam haam recategorize` | Re-derive imported events' categories from their Wikidata classes (database and CSV) |
 | `flask --app haam haam retag-csv seed/wikidata_events.csv` | Recompute the file's tags column from Wikidata |
 | `flask --app haam haam import-csv seed/events.csv` | Import a CSV (`url`, optional `category,status,year,lat,lon,tags`) |
 | `flask --app haam haam import-legacy` | Copy data from the previous version's `entries`/`locations` tables |
