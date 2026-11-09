@@ -1781,3 +1781,20 @@ a.tag-pill { text-decoration: none; }
 @media (max-width: 860px) {
   .welcome-open { top: calc(0.75rem + 48px); right: 0.75rem; }
 }
+
+/* "All historical events": oldest or newest first */
+.list-sort { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; max-width: 1400px; margin: 0 auto 0.9rem; flex-wrap: wrap; }
+.list-sort-label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-right: 0.15rem; }
+.list-sort-btn {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.list-sort-btn:hover { border-color: var(--accent); }
+.list-sort-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (max-width: 768px) { .list-sort { justify-content: center; margin: 0 1rem 0.9rem; } }

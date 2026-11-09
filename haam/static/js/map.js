@@ -1107,6 +1107,43 @@ function finishRender() {
 const LIST_PAGE = 60;
 let listLimit = LIST_PAGE;
 
+// The list below the map: oldest or newest first (remembered in this browser).
+const LIST_SORT_KEY = "haam.listSort";
+let listSort = "oldest";
+try {
+  if (localStorage.getItem(LIST_SORT_KEY) === "newest") listSort = "newest";
+} catch { /* storage blocked: oldest first */ }
+let sortedCache = { source: null, order: null, events: [] };
+
+/** The shown events in list order; re-sorted only when the filters or the order change. */
+function listEvents() {
+  if (sortedCache.source !== state.filtered || sortedCache.order !== listSort) {
+    const sign = listSort === "newest" ? -1 : 1;
+    const events = state.filtered.slice().sort((a, b) =>
+      sign * (a.year - b.year) || a.title.localeCompare(b.title));
+    sortedCache = { source: state.filtered, order: listSort, events };
+  }
+  return sortedCache.events;
+}
+
+function setupListSort() {
+  const buttons = document.querySelectorAll(".list-sort-btn");
+  const render = () => buttons.forEach((b) => {
+    const active = b.dataset.sort === listSort;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  });
+  render();
+  buttons.forEach((button) => button.addEventListener("click", () => {
+    if (button.dataset.sort === listSort) return;
+    listSort = button.dataset.sort;
+    try { localStorage.setItem(LIST_SORT_KEY, listSort); } catch { /* not remembered */ }
+    render();
+    listLimit = LIST_PAGE;
+    renderList();
+  }));
+}
+
 function renderList() {
   const grid = document.getElementById("events-grid");
   const template = document.getElementById("event-card-template");
@@ -1118,7 +1155,7 @@ function renderList() {
   }
 
   const fragment = document.createDocumentFragment();
-  state.filtered.slice(0, listLimit).forEach((event) => {
+  listEvents().slice(0, listLimit).forEach((event) => {
     const card = template.content.firstElementChild.cloneNode(true);
     const pill = card.querySelector(".year-pill");
     pill.textContent = event.display_year;
@@ -1817,6 +1854,7 @@ async function init() {
   setupSearch();
   setupHeatmapToggle();
   setupColorToggle();
+  setupListSort();
   setupFilterPanelToggle();
 
   const manifest = MAP_ELEMENT.dataset.manifest ? JSON.parse(MAP_ELEMENT.dataset.manifest) : null;
