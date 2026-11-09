@@ -17,9 +17,10 @@ CSP = "; ".join([
     "script-src 'self' https://unpkg.com https://cdnjs.cloudflare.com",
     "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com",
     "font-src 'self' https://cdnjs.cloudflare.com",
-    # server.arcgisonline.com: the game's map tiles without place names.
+    # Base map tiles (haam/static/js/basemaps.js): OpenStreetMap, OpenTopoMap,
+    # Esri (satellite, gray canvas and the game's map without place names).
     "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com"
-    " https://server.arcgisonline.com",
+    " https://server.arcgisonline.com https://*.tile.opentopomap.org",
     "connect-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

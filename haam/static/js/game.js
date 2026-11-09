@@ -5,6 +5,7 @@
 // Hard mode (&hard=1, either mode): the year is hidden and guessed too; the daily
 // hard game has five other events, with its own progress and streak.
 /* global L */
+import { addBasemapSwitcher } from "./basemaps.js";
 
 const STORAGE_KEY = "haam-game-v1";
 const ROOT = document.getElementById("game");
@@ -198,22 +199,14 @@ $("year-slider").addEventListener("input", () => setYear(sliderToYear(Number($("
 
 // ---------------------------------------------------------------- map
 
-const map = L.map("game-map", { worldCopyJump: true, minZoom: 2 }).setView([30, 10], 2);
+const map = L.map("game-map", { worldCopyJump: true, minZoom: 2, maxZoom: 16 }).setView([30, 10], 2);
 
-// Esri's gray canvas base maps without their label layer, so zooming in does not
-// reveal the answer. (CARTO's no-label tiles now need an API key.)
-const tileUrl = () => {
-  const style = document.documentElement.dataset.theme === "dark" ? "World_Dark_Gray_Base" : "World_Light_Gray_Base";
-  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`;
-};
-const tiles = L.tileLayer(tileUrl(), {
-  maxZoom: 16,
-  attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community",
-}).addTo(map);
+// Only base maps without place names, so zooming in does not reveal the answer:
+// Esri's gray canvas (follows the theme) or satellite imagery.
+addBasemapSwitcher(map, { choices: ["plain", "satellite"], storageKey: "basemap-game" });
 
-// Follow the theme toggle; the pin line takes the theme's text colour too.
+// The pin line takes the theme's text colour.
 new MutationObserver(() => {
-  tiles.setUrl(tileUrl());
   layer.eachLayer((item) => {
     if (item instanceof L.Polyline && !(item instanceof L.CircleMarker)) item.setStyle(lineStyle());
   });

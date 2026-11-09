@@ -1,6 +1,7 @@
 // <div data-location-picker data-lat="#lat" data-lon="#lon">: click the map to fill
 // the latitude/longitude inputs; typing coordinates moves the marker.
 /* global L */
+import { addBasemapSwitcher } from "./basemaps.js";
 
 document.querySelectorAll("[data-location-picker]").forEach((element) => {
   const latInput = document.querySelector(element.dataset.lat);
@@ -8,10 +9,7 @@ document.querySelectorAll("[data-location-picker]").forEach((element) => {
   if (!latInput || !lonInput) return;
 
   const map = L.map(element, { worldCopyJump: true, minZoom: 1 }).setView([35, 15], 2);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 18,
-  }).addTo(map);
+  addBasemapSwitcher(map);
 
   let marker = null;
   const round = (value) => Math.round(value * 1e5) / 1e5; // ~1 m
