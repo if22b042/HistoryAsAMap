@@ -17,7 +17,6 @@ const CATEGORY_LABELS = {
   scientific: "Scientific",
   natural: "Natural",
   disaster: "Disaster",
-  violence: "Violence",
   other: "Other",
 };
 

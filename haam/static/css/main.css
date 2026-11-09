@@ -16,7 +16,6 @@
   --cat-scientific: #38a169;
   --cat-natural: #dd6b20;
   --cat-disaster: #8b4513;
-  --cat-violence: #c53f8c;
   --cat-other: #718096;
 
   --bg: #eef2f7;
@@ -274,7 +273,6 @@ img { max-width: 100%; }
 .badge-scientific { background: var(--cat-scientific); }
 .badge-natural { background: var(--cat-natural); }
 .badge-disaster { background: var(--cat-disaster); }
-.badge-violence { background: var(--cat-violence); }
 .badge-other { background: var(--cat-other); }
 .badge-warning { background: var(--warning-bg); color: var(--warning); }
 .year-pill {
@@ -293,7 +291,6 @@ img { max-width: 100%; }
 .dot-scientific { background: var(--cat-scientific); }
 .dot-natural { background: var(--cat-natural); }
 .dot-disaster { background: var(--cat-disaster); }
-.dot-violence { background: var(--cat-violence); }
 .dot-other { background: var(--cat-other); }
 .tag-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .tag {
@@ -544,7 +541,6 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 .marker-scientific { background: var(--cat-scientific); }
 .marker-natural { background: var(--cat-natural); }
 .marker-disaster { background: var(--cat-disaster); }
-.marker-violence { background: var(--cat-violence); }
 .cluster {
   display: grid;
   place-items: center;
@@ -568,7 +564,6 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 .cluster-cat-scientific { background: var(--cat-scientific); }
 .cluster-cat-natural { background: var(--cat-natural); }
 .cluster-cat-disaster { background: var(--cat-disaster); }
-.cluster-cat-violence { background: var(--cat-violence); }
 
 /* Leaflet popups follow the theme */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--text); }

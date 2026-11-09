@@ -164,7 +164,7 @@ Everything rejected goes to `seed/wikidata_rejected.csv` with the reason. The
 first matching type decides the broad category (naval battle → naval, treaty →
 diplomatic, …); for natural, fire and "other" items it is then refined from the
 item's own P31 classes (`CATEGORY_CLASSES` in `haam/data/event_types.py`):
-massacres, assassinations and terrorist attacks → violence; earthquakes,
+massacres and terrorist attacks → disaster; earthquakes,
 eruptions, storms and floods → natural; fires, explosions, accidents and
 collapses → disaster; wildfires stay natural unless Wikidata names a human cause
 (arson, slash-and-burn…). Events dated only by an inception go in as pending.

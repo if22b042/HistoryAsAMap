@@ -55,7 +55,13 @@ def state() -> dict:
                         + func.coalesce(Tag.end_year, 1))).scalar_subquery(),
     )).one()
     total, min_year, max_year = row[0], row[1], row[2]
-    digest = hashlib.sha1(repr((tuple(row), MODULUS, BOUNDS, FORMAT)).encode()).hexdigest()
+    # Bulk recategorisations (migrations, `flask haam recategorize`, sync-wikidata) leave
+    # updated_at alone, so the events per category are fingerprinted too, with the list of
+    # categories itself (the chunks store categories as indexes into it).
+    per_category = sorted((c.value, n) for c, n in db.session.execute(
+        select(Event.category, func.count(Event.id)).where(approved).group_by(Event.category)))
+    digest = hashlib.sha1(repr((tuple(row), tuple(per_category), tuple(CATEGORIES), MODULUS, BOUNDS,
+                                FORMAT)).encode()).hexdigest()
     return {"version": digest[:12], "total": total, "years": [min_year, max_year]}
 
 

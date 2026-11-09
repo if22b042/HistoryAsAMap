@@ -137,8 +137,8 @@ def sync_wikidata_command(path, dry_run):
 def recategorize_command(csv_path, dry_run):
     """Re-derive the categories of imported events from their Wikidata classes (P31).
 
-    Splits "natural" into natural and human-made disasters and moves massacres,
-    assassinations and terrorist attacks into "violence". Events submitted on the
+    Splits "natural" into natural and human-made disasters and moves massacres and
+    terrorist attacks out of "other" into "disaster". Events submitted on the
     website keep the category their author picked.
     """
     import os

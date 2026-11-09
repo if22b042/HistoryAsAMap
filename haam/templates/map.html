@@ -65,7 +65,7 @@
         <button type="button" class="category-btn active" data-category="all" aria-pressed="true">
           <i class="fas fa-globe" aria-hidden="true"></i> All
         </button>
-        {% set icons = {'military': 'crosshairs', 'diplomatic': 'handshake', 'naval': 'ship', 'scientific': 'flask', 'natural': 'volcano', 'disaster': 'fire', 'violence': 'skull', 'other': 'ellipsis-h'} %}
+        {% set icons = {'military': 'crosshairs', 'diplomatic': 'handshake', 'naval': 'ship', 'scientific': 'flask', 'natural': 'volcano', 'disaster': 'exclamation-triangle', 'other': 'ellipsis-h'} %}
         {% for category in categories %}
           <button type="button" class="category-btn" data-category="{{ category.value }}" aria-pressed="false">
             <span class="dot dot-{{ category.value }}" aria-hidden="true"></span>
