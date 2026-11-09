@@ -15,7 +15,7 @@ old category are touched; events submitted on the website keep their author's
 choice. The downgrade folds the new categories back into the old ones.
 
 Revision ID: 7b2f9c41d8a3
-Revises: c3f1d2a4b5e6
+Revises: d4e5f6a7b8c9
 Create Date: 2026-11-09 10:00:00.000000
 
 """
@@ -25,7 +25,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '7b2f9c41d8a3'
-down_revision = 'c3f1d2a4b5e6'
+down_revision = 'd4e5f6a7b8c9'
 branch_labels = None
 depends_on = None
 
