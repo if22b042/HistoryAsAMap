@@ -955,6 +955,12 @@ function updateTagOptions() {
     option.disabled = hide; // Safari ignores "hidden" on options
     option.textContent = `${tag.name} (${tag.display_range}) – ${count.toLocaleString()}`;
   });
+  // Most entries first (the counts follow the other filters), ties alphabetically.
+  const options = [...select.options].slice(1);
+  options.sort((a, b) => (state.tagCounts.get(Number(b.value)) || 0) - (state.tagCounts.get(Number(a.value)) || 0)
+    || state.tagsById.get(Number(a.value)).name.localeCompare(state.tagsById.get(Number(b.value)).name));
+  const inOrder = options.every((option, i) => select.options[i + 1] === option);
+  if (!inOrder) select.append(...options); // append moves them, in the new order
 }
 
 /** Every filter except the tags (their counts are taken from these events). */
