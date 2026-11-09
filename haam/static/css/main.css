@@ -1798,3 +1798,8 @@ a.tag-pill { text-decoration: none; }
 .list-sort-btn:hover { border-color: var(--accent); }
 .list-sort-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 @media (max-width: 768px) { .list-sort { justify-content: center; margin: 0 1rem 0.9rem; } }
+
+/* the selected dot or cluster sits above the others (CSS beats Leaflet's inline z-index,
+   and unlike setZIndexOffset() it never moves the marker) */
+.leaflet-marker-icon.marker-selected,
+.leaflet-marker-icon.cluster-selected { z-index: 100000 !important; }

@@ -421,7 +421,6 @@ function placeRing() {
     const old = ringed.getElement?.();
     old?.classList.remove("marker-selected", "ring-colored", "cluster-selected");
     old?.style.removeProperty("--ring-color");
-    ringed.setZIndexOffset?.(0);
     ringed = null;
   }
   const marker = selectedId === null ? null : state.markersById.get(selectedId);
@@ -451,7 +450,10 @@ function placeRing() {
   } else {
     element.classList.add("cluster-selected"); // still bundled: the cluster pulses
   }
-  layer.setZIndexOffset?.(10000);
+  // Raised above the others by CSS (z-index on the class), not setZIndexOffset():
+  // that also re-positions the layer, and done right after a zoom it snapped the
+  // cluster to a stale place while the cluster group was still animating it, so the
+  // selected bundle jumped back and forth between regions.
   ringed = layer;
 }
 
