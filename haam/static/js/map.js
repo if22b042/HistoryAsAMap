@@ -365,6 +365,12 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   maps.target = "_blank";
   maps.rel = "noopener";
   actions.append(maps);
+  if (!FULL_TEXT) {
+    // Main-map events have their own page, the link to share or bookmark.
+    const page = el("a", "btn btn-secondary", "Event page");
+    page.href = `/event/${encodeURIComponent(id)}`;
+    actions.append(page);
+  }
   parts.push(actions);
   const adder = collectionAdder.control(id);
   if (adder) parts.push(adder);

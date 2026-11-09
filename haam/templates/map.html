@@ -1,5 +1,19 @@
 {% extends "base.html" %}
-{% block title %}{% if collection %}{{ collection.title }} · Map{% else %}Map{% endif %}{% endblock %}
+{% block title %}
+  {%- if collection %}{{ collection.title }} · Map
+  {%- elif shared_event %}{{ shared_event.title }} ({{ shared_event.display_year }}) · Map
+  {%- else %}Interactive map of historical events{% endif %}
+{%- endblock %}
+{% block description %}
+  {%- if collection %}{{ (collection.description or 'A personal map of history: ' ~ collection.entries|length ~ ' entries' ~ (', ' ~ collection.year_span if collection.year_span else '') ~ '.')|describe }}
+  {%- elif shared_event %}{{ shared_event.summary|describe }}{% endif %}
+{%- endblock %}
+{% block canonical %}{% if not collection and not shared_event %}{{ external_url('public.index') }}{% endif %}{% endblock %}
+{% block share_title %}
+  {%- if collection %}{{ collection.title }}
+  {%- elif shared_event %}{{ shared_event.title }} ({{ shared_event.display_year }}){% endif %}
+{%- endblock %}
+{% block share_url %}{% if shared_event %}{{ absolute_url(event_path(shared_event)) }}{% endif %}{% endblock %}
 {% block body_class %}page-map{% endblock %}
 
 {% block head %}

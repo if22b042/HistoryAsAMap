@@ -1,20 +1,66 @@
-"""Pages for visitors: the map, the about page and the submission flow."""
+"""Pages for visitors: the map, event pages, the about page and the submission flow."""
 
-from flask import Blueprint, render_template, url_for
+from flask import Blueprint, abort, redirect, render_template, request, url_for
+from sqlalchemy import func, select
 
-from haam import events, feed
+from haam import events, feed, seo
 from haam.dates import format_year
 from haam.events import EventData, EventError
+from haam.extensions import db
 from haam.forms import EventForm, LinkForm
-from haam.models import Status
+from haam.models import Event, Status, event_tags
 
 bp = Blueprint("public", __name__)
+
+RELATED_LIMIT = 8
+
+
+def _approved_event(event_id: int) -> Event | None:
+    event = db.session.get(Event, event_id)
+    return event if event is not None and event.status == Status.APPROVED else None
 
 
 @bp.get("/")
 def index():
+    # A shared link to one event (/?event=7) previews that event, not the whole map.
+    event_id = request.args.get("event", type=int)
+    event = _approved_event(event_id) if event_id else None
     # The map starts loading its chunks straight away, without asking for the manifest.
-    return render_template("map.html", manifest=feed.manifest(url_for))
+    return render_template("map.html", manifest=feed.manifest(url_for), shared_event=event)
+
+
+def _related(event: Event) -> tuple[object | None, list[Event]]:
+    """Events from the same tag (the most specific one), closest in time first."""
+    if not event.tags:
+        return None, []
+    tag = min(event.tags, key=lambda t: (t.end_year or 10**6) - (t.start_year or -10**6))
+    related = db.session.scalars(
+        select(Event)
+        .join(event_tags, event_tags.c.event_id == Event.id)
+        .where(event_tags.c.tag_id == tag.id, Event.status == Status.APPROVED, Event.id != event.id)
+        .order_by(func.abs(Event.year - event.year), Event.id)
+        .limit(RELATED_LIMIT)
+    ).all()
+    return tag, related
+
+
+@bp.get("/event/<int:event_id>")
+@bp.get("/event/<int:event_id>-<slug>")
+def event_page(event_id: int, slug: str = ""):
+    event = _approved_event(event_id)
+    if event is None:
+        abort(404)
+    canonical_slug = seo.slugify(event.title)
+    if slug != canonical_slug:
+        return redirect(url_for("public.event_page", event_id=event.id, slug=canonical_slug), 301)
+    tag, related = _related(event)
+    return render_template(
+        "event.html",
+        event=event,
+        tile_map=seo.tile_map(event.lat, event.lon),
+        related_tag=tag,
+        related=related,
+    )
 
 
 @bp.get("/about")

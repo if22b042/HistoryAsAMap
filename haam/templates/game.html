@@ -1,12 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Daily game{% endblock %}
+{% block title %}Where did it happen? Daily history geography game{% endblock %}
+{% block description %}A free daily history geography game: five historical events from Wikipedia each day. Pin where each one happened on the map – and guess the year in hard mode. New game every midnight UTC.{% endblock %}
+{% block canonical %}{{ external_url('game.page') }}{% endblock %}
+{% block share_title %}
+  {%- if shared_day %}History As A Map · Game #{{ shared_day.number }}{% if shared_day.hard %} (Hard){% endif %} – where did it happen?
+  {%- else %}Where did it happen? A daily history geography game{% endif %}
+{%- endblock %}
+{% block share_url %}{% if shared_day %}{{ absolute_url(request.full_path.rstrip('?')) }}{% endif %}{% endblock %}
+{% block share_image %}{{ absolute_url(url_for('static', filename='img/og-game.png')) }}{% endblock %}
+{% block share_image_alt %}Where did it happen? A daily history geography game on History As A Map{% endblock %}
 {% block body_class %}page-game{% endblock %}
 
 {% block head %}
+  <script type="application/ld+json">{{ {
+    "@context": "https://schema.org",
+    "@type": ["VideoGame", "WebApplication"],
+    "name": "Where did it happen? – History As A Map daily game",
+    "url": external_url('game.page'),
+    "description": "A daily history geography game: five historical events each day; pin where each happened on the world map, and guess the year in hard mode.",
+    "genre": ["Geography game", "History quiz", "Trivia"],
+    "gamePlatform": "Web browser",
+    "applicationCategory": "GameApplication",
+    "operatingSystem": "Any",
+    "inLanguage": "en",
+    "isAccessibleForFree": true,
+    "image": absolute_url(url_for('static', filename='img/og-game.png')),
+    "publisher": {"@type": "Organization", "name": site_name, "url": external_url('public.index')},
+  }|tojson }}</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 {% endblock %}
 
 {% block content %}
+<noscript>
+  <div class="page narrow"><div class="card">
+    <h1>Where did it happen?</h1>
+    <p>A daily history geography game: each day brings five historical events from Wikipedia, and you pin
+      where each one happened on the map. Hard mode asks for the year too. The game needs JavaScript.</p>
+  </div></div>
+</noscript>
 <section class="game-layout" id="game" data-puzzle-url="{{ url_for('game.puzzle', value='DAY') }}"
          data-check-url="{{ url_for('game.check') }}" data-page-url="{{ url_for('game.page') }}"
          data-practice-url="{{ url_for('game.practice') }}" data-practice-check-url="{{ url_for('game.practice_check') }}">
