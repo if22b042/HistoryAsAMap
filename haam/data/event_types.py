@@ -26,8 +26,8 @@ EVENT_TYPES = [
     ("Q10931", "revolution", "other"),
     ("Q124734", "rebellion", "other"),
     ("Q45382", "coup d'état", "other"),
-    ("Q3882219", "assassination", "violence"),
-    ("Q3199915", "massacre", "violence"),
+    ("Q3882219", "assassination", "other"),
+    ("Q3199915", "massacre", "disaster"),
     ("Q209715", "coronation", "other"),
     ("Q2401485", "expedition", "other"),
     ("Q7692360", "volcanic eruption", "natural"),
@@ -41,7 +41,7 @@ EVENT_TYPES = [
 # so their category is refined from the item's own P31 classes, each checked with
 # all its subclasses, in this order (see haam.wikidata.refine_category):
 #
-# 1. violence  – massacres, assassinations, terrorist attacks...  -> "violence"
+# 1. violence  – massacres, terrorist attacks, mass shootings...  -> "disaster"
 # (rules 2-5 only apply to natural / disaster items: a coup that burned a
 #  palace stays "other")
 # 2. natural   – earthquakes, eruptions, storms, floods...          -> "natural"
@@ -64,8 +64,6 @@ CATEGORY_CLASSES = {  # group -> {Wikidata ID: label}, each with all its subclas
         "Q21480300": "mass shooting",
         "Q2223653": "terrorist attack",
         "Q891854": "bombing",
-        "Q3882219": "assassination",
-        "Q132821": "murder",
         "Q135010": "war crime",
         "Q41397": "genocide",
         "Q177716": "pogrom",

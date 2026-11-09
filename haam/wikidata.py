@@ -236,7 +236,7 @@ def refine_category(base: str, types: Iterable[str], causes: Iterable[str],
         return bool(types & classes.get(group, set()))
 
     if has("violence"):
-        return "violence"
+        return "disaster"
     if base == "other":
         return base
     if has("natural"):
