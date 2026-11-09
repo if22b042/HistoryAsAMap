@@ -399,38 +399,83 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
   timeline.setActive(id);
 }
 
-// The event that is open on the right gets a black-and-white ring (no colour, so it
-// never looks like a category or year colour). The ring is drawn on the event's own
-// marker, which leaves the cluster group while it is selected: so it is never hidden
-// in a cluster and the ring moves exactly with the dot while zooming.
-let selectedMarker = null;
+// The event that is open on the right is marked on whatever shows it right now: while
+// it is bundled, the cluster it is in ("3") pulses; once you zoom in far enough to see
+// its own dot, that dot gets a ring in the event's colour. The mark is part of that
+// cluster or dot, so it moves with it while zooming, and it moves on to the new cluster
+// or dot after every zoom or pan. In the heatmap (no markers) the dot is shown on its own.
+let selectedId = null;
+let ringed = null; // the cluster or marker that carries the ring
+let standalone = null; // the selected marker, shown outside the clusters (heatmap, filtered out)
+let clustersLoading = false; // markers are still being added to the clusters in chunks
 
-function ringOn(marker) {
-  const element = marker.getElement();
-  if (element) element.classList.add("marker-selected");
+function dropStandalone() {
+  if (standalone) {
+    map.removeLayer(standalone);
+    standalone = null;
+  }
 }
+
+function placeRing() {
+  if (ringed) {
+    const old = ringed.getElement?.();
+    old?.classList.remove("marker-selected", "ring-colored", "cluster-selected");
+    old?.style.removeProperty("--ring-color");
+    ringed.setZIndexOffset?.(0);
+    ringed = null;
+  }
+  const marker = selectedId === null ? null : state.markersById.get(selectedId);
+  if (standalone && standalone !== marker) dropStandalone();
+  if (!marker) return;
+  // Decided from the filters, not from clusters.hasLayer(): while the clusters are
+  // filling up in chunks that is false for markers not added yet, and a marker put on
+  // the map by hand that the clusters then also add would get lost when taken off again.
+  const inClusters = !state.heatmap && state.filtered.some((e) => e.id === selectedId);
+  let layer;
+  if (inClusters) {
+    dropStandalone();
+    if (clustersLoading) return; // placed again once all markers are in
+    layer = clusters.getVisibleParent(marker); // its cluster, or the marker itself
+  } else {
+    if (!map.hasLayer(marker)) marker.addTo(map);
+    standalone = marker;
+    layer = marker;
+  }
+  const element = layer?.getElement?.();
+  if (!element) return;
+  if (layer === marker) {
+    // Its own dot: a ring in the event's colour (category, or year when colouring by year).
+    const fill = element.querySelector(".marker-year-fill") || element;
+    element.style.setProperty("--ring-color", getComputedStyle(fill).backgroundColor);
+    element.classList.add("marker-selected", "ring-colored");
+  } else {
+    element.classList.add("cluster-selected"); // still bundled: the cluster pulses
+  }
+  layer.setZIndexOffset?.(10000);
+  ringed = layer;
+}
+
+// Clusters change (and their icons are rebuilt) on zoom, pan and spiderfy.
+map.on("zoomend moveend", placeRing);
+clusters.on("animationend spiderfied unspiderfied", placeRing);
+// Large sets go into the clusters in chunks; the last call comes just before the
+// clusters are put on the map, so the ring is placed right after it.
+clusters.options.chunkProgress = (done, total) => {
+  if (done < total) return;
+  setTimeout(() => {
+    clustersLoading = false;
+    placeRing();
+  });
+};
 
 function showSelection(event) {
-  const marker = state.markersById.get(event.id);
-  if (!marker) return;
-  if (selectedMarker && selectedMarker !== marker) releaseSelection();
-  selectedMarker = marker;
-  if (clusters.hasLayer(marker)) clusters.removeLayer(marker);
-  if (!map.hasLayer(marker)) marker.addTo(map);
-  marker.setZIndexOffset(10000);
-  ringOn(marker);
+  selectedId = event.id;
+  placeRing();
 }
 
-/** Put the selected marker back where it belongs: into its cluster, if it is still shown. */
 function releaseSelection() {
-  const marker = selectedMarker;
-  if (!marker) return;
-  selectedMarker = null;
-  marker.getElement()?.classList.remove("marker-selected");
-  marker.setZIndexOffset(0);
-  map.removeLayer(marker);
-  const shown = !state.heatmap && state.filtered.some((e) => state.markersById.get(e.id) === marker);
-  if (shown) clusters.addLayer(marker);
+  selectedId = null;
+  placeRing();
 }
 
 function closeSidebar() {
@@ -1012,10 +1057,12 @@ function applyFilters({ added = null } = {}) {
       return marker;
     });
     clusters.addLayers(markers);
+    placeRing(); // the selected event may have arrived in this batch
     finishRender();
     return;
   }
 
+  dropStandalone(); // it goes back into the clusters below (unless the heatmap is on)
   clusters.clearLayers();
   if (heatLayer) {
     map.removeLayer(heatLayer);
@@ -1029,12 +1076,10 @@ function applyFilters({ added = null } = {}) {
     state.filtered.forEach((e) => {
       state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
     });
-    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)).filter((m) => m !== selectedMarker));
+    clustersLoading = true; // until chunkProgress says all markers are in
+    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)));
   }
-  if (selectedMarker) {  // stays on the map, outside the clusters, with its ring
-    if (!map.hasLayer(selectedMarker)) selectedMarker.addTo(map);
-    ringOn(selectedMarker);
-  }
+  placeRing();
   finishRender();
 }
 
