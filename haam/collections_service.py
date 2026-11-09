@@ -298,13 +298,52 @@ def update_note(entry: CollectionEntry, note: str) -> None:
     db.session.commit()
 
 
+def _renumber(collection: Collection) -> None:
+    for position, entry in enumerate(collection.entries):
+        entry.position = position
+
+
 def remove_entry(entry: CollectionEntry) -> None:
-    collection = entry.collection
-    collection.entries.remove(entry)
-    for position, other in enumerate(collection.entries):
-        other.position = position
+    remove_entries(entry.collection, [entry.id])
+
+
+def remove_entries(collection: Collection, entry_ids) -> int:
+    """Remove the given entries of this collection (other ids are ignored); returns how many."""
+    wanted = set(entry_ids)
+    removed = [entry for entry in collection.entries if entry.id in wanted]
+    if not removed:
+        return 0
+    for entry in removed:
+        collection.entries.remove(entry)
+    _renumber(collection)
     _touch(collection)
     db.session.commit()
+    return len(removed)
+
+
+def reorder_entries(collection: Collection, entry_ids: list[int]) -> None:
+    """Put the entries in the given order; ``entry_ids`` must list every entry exactly once."""
+    by_id = {entry.id: entry for entry in collection.entries}
+    if len(entry_ids) != len(by_id) or set(entry_ids) != set(by_id):
+        raise CollectionError("The list of entries changed meanwhile – reload the page and try again.")
+    collection.entries[:] = [by_id[i] for i in entry_ids]
+    _renumber(collection)
+    _touch(collection)
+    db.session.commit()
+
+
+def move_entry_by(entry: CollectionEntry, step: int) -> bool:
+    """Move an entry ``step`` places up (negative) or down; False if it is already at that end."""
+    entries = entry.collection.entries
+    index = entries.index(entry)
+    target = index + step
+    if step == 0 or not 0 <= target < len(entries):
+        return False
+    entries.insert(target, entries.pop(index))
+    _renumber(entry.collection)
+    _touch(entry.collection)
+    db.session.commit()
+    return True
 
 
 def delete_collection(collection: Collection) -> None:
