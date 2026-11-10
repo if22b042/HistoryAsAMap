@@ -5,7 +5,9 @@ import gzip
 from flask import Blueprint, abort, jsonify, request, url_for
 
 from haam import events, feed, welcome
-from haam.models import Category, Status
+from haam import tag_tree as tag_trees
+from haam.extensions import db
+from haam.models import Category, Status, Tag
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -105,6 +107,18 @@ def get_event(event_id: int):
 @bp.get("/tags")
 def list_tags():
     return jsonify([tag.to_dict() for tag in events.all_tags()])
+
+
+@bp.get("/tags/<int:tag_id>/tree")
+def tag_tree(tag_id: int):
+    """The tag as a tree of its parts (haam.tag_tree), every level largest branch first."""
+    tag = db.session.get(Tag, tag_id)
+    if tag is None:
+        abort(404)
+    response = jsonify(tag_trees.tag_tree(tag))
+    response.cache_control.public = True
+    response.cache_control.max_age = 300
+    return response
 
 
 @bp.get("/categories")

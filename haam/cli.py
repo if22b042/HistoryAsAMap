@@ -183,6 +183,25 @@ def retag_csv_command(paths):
                    f"({stats['changed']} changed)")
 
 
+@haam_cli.command("build-part-of")
+@click.argument("path", default="seed/wikidata_events.csv", type=click.Path(exists=True, dir_okay=False))
+def build_part_of_command(path):
+    """Fetch the "part of" chains of the CSV's tagged events into haam/data/part_of.json.
+
+    The map's tag trees (World War II > Eastern Front > Operation Barbarossa > ...) are
+    built from this file. Run it again after export-wikidata or retag-csv, then commit it.
+    """
+    from flask import current_app
+
+    from haam.tag_tree import GRAPH_PATH, build_graph_file
+    from haam.wikidata import WikidataClient
+
+    client = WikidataClient(current_app.config["HAAM_USER_AGENT"])
+    graph = build_graph_file(client, path, report=click.echo)
+    click.echo(f"{len(graph.parents)} items with a part-of link, {len(graph.labels)} labels, "
+               f"{len(graph.tag_items)} tags found on chains -> {GRAPH_PATH}")
+
+
 @haam_cli.command("import-legacy")
 def import_legacy_command():
     """Copy events from the previous version's tables (entries/locations)."""

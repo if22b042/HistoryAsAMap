@@ -6,6 +6,7 @@
 import { createCollectionAdder } from "./collection-add.js";
 import { addBasemapSwitcher } from "./basemaps.js";
 import { createTimeline } from "./timeline.js";
+import { branchEventIds, createTagTree, fetchTagTree, findNode, pathTo } from "./tag-tree.js";
 import { chunkOrder, compareEvents, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
 
 // Map zoom when an event is picked in the search or on the timeline: 9 is twice
@@ -37,6 +38,9 @@ const state = {
   tagIds: [], // selected tags (see "tags" below)
   tagMode: "any", // an event needs "any" or "all" of them
   tagCounts: new Map(), // tag id -> events matching the other filters
+  // A part of the selected tag picked in its tree (Operation Barbarossa within
+  // World War II): { qid, label, path, tagId, ids: Set of event ids } or null.
+  part: null,
   query: "",
   heatmap: false,
   colorByYear: false,
@@ -790,6 +794,7 @@ function searchScore(event) {
 const hasTags = () => state.tagIds.length > 0;
 
 function tagMatch(event) {
+  if (state.part && !state.part.ids.has(event.id)) return false;
   if (!state.tagIds.length) return true;
   return state.tagMode === "all"
     ? state.tagIds.every((id) => event.tags.includes(id))
@@ -799,6 +804,7 @@ function tagMatch(event) {
 /** "Napoleonic Wars", "Seven Years' War / American Revolutionary War" or "3 tags". */
 function tagNames() {
   const names = state.tagIds.map((id) => state.tagsById.get(id)?.name).filter(Boolean);
+  if (state.part) return state.part.label;
   if (names.length > 2) return `${names.length} tags`;
   return names.join(state.tagMode === "all" ? " & " : " / ");
 }
@@ -809,7 +815,7 @@ function tagNames() {
 // (Back undoes it); typing, dragging the slider or a category only update the
 // current one, so Back does not step through every keystroke.
 
-const URL_KEYS = ["tag", "tagmode", "cat", "q", "from", "to"];
+const URL_KEYS = ["tag", "tagmode", "part", "cat", "q", "from", "to"];
 let restoringUrl = false; // while a link's filters are applied, do not rewrite it
 
 function filtersFromUrl() {
@@ -819,6 +825,7 @@ function filtersFromUrl() {
   return {
     ids: params.getAll("tag").map(Number).filter((id) => state.tagsById.has(id)),
     mode: params.get("tagmode") === "all" ? "all" : "any",
+    part: /^Q\d+$/.test(params.get("part") || "") ? params.get("part") : null,
     category: category && CATEGORY_LABELS[category] ? category : "all",
     q: (params.get("q") || "").slice(0, 200),
     from: year("from"),
@@ -832,6 +839,7 @@ function syncUrl(push = false) {
   URL_KEYS.forEach((key) => url.searchParams.delete(key));
   state.tagIds.forEach((id) => url.searchParams.append("tag", id));
   if (state.tagMode === "all" && state.tagIds.length > 1) url.searchParams.set("tagmode", "all");
+  if (state.part?.qid) url.searchParams.set("part", state.part.qid);
   if (state.category !== "all") url.searchParams.set("cat", state.category);
   if (state.queryText) url.searchParams.set("q", state.queryText);
   const slider = document.getElementById("year-slider")?.noUiSlider;
@@ -851,6 +859,7 @@ function applyUrlFilters(filters) {
   try {
     state.tagIds = filters.ids;
     state.tagMode = filters.mode;
+    state.part = null;
     state.category = filters.category;
     markCategory(filters.category);
     ["search", "search-big"].forEach((id) => {
@@ -868,10 +877,30 @@ function applyUrlFilters(filters) {
   } finally {
     restoringUrl = false;
   }
+  if (filters.part && filters.ids.length === 1) restorePart(filters.ids[0], filters.part);
+}
+
+/** ?tag=…&part=Q83055: the part is looked up in the tag's tree once that has loaded. */
+async function restorePart(tagId, qid) {
+  let root;
+  try {
+    root = await fetchTagTree(tagId);
+  } catch {
+    return; // the tag alone is still shown
+  }
+  const node = findNode(root, qid);
+  if (!node || state.tagIds.length !== 1 || state.tagIds[0] !== tagId) return;
+  restoringUrl = true;
+  try {
+    setPart(node, root, { push: false, zoom: false });
+  } finally {
+    restoringUrl = false;
+  }
 }
 
 function setTags(ids, { push = true } = {}) {
   state.tagIds = [...new Set(ids)].filter((id) => state.tagsById.has(id));
+  state.part = null;
   renderTagChips();
   syncUrl(push);
   refilter();
@@ -890,7 +919,10 @@ function quantile(sorted, q) {
 
 function zoomToTags() {
   if (!hasTags()) return;
-  const events = state.events.filter(tagMatch);
+  zoomToEvents(state.events.filter(tagMatch));
+}
+
+function zoomToEvents(events) {
   if (!events.length) return;
   // The middle 80% of the events, so a few far-away ones (a strike abroad, an
   // embassy treaty) don't make a regional war look worldwide.
@@ -908,6 +940,48 @@ function zoomToTags() {
     maxZoom: 7, // "vaguely": the region, not a street
     duration: 0.9,
   });
+}
+
+// ------------------------------------------------------------ tag trees
+// The tree button on a tag chip opens the tag's parts (tag-tree.js). Picking the
+// tag itself or another tag in it selects that tag; picking any other part keeps
+// the tag and narrows the map to that branch's events (state.part).
+
+const tagTree = createTagTree({
+  onPick(node, root) {
+    if (node === root || (node.tag !== undefined && state.tagsById.has(node.tag))) {
+      setTags([node === root ? root.tag : node.tag]);
+    } else if (!node.children && node.event !== undefined && state.eventsById.has(node.event)) {
+      showEvent(node.event, { zoom: CLICK_ZOOM }); // a single event: open it
+    } else {
+      setPart(node, root);
+    }
+  },
+});
+
+function setPart(node, root, { push = true, zoom = true } = {}) {
+  if (!state.tagIds.includes(root.tag) || state.tagIds.length !== 1) {
+    state.tagIds = [root.tag];
+    state.tagMode = "any";
+  }
+  state.part = {
+    qid: node.qid || null,
+    label: node.label,
+    path: (node.qid && pathTo(root, node.qid)) || [root.label, node.label],
+    tagId: root.tag,
+    ids: branchEventIds(node),
+  };
+  renderTagChips();
+  syncUrl(push);
+  refilter();
+  if (zoom) zoomToEvents(state.events.filter(tagMatch));
+}
+
+function clearPart() {
+  state.part = null;
+  renderTagChips();
+  syncUrl(true);
+  refilter();
 }
 
 const addTag = (id) => setTags([...state.tagIds, id]);
@@ -957,9 +1031,29 @@ function renderTagChips() {
       remove.type = "button";
       remove.setAttribute("aria-label", `Remove the tag ${tag.name}`);
       remove.addEventListener("click", () => removeTag(id));
-      chip.append(remove);
+      const tree = el("button", "tag-chip-tree");
+      tree.type = "button";
+      tree.setAttribute("aria-label", `Show the parts of ${tag.name} as a tree`);
+      tree.title = `Parts of ${tag.name}, largest first`;
+      const icon = el("i", "fas fa-sitemap");
+      icon.setAttribute("aria-hidden", "true");
+      tree.append(icon);
+      tree.addEventListener("click", () => tagTree.open(tag));
+      chip.append(tree, remove);
       return chip;
     });
+    if (state.part) {
+      const part = el("span", "tag-chip tag-chip-part");
+      part.title = state.part.path.join(" › ");
+      const name = el("span", "tag-chip-name", `› ${state.part.label}`);
+      part.append(name, el("span", "tag-chip-years", state.part.ids.size.toLocaleString()));
+      const remove = el("button", "tag-chip-remove", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Show all of ${state.tagsById.get(state.part.tagId)?.name || "the tag"} again`);
+      remove.addEventListener("click", clearPart);
+      part.append(remove);
+      chips.push(part);
+    }
     const tools = el("div", "tag-chip-tools");
     if (state.tagIds.length > 1) {
       const mode = el("div", "tag-mode");

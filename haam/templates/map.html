@@ -167,6 +167,19 @@
     <ol class="search-results" id="search-results"></ol>
   </section>
 
+  <dialog class="tag-tree" id="tag-tree" aria-labelledby="tag-tree-title">
+    <div class="tag-tree-top">
+      <i class="fas fa-sitemap" aria-hidden="true"></i>
+      <h2 id="tag-tree-title" data-tree-title>Parts of the tag</h2>
+      <button type="button" class="icon-btn" data-tree-close aria-label="Close the tree">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+    <p class="tag-tree-summary" data-tree-summary aria-live="polite"></p>
+    <div class="tag-tree-body" data-tree-body></div>
+    <p class="tag-tree-note">From Wikidata's "part of" links. Each event is counted once, under its most specific part.</p>
+  </dialog>
+
   <aside class="sidebar" id="sidebar" aria-label="Event details" hidden>
     <div class="sidebar-header">
       <span class="sheet-handle" aria-hidden="true"></span>
