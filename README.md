@@ -195,6 +195,20 @@ flask --app haam haam retag-csv seed/wikidata_events.csv
 flask --app haam haam sync-wikidata
 ```
 
+**Tag trees.** The tree button on a selected tag chip shows the tag as a tree of
+its parts, every level largest branch first: World War II › European Theater ›
+Eastern Front › Operation Barbarossa › its battles. Clicking a part narrows the map
+to its events (`?tag=301&part=Q83055`), clicking a tag in the tree selects that tag
+and clicking a single event opens it. The tree follows the same "part of" chains
+as tagging; they are stored in `haam/data/part_of.json` so no Wikidata request is
+made at page load (`haam/tag_tree.py`, served by `/api/tags/<id>/tree`). Each event
+sits once, under the longest chain that leads to the tag. Rebuild the file after a
+new export or retag (about 7,000 events, a few minutes) and commit it:
+
+```bash
+flask --app haam haam build-part-of
+```
+
 ## Commands
 
 | Command | Purpose |
@@ -208,6 +222,7 @@ flask --app haam haam sync-wikidata
 | `flask --app haam haam sync-wikidata` | Make the database's Wikidata events match `seed/wikidata_events.csv` |
 | `flask --app haam haam recategorize` | Re-derive imported events' categories from their Wikidata classes (database and CSV) |
 | `flask --app haam haam retag-csv seed/wikidata_events.csv` | Recompute the file's tags column from Wikidata |
+| `flask --app haam haam build-part-of` | Fetch the tagged events' "part of" chains into `haam/data/part_of.json` (tag trees) |
 | `flask --app haam haam import-csv seed/events.csv` | Import a CSV (`url`, optional `category,status,year,lat,lon,tags`) |
 | `flask --app haam haam import-legacy` | Copy data from the previous version's `entries`/`locations` tables |
 

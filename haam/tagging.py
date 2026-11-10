@@ -111,6 +111,7 @@ class ChainResolver:
     def __init__(self, client):
         self.client = client
         self.names: dict[str, set[str]] = {}
+        self.labels: dict[str, str] = {}  # English label, for the tag trees (haam.tag_tree)
         self.parents: dict[str, list[str]] = {}
 
     def _fetch(self, qids: Iterable[str]) -> None:
@@ -123,6 +124,8 @@ class ChainResolver:
             label = entity.get("labels", {}).get("en", {}).get("value")
             aliases = [a.get("value") for a in entity.get("aliases", {}).get("en", [])]
             self.names[qid] = {n for n in [label, *aliases] if n}
+            if label:
+                self.labels[qid] = label
             parents = item_ids(entity.get("claims", {}), P_PART_OF)
             self.parents[qid] = [] if qid in NO_CLIMB else parents
         for qid in missing:  # unknown or deleted items

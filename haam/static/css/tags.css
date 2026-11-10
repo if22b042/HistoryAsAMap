@@ -53,3 +53,105 @@
 
 .tag-selection-wide { margin-top: 0.6rem; }
 .tag-search-hint { margin: 0.4rem 0 0; font-size: 0.78rem; color: var(--text-muted); }
+
+/* Tag tree: the button on a chip and the dialog (tag-tree.js). */
+.tag-chip-tree {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.tag-chip-tree:hover, .tag-chip-tree:focus-visible { background: rgba(255, 255, 255, 0.4); }
+.tag-chip-part { background: var(--accent-soft); color: var(--link); border: 1px solid var(--accent); }
+.tag-chip-part .tag-chip-remove { background: transparent; color: var(--link); }
+.tag-chip-part .tag-chip-remove:hover, .tag-chip-part .tag-chip-remove:focus-visible { background: var(--border); }
+
+.tag-tree {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+.tag-tree[open] { display: flex; flex-direction: column; }
+.tag-tree::backdrop { background: rgba(0, 0, 0, 0.35); }
+.tag-tree-top { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 0.75rem 0.25rem 1rem; color: var(--text-muted); }
+.tag-tree-top h2 { flex: 1; min-width: 0; margin: 0; font-size: 1.1rem; color: var(--text-strong); overflow-wrap: anywhere; }
+.tag-tree-summary { margin: 0; padding: 0 1rem 0.5rem; font-size: 0.82rem; color: var(--text-muted); }
+.tag-tree-body { flex: 1; min-height: 0; overflow: auto; padding: 0 0.5rem 0.5rem; border-top: 1px solid var(--border); }
+.tag-tree-note { margin: 0; padding: 0.5rem 1rem 0.75rem; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border); }
+
+.tree, .tree-children { list-style: none; margin: 0; padding: 0; }
+.tree-children { margin-left: 0.7rem; padding-left: 0.5rem; border-left: 1px solid var(--border); }
+.tree-children[hidden] { display: none; }
+.tree-line {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto 4.5rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0;
+}
+.tree-toggle {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tree-toggle::before { content: "▸"; display: inline-block; transition: transform 0.15s; }
+.tree-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
+.tree-toggle:disabled { cursor: default; }
+.tree-toggle:disabled::before { content: "•"; font-size: 0.7rem; opacity: 0.5; }
+.tree-toggle:not(:disabled):hover, .tree-toggle:focus-visible { background: var(--accent-soft); color: var(--link); }
+.tree-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.25rem 0.35rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+.tree-name:hover, .tree-name:focus-visible { background: var(--accent-soft); color: var(--link); }
+.tree-label { min-width: 0; overflow-wrap: anywhere; }
+.tree-root > .tree-line .tree-name { font-weight: 700; font-size: 0.95rem; }
+.tree-year { flex: none; font-size: 0.75rem; color: var(--text-muted); }
+.tree-badge {
+  flex: none;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.tree-count { font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-strong); text-align: right; }
+.tree-bar { height: 0.4rem; border-radius: 999px; background: var(--surface-alt); overflow: hidden; }
+.tree-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); opacity: 0.7; }
+.tree-more { padding: 0.15rem 0 0.25rem 2rem; }
+.tree-more[hidden] { display: none; }
+.tree-more-btn { border: 0; background: none; color: var(--link); font: inherit; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
+
+@media (max-width: 860px) {
+  .tag-tree { width: calc(100vw - 1rem); max-width: none; max-height: calc(100dvh - 1rem); margin: auto; }
+  .tree-line { grid-template-columns: 1.6rem minmax(0, 1fr) auto; }
+  .tree-bar { display: none; }
+  .tree-children { margin-left: 0.45rem; padding-left: 0.35rem; }
+}
