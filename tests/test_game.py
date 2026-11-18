@@ -90,10 +90,10 @@ def test_haversine():
 def test_score_distance():
     assert game.score_distance(0) == game.MAX_POINTS
     assert game.score_distance(game.FULL_KM) == game.MAX_POINTS
-    assert game.score_distance(game.HALF_KM) == pytest.approx(500, abs=15)
+    assert game.score_distance(game.HALF_KM) == pytest.approx(game.MAX_POINTS / 2, abs=75)
     assert game.score_distance(game.ZERO_KM) == 0
     assert game.score_distance(15000) == 0
-    assert game.score_distance(500) > 650
+    assert game.score_distance(500) > 0.65 * game.MAX_POINTS
     scores = [game.score_distance(km) for km in range(0, 6200, 50)]
     assert scores == sorted(scores, reverse=True)
 
@@ -542,7 +542,7 @@ def test_score_is_recorded_and_averaged(client, events):
 
 
 @pytest.mark.parametrize("body", [
-    {"date": "today", "points": 5001},
+    {"date": "today", "points": 25001},
     {"date": "today", "points": -1},
     {"date": "today", "points": 10.5},
     {"date": "today", "points": True},
@@ -795,8 +795,8 @@ def test_hint_costs_a_fifth_of_the_points(client, events):
     body = {"date": _today(), "index": 0, "lat": answer.lat, "lon": answer.lon}
     plain = client.post("/api/game/check", json=body).json
     hinted = client.post("/api/game/check", json={**body, "hint": True}).json
-    assert plain["points"] == 1000 and plain["hint"] is False and plain["hint_penalty"] == 0
-    assert hinted["points"] == 800 and hinted["hint"] is True and hinted["hint_penalty"] == 200
+    assert plain["points"] == 5000 and plain["hint"] is False and plain["hint_penalty"] == 0
+    assert hinted["points"] == 4000 and hinted["hint"] is True and hinted["hint_penalty"] == 1000
 
 
 def test_hint_in_hard_mode_scales_place_and_year(client, events):
@@ -804,9 +804,9 @@ def test_hint_in_hard_mode_scales_place_and_year(client, events):
     body = {"date": _today(), "hard": True, "index": 0, "lat": answer.lat, "lon": answer.lon, "year": answer.year}
     plain = client.post("/api/game/check", json=body).json
     hinted = client.post("/api/game/check", json={**body, "hint": True}).json
-    assert plain["points"] == 1000
-    assert (hinted["location_points"], hinted["year_points"], hinted["points"]) == (400, 400, 800)
-    assert hinted["hint_penalty"] == 200
+    assert plain["points"] == 5000
+    assert (hinted["location_points"], hinted["year_points"], hinted["points"]) == (2000, 2000, 4000)
+    assert hinted["hint_penalty"] == 1000
 
 
 def test_check_rejects_a_bad_hint_flag(client, events):
