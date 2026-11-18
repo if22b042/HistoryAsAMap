@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import inspect, select, text
 
 from haam.data.tags import TAGS
-from haam.dates import parse_year_input
+from haam.dates import format_year, month_day, parse_year_input
 from haam.events import EventData, create_event, find_existing
 from haam.extensions import db
 from haam.models import Category, Event, Status, Tag
@@ -63,7 +63,7 @@ def import_titles(
     point in time or start time, which filters out towns, buildings, etc.
     """
     stats = ImportStats()
-    client = get_client()
+    client = get_client(patient=True)
     status = Status.APPROVED if approve else Status.PENDING
 
     for title in titles:
@@ -108,7 +108,7 @@ def import_titles(
 def region_titles(lat_min: float, lat_max: float, lon_min: float, lon_max: float,
                   step: float, radius: int) -> Iterable[str]:
     """Titles found by Wikipedia geosearch on a grid of points (deduplicated)."""
-    client = get_client()
+    client = get_client(patient=True)
     seen: set[str] = set()
     lat = lat_min
     while lat <= lat_max:
@@ -154,7 +154,7 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
 
     stats = ImportStats()
     tags_by_name = {t.name.lower(): t.id for t in db.session.scalars(select(Tag))}
-    client = get_client()
+    client = get_client(patient=True)
     default_status = Status.APPROVED if approve else Status.PENDING
     with open(path, newline="", encoding="utf-8") as handle:
         for line_no, row in enumerate(csv.DictReader(handle), start=2):
@@ -203,7 +203,9 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
                 category = Category.OTHER
             tag_ids = [tags_by_name[n.strip().lower()] for n in (row.get("tags") or "").split(";")
                        if n.strip().lower() in tags_by_name]
-            data = EventData(article.title, year, article.date_label, article.summary or article.title,
+            # A year from the CSV replaces the article's: its date label must follow.
+            date_label = format_year(year) if year != article.year else article.date_label
+            data = EventData(article.title, year, date_label, article.summary or article.title,
                              lat, lon, category, tag_ids)
             create_event(article, data, status=status)
             stats.added += 1
@@ -389,10 +391,29 @@ class SyncStats:
     removed: int = 0
     retagged: int = 0
     recategorized: int = 0
+    updated: int = 0  # imported events whose title, date, place or summary changed in the file
     unchanged: int = 0
     adopted: int = 0  # older rows of the same article that now carry the Wikidata id
     rejected: int = 0  # invalid rows in the file
     kept_in_collections: list[str] = field(default_factory=list)  # titles
+
+
+def _scalar_fields(row: dict) -> dict | None:
+    """The title, year, date, place and summary of a CSV row (None if the row is unusable)."""
+    year = parse_year_input(row.get("year", ""))
+    lat, lon = _optional_float(row.get("lat")), _optional_float(row.get("lon"))
+    title = (row.get("title") or "").strip()[:300]
+    if year is None or not title or lat is None or lon is None or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return {
+        "title": title,
+        "year": year,
+        "date_label": (row.get("date") or "").strip()[:120],
+        "summary": (row.get("summary") or "").strip() or title,
+        "lat": lat,
+        "lon": lon,
+        "country": (row.get("country") or "").strip()[:100] or None,
+    }
 
 
 def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
@@ -403,6 +424,8 @@ def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
     * imported events (with a Wikidata id, not submitted on the website) that are
       no longer in the file are deleted – unless a collection uses them;
     * every imported event in the file gets exactly the file's tags;
+    * title, year, date, place and summary of imported events that no editor has
+      changed (``modified`` is false) follow the file;
     * an event for the same article that was added without a Wikidata id (the
       demo data) is adopted: it gets the id and is then treated like the others.
 
@@ -486,6 +509,32 @@ def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
                 db.session.execute(Event.__table__.update().where(Event.id.in_(ids[start:start + chunk]))
                                    .values(category=category.value))
         db.session.commit()
+
+    # 3b. update the fields of imported events that no editor has changed
+    stay = [event_id for qid, event_id in imported.items() if qid in rows]
+    by_id = {event_id: qid for qid, event_id in imported.items() if qid in rows}
+    for start in range(0, len(stay), chunk):
+        part = stay[start:start + chunk]
+        current = db.session.execute(
+            select(Event.id, Event.title, Event.year, Event.date_label, Event.summary, Event.lat, Event.lon,
+                   Event.country).where(Event.id.in_(part), Event.modified.is_(False)))
+        for event_id, *have in current:
+            wanted = _scalar_fields(rows[by_id[event_id]])
+            if wanted is None:
+                continue
+            same = (have[0] == wanted["title"] and have[1] == wanted["year"] and have[2] == wanted["date_label"]
+                    and have[3] == wanted["summary"] and abs(have[4] - wanted["lat"]) < 1e-9
+                    and abs(have[5] - wanted["lon"]) < 1e-9 and have[6] == wanted["country"])
+            if same:
+                continue
+            stats.updated += 1
+            if not dry_run:
+                # Bulk SQL skips the model's validator, so month and day are set here.
+                month, day = month_day(wanted["date_label"]) or (None, None)
+                db.session.execute(Event.__table__.update().where(Event.id == event_id)
+                                   .values(**wanted, month=month, day=day))
+        if not dry_run:
+            db.session.commit()
 
     # 4. set the tags of the imported events that stay
     links: dict[int, set[int]] = {}

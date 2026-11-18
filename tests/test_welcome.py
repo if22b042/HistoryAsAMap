@@ -93,9 +93,10 @@ def test_check_reports_missing_days(app, make_event):
     assert "29 February" in result.output
 
 
-def _collection(title, entries, *, public=True, hidden=False, reports=0):
+def _collection(title, entries, *, public=True, hidden=False, reports=0, featured=True):
     collection, _ = service.create_collection(title, "", public)
     collection.is_hidden = hidden
+    collection.is_featured = featured
     for event in entries:
         service.add_event(collection, event.id, "")
     for _ in range(reports):
@@ -104,7 +105,7 @@ def _collection(title, entries, *, public=True, hidden=False, reports=0):
     return collection
 
 
-def test_featured_collections_are_public_unreported_and_largest(make_event):
+def test_featured_collections_are_featured_public_and_unreported(make_event):
     events = [make_event(f"Battle {i}", year=1000 + i) for i in range(4)]
     big = _collection("Big", events[:3])
     small = _collection("Small", events[:1])
@@ -113,9 +114,10 @@ def test_featured_collections_are_public_unreported_and_largest(make_event):
     _collection("Hidden", events, hidden=True)
     _collection("Reported", events, reports=1)
     _collection("Empty", [])
+    _collection("Not featured", events, featured=False)  # the largest, but no editor chose it
 
     featured = welcome.featured_collections()
-    assert featured == [(big, 3), (newer, 1), (small, 1)]  # ties: newest first
+    assert featured == [(newer, 1), (small, 1), (big, 3)]  # newest first, not by size
 
 
 def test_welcome_api(client, make_event):

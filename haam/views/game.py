@@ -1,7 +1,8 @@
 """The daily game page and its JSON API.
 
-Practice mode serves random sets of five with the same rules; see
-:func:`haam.game.practice_event_ids`.
+Practice mode serves random sets of five with the same rules (optionally from
+one collection, or a given seed); see :func:`haam.game.practice_event_ids`.
+"Which came first?" serves ten pairs of events checked by seed and index.
 
 The puzzle endpoints never include where an event happened (nor its id, which
 would let the answer be looked up through /api/events/<id>); the check endpoint
@@ -13,10 +14,15 @@ from datetime import date
 from flask import Blueprint, abort, jsonify, render_template, request, url_for
 
 from haam import game
+from haam.events import public_id
 from haam.extensions import csrf
 from haam.models import Category
+from haam.ratelimit import allow, limit
 
 bp = Blueprint("game", __name__)
+
+
+MAX_SCORES_PER_CLIENT = 5
 
 
 def _day(value: str) -> date:
@@ -66,6 +72,7 @@ def puzzle(value: str):
         next_game_at=game.next_game_at(today).isoformat(),
         max_points=game.MAX_POINTS,
         hard=hard,
+        stats=game.score_stats(day, hard),
         rounds=[game.round_dict(i, event, hard) for i, event in enumerate(events)],
     )
     response.cache_control.no_store = True
@@ -97,7 +104,8 @@ def _score(data: dict, events: list):
     lat = _number(data, "lat", -90, 90)
     lon = game.normalize_lon(_number(data, "lon", -1e6, 1e6))
     hard = data.get("hard", False)
-    if not isinstance(hard, bool):
+    hint = data.get("hint", False)
+    if not isinstance(hard, bool) or not isinstance(hint, bool):
         abort(400)
     year = None
     if hard:
@@ -110,22 +118,30 @@ def _score(data: dict, events: list):
     event = events[index]
     km = game.haversine_km(lat, lon, event.lat, event.lon)
     answer = game.answer_dict(event)
-    answer["map_url"] = url_for("public.index", event=event.id)
+    answer["map_url"] = url_for("public.index", event=public_id(event))
+    # A hint costs HINT_PENALTY of the round's points (of both parts in hard mode).
+    keep = game.apply_hint if hint else (lambda points: points)
     if not hard:
-        return jsonify(km=round(km, 1), points=game.score_distance(km), answer=answer)
-    location_points = game.score_hard_location(km)
-    year_points = game.score_year(year, event.year)
+        full = game.score_distance(km)
+        points = keep(full)
+        return jsonify(km=round(km, 1), points=points, hint=hint, hint_penalty=full - points, answer=answer)
+    full_location = game.score_hard_location(km)
+    full_year = game.score_year(year, event.year)
+    location_points, year_points = keep(full_location), keep(full_year)
     return jsonify(
         km=round(km, 1),
         points=location_points + year_points,
         location_points=location_points,
         year_points=year_points,
         year_error=game.year_error(year, event.year),
+        hint=hint,
+        hint_penalty=full_location + full_year - location_points - year_points,
         answer=answer,
     )
 
 
 @bp.post("/api/game/check")
+@limit("game-check", 120, 60)
 @csrf.exempt  # stateless and changes nothing on the server
 def check():
     data = _json_body()
@@ -158,13 +174,41 @@ def _filters(source) -> tuple[int | None, Category | None]:
     return era, category
 
 
+def _collection_ids(source) -> list[int] | None:
+    """The approved events of ``collection=<view token>``; None without that parameter."""
+    token = source.get("collection")
+    if token in (None, ""):
+        return None
+    if not isinstance(token, str):
+        abort(400)
+    ids = game.collection_event_ids(token)
+    if ids is None:
+        abort(404)
+    return ids
+
+
 @bp.get("/api/game/practice")
+@limit("game-practice", 60, 60)
 def practice():
-    """A new random set of five; only its seed is needed to check guesses later."""
+    """A random set of five (or the one of ``seed``); only the seed is needed to check guesses later."""
     era, category = _filters(request.args)
     hard = _hard_arg()
-    seed = game.new_practice_seed()
-    events = game.practice_events(seed, era, category)
+    only_ids = _collection_ids(request.args)
+    seed = request.args.get("seed")
+    if seed is None:
+        seed = game.new_practice_seed()
+    elif not game.SEED_PATTERN.fullmatch(seed):
+        abort(400)
+    if only_ids is not None and len(only_ids) < game.MIN_COLLECTION_EVENTS:
+        response = jsonify(
+            seed=seed, era=era, category=category.value if category else None, hard=hard,
+            max_points=game.MAX_POINTS, rounds=[],
+            message=f"This collection has {len(only_ids)} approved events from the main map; "
+                    f"a quiz needs at least {game.MIN_COLLECTION_EVENTS}.",
+        )
+        response.cache_control.no_store = True
+        return response
+    events = game.practice_events(seed, era, category, only_ids)
     response = jsonify(
         seed=seed,
         era=era,
@@ -178,6 +222,7 @@ def practice():
 
 
 @bp.post("/api/game/practice/check")
+@limit("game-practice", 60, 60)
 @csrf.exempt  # stateless and changes nothing on the server
 def practice_check():
     data = _json_body()
@@ -185,4 +230,97 @@ def practice_check():
     if not isinstance(seed, str) or not game.SEED_PATTERN.fullmatch(seed):
         abort(400)
     era, category = _filters(data)
-    return _score(data, game.practice_events(seed, era, category))
+    return _score(data, game.practice_events(seed, era, category, _collection_ids(data)))
+
+
+# ---------------------------------------------------------------- hints
+
+@bp.post("/api/game/hint")
+@limit("game-hint", 60, 60)
+@csrf.exempt  # stateless and changes nothing on the server
+def hint():
+    """The optional hint for one event of a daily or practice game; it costs points when scoring."""
+    data = _json_body()
+    index = data.get("index")
+    if isinstance(index, bool) or not isinstance(index, int):
+        abort(400)
+    if "seed" in data:
+        seed = data["seed"]
+        if not isinstance(seed, str) or not game.SEED_PATTERN.fullmatch(seed):
+            abort(400)
+        era, category = _filters(data)
+        events = game.practice_events(seed, era, category, _collection_ids(data))
+    elif isinstance(data.get("date"), str):
+        events = game.daily_events(_day(data["date"]), hard=data.get("hard") is True)
+    else:
+        abort(400)
+    if not 0 <= index < len(events):
+        abort(404)
+    response = jsonify(game.hint_dict(events[index]))
+    response.cache_control.no_store = True
+    return response
+
+
+# ---------------------------------------------------------------- daily scores
+
+@bp.post("/api/game/score")
+@limit("game-score", 30, 60)
+@csrf.exempt  # anonymous total of a finished game; the client sends it once
+def score():
+    data = _json_body()
+    if not isinstance(data.get("date"), str):
+        abort(400)
+    day = _day(data["date"])
+    hard = data.get("hard", False)
+    points = data.get("points")
+    if not isinstance(hard, bool) or isinstance(points, bool) or not isinstance(points, int):
+        abort(400)
+    if not 0 <= points <= game.MAX_DAILY_TOTAL:
+        abort(400)
+    # A game is finished once: a few reports per client, game and day (a household or school
+    # may share one address), so a script cannot skew the average.
+    if not allow(f"game-score:{day.isoformat()}:{int(hard)}", MAX_SCORES_PER_CLIENT, 86400):
+        abort(429)
+    game.record_score(day, hard, points)
+    return jsonify(stats=game.score_stats(day, hard))
+
+
+# ------------------------------------------------------------ which came first
+
+def _seed_arg(value) -> str:
+    if value is None:
+        return game.new_practice_seed()
+    if not isinstance(value, str) or not game.SEED_PATTERN.fullmatch(value):
+        abort(400)
+    return value
+
+
+@bp.get("/api/game/pairs")
+def pairs():
+    """Ten pairs of events with their years hidden: which one came first?"""
+    seed = _seed_arg(request.args.get("seed"))
+    response = jsonify(
+        seed=seed,
+        rounds=[game.pair_round_dict(i, a, b) for i, (a, b) in enumerate(game.pair_events(seed))],
+    )
+    response.cache_control.no_store = True
+    return response
+
+
+@bp.post("/api/game/pairs/check")
+@csrf.exempt  # stateless and changes nothing on the server
+def pairs_check():
+    data = _json_body()
+    seed = data.get("seed")
+    if not isinstance(seed, str) or not game.SEED_PATTERN.fullmatch(seed):
+        abort(400)
+    index, choice = data.get("index"), data.get("choice")
+    for value in (index, choice):
+        if isinstance(value, bool) or not isinstance(value, int):
+            abort(400)
+    if choice not in (0, 1):
+        abort(400)
+    pairs_ = game.pair_events(seed)
+    if not 0 <= index < len(pairs_):
+        abort(404)
+    return jsonify(game.pair_answer(*pairs_[index], choice))

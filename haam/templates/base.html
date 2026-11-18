@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
+  {% if not embed %}
   <header class="navbar">
     <a class="brand" href="{{ url_for('public.index') }}">
       <span class="brand-icon"><i class="fas fa-map-marked-alt" aria-hidden="true"></i></span>
@@ -83,6 +84,7 @@
       </button>
     </nav>
   </header>
+  {% endif %}
 
   <main class="main">
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -97,7 +99,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  {% block footer %}
+  {% block footer %}{% if not embed %}
   <footer class="footer">
     <div class="footer-content">
       <section>
@@ -114,7 +116,7 @@
       </section>
     </div>
   </footer>
-  {% endblock %}
+  {% endif %}{% endblock %}
 
   <script src="{{ url_for('static', filename='js/nav.js') }}" defer></script>
   {% block scripts %}{% endblock %}

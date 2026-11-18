@@ -157,14 +157,15 @@ def test_hidden_collection_map_is_gone_for_visitors(app, client, napoleonic):
 
 def test_main_map_still_loads_all_events(client):
     html = client.get("/").get_data(as_text=True)
-    assert 'data-events-url="/api/events"' in html and "data-full-text" not in html
+    # No events URL: the main map reads the manifest instead.
+    assert "data-events-url" not in html and "data-manifest" in html and "data-full-text" not in html
 
 
 # --------------------------------------------------------------- natural
 
 def test_natural_category(client, make_event):
-    make_event(title="1755 Lisbon earthquake", category=Category.NATURAL, year=1755)
-    assert client.get("/api/events").json[0]["category"] == "natural"
+    event = make_event(title="1755 Lisbon earthquake", category=Category.NATURAL, year=1755)
+    assert client.get(f"/api/events/{event.id}").json["category"] == "natural"
     assert 'data-category="natural"' in client.get("/").get_data(as_text=True)
 
 

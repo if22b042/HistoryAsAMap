@@ -23,9 +23,39 @@
     {{ copy_field('share-url', 'Share link (view only)', share_url, 'Give this to anyone you want to show the collection to.') }}
     {% if edit_url %}
       {{ copy_field('edit-url', 'Edit link – keep it private', edit_url,
-                    'Anyone with this link can change or delete the collection. It is remembered in this browser, but save it (e.g. as a bookmark) to edit from elsewhere. We cannot recover it.') }}
+                    'Anyone with this link can change or delete the collection. It is shown only this once: save it now (e.g. as a bookmark) to edit from another browser. We cannot recover it.') }}
+    {% else %}
+      <p class="form-hint">The edit link is shown only once, right after you create or open it, and cannot be shown again.
+        This browser stays signed in to edit; to edit from elsewhere you need the link you saved.</p>
     {% endif %}
   </section>
+
+  {% if collection.suggestions %}
+    <section class="card suggestions-card" id="suggestions">
+      <h2><i class="fas fa-lightbulb" aria-hidden="true"></i> Suggestions ({{ collection.suggestions|length }})</h2>
+      <p class="form-hint">Visitors suggested these. Accept adds an event as an entry (a text suggestion opens the form for your own entries, filled in); Dismiss removes it.</p>
+      <ul class="suggestion-list">
+        {% for suggestion in collection.suggestions %}
+          <li id="suggestion-{{ suggestion.id }}">
+            <strong>{{ suggestion.display_title }}</strong>
+            {% if suggestion.event %}<span class="year-pill">{{ suggestion.event.display_year }}</span>{% else %}<span class="badge badge-other">text</span>{% endif %}
+            {% if suggestion.link %}<a href="{{ suggestion.link }}" target="_blank" rel="noopener noreferrer nofollow ugc">{{ suggestion.link|truncate(60) }}</a>{% endif %}
+            {% if suggestion.message %}<p class="form-hint"><i class="fas fa-comment" aria-hidden="true"></i> {{ suggestion.message }}</p>{% endif %}
+            <div class="button-row">
+              <form method="post" action="{{ url_for('collections.decide_suggestion', view_token=token, suggestion_id=suggestion.id, action='accept') }}">
+                {{ action_form.csrf_token }}
+                <button class="btn btn-small btn-success" type="submit"><i class="fas fa-check" aria-hidden="true"></i> Accept</button>
+              </form>
+              <form method="post" action="{{ url_for('collections.decide_suggestion', view_token=token, suggestion_id=suggestion.id, action='dismiss') }}">
+                {{ action_form.csrf_token }}
+                <button class="btn btn-small btn-secondary" type="submit"><i class="fas fa-times" aria-hidden="true"></i> Dismiss</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
 
   <div class="manage-grid">
     {# The forms come first in the page, so on phones they sit (folded) above the list; on wide
@@ -59,10 +89,11 @@
         </form>
       </details>
 
-      <details class="card fold" id="add-custom" {{ 'open' if custom_form.errors }}>
+      <details class="card fold" id="add-custom" {{ 'open' if custom_form.errors or suggestion_id }}>
         <summary><h2><i class="fas fa-pen" aria-hidden="true"></i> Add your own entry</h2></summary>
         <p class="form-hint">Anything you like – it only appears in this collection and is not reviewed.</p>
         <form method="post" action="{{ url_for('collections.add_custom', view_token=token) }}#add-custom" novalidate>
+          {% if suggestion_id %}<input type="hidden" name="suggestion_id" value="{{ suggestion_id }}">{% endif %}
           {% with form = custom_form %}{% include "collections/_custom_form.html" %}{% endwith %}
           <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-plus" aria-hidden="true"></i> Add entry</button>
         </form>

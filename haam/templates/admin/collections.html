@@ -25,6 +25,7 @@
         <header>
           {% if collection.reports %}<span class="badge badge-military">{{ collection.reports|length }} report{{ 's' if collection.reports|length != 1 }}</span>{% endif %}
           {% if collection.is_hidden %}<span class="badge badge-warning">hidden</span>{% endif %}
+          {% if collection.is_featured %}<span class="badge badge-scientific">featured</span>{% endif %}
           <span class="badge {{ 'badge-diplomatic' if collection.is_public else 'badge-other' }}">{{ 'public' if collection.is_public else 'unlisted' }}</span>
           {{ collection_badges(collection) }}
           <h2><a href="{{ url_for('collections.view', view_token=collection.view_token) }}" target="_blank" rel="noopener">{{ collection.title }}</a></h2>
@@ -37,6 +38,8 @@
           </ul>
         {% endif %}
         <div class="button-row">
+          {% if collection.is_featured %}{{ action(collection, 'unfeature', 'Unfeature', 'star', 'btn-secondary') }}
+          {% else %}{{ action(collection, 'feature', 'Feature', 'star', 'btn-secondary') }}{% endif %}
           {% if collection.is_hidden %}{{ action(collection, 'unhide', 'Restore', 'eye', 'btn-success') }}
           {% else %}{{ action(collection, 'hide', 'Hide', 'eye-slash', 'btn-secondary') }}{% endif %}
           {{ action(collection, 'delete', 'Delete', 'trash', 'btn-danger') }}
@@ -44,6 +47,14 @@
       </article>
     {% endfor %}
   </div>
+
+  {% if pages > 1 %}
+    <nav class="pagination" aria-label="Pages">
+      {% if page > 1 %}<a class="btn btn-secondary btn-small" href="{{ url_for('admin.collections', page=page - 1) }}">← Previous</a>{% endif %}
+      <span>Page {{ page }} of {{ pages }}</span>
+      {% if page < pages %}<a class="btn btn-secondary btn-small" href="{{ url_for('admin.collections', page=page + 1) }}">Next →</a>{% endif %}
+    </nav>
+  {% endif %}
 </div>
 {% endblock %}
 

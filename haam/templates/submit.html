@@ -21,7 +21,7 @@
   {% if error %}
     <div class="alert alert-error" role="alert">
       <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> {{ error }}
-      {% if existing %}<a href="{{ url_for('public.index', event=existing.id) }}">See it on the map</a>.{% endif %}
+      {% if existing %}<a href="{{ url_for('public.index', event=public_id(existing)) }}">See it on the map</a>.{% endif %}
     </div>
   {% endif %}
 

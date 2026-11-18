@@ -36,7 +36,7 @@ def test_review_queue_and_approve(admin_client, make_event):
 
     admin_client.post(f"/admin/events/{event.id}/approve")
     assert db.session.get(Event, event.id).status == Status.APPROVED
-    assert [e["title"] for e in admin_client.get("/api/events").json] == ["Battle of Hastings"]
+    assert admin_client.get(f"/api/events/{event.id}").json["title"] == "Battle of Hastings"
 
 
 def test_reject_and_delete(admin_client, make_event):

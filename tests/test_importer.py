@@ -168,3 +168,42 @@ def test_sync_wikidata(app, make_event, tmp_path):
 
     again = importer.sync_wikidata(str(path), report=quiet)
     assert (again.added, again.removed, again.retagged, again.adopted) == (0, 0, 0, 0)
+
+
+def test_sync_wikidata_updates_changed_fields_of_unedited_events(app, make_event, tmp_path):
+    changed = make_event(title="Old title", wikidata_id="Q10", year=1000, date_label="1000", summary="old",
+                         lat=1.0, lon=2.0, country="Nowhere")
+    edited = make_event(title="Edited by hand", wikidata_id="Q11", year=1100, modified=True)
+    website = make_event(title="Site event", wikidata_id="Q12", year=1200, from_website=True)
+    make_event(title="Same", wikidata_id="Q13", year=1300, date_label="1300", summary="same", lat=5.0, lon=6.0)
+    changed_id, edited_id, website_id = changed.id, edited.id, website.id
+
+    path = tmp_path / "final.csv"
+    base = {"category": "military", "status": "approved"}
+    write_sync_csv(path, [
+        {**base, "wikidata_id": "Q10", "url": "https://en.wikipedia.org/wiki/Old_title", "title": "New title",
+         "year": "1215", "date": "15 June 1215", "lat": "51.4", "lon": "-0.56", "country": "England",
+         "summary": "new text"},
+        {**base, "wikidata_id": "Q11", "url": "https://en.wikipedia.org/wiki/Edited_by_hand", "title": "Other",
+         "year": "1111", "lat": "1", "lon": "1", "summary": "csv"},
+        {**base, "wikidata_id": "Q12", "url": "https://en.wikipedia.org/wiki/Site_event", "title": "Other",
+         "year": "1212", "lat": "1", "lon": "1", "summary": "csv"},
+        {**base, "wikidata_id": "Q13", "url": "https://en.wikipedia.org/wiki/Same", "title": "Same",
+         "year": "1300", "date": "1300", "lat": "5", "lon": "6", "summary": "same"},
+    ])
+
+    dry = importer.sync_wikidata(str(path), dry_run=True, report=quiet)
+    assert dry.updated == 1
+    assert db.session.get(Event, changed_id).title == "Old title"
+
+    stats = importer.sync_wikidata(str(path), report=quiet)
+    assert stats.updated == 1
+    db.session.expire_all()
+    event = db.session.get(Event, changed_id)
+    assert (event.title, event.year, event.date_label, event.summary) == ("New title", 1215, "15 June 1215", "new text")
+    assert (event.lat, event.lon, event.country) == (51.4, -0.56, "England")
+    assert (event.month, event.day) == (6, 15)
+    assert db.session.get(Event, edited_id).title == "Edited by hand"
+    assert db.session.get(Event, website_id).title == "Site event"
+
+    assert importer.sync_wikidata(str(path), report=quiet).updated == 0

@@ -4,10 +4,14 @@
 // sets of five, optionally from one era or category; nothing is stored.
 // Hard mode (&hard=1, either mode): the year is hidden and guessed too; the daily
 // hard game has five other events, with its own progress and streak.
+// Practice can come from one collection (&collection=<token>) or a shared set
+// (&seed=..., "Challenge a friend"). "Which came first?" (?mode=pairs): ten pairs of
+// events with hidden years; the player picks the earlier one, the server checks.
 /* global L */
 import { addBasemapSwitcher } from "./basemaps.js";
 
 const STORAGE_KEY = "haam-game-v1";
+const KEEP_DAYS = 60; // played days kept in localStorage; the streaks are kept regardless
 const ROOT = document.getElementById("game");
 const $ = (id) => document.getElementById(id);
 
@@ -29,6 +33,7 @@ function loadStore() {
     if (parsed && typeof parsed === "object" && parsed.days) {
       parsed.streak = parsed.streak || { current: 0, best: 0, last: null };
       parsed.hardStreak = parsed.hardStreak || { current: 0, best: 0, last: null };
+      pruneDays(parsed);
       return parsed;
     }
   } catch (e) { /* storage blocked or corrupt */ }
@@ -37,6 +42,15 @@ function loadStore() {
     streak: { current: 0, best: 0, last: null },
     hardStreak: { current: 0, best: 0, last: null },
   };
+}
+
+/** Drop the progress of days older than KEEP_DAYS (keys are "YYYY-MM-DD" or "YYYY-MM-DD:hard"). */
+function pruneDays(data) {
+  const oldest = addDays(new Date().toISOString().slice(0, 10), -(KEEP_DAYS - 1));
+  for (const key of Object.keys(data.days)) {
+    const day = key.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < oldest) delete data.days[key];
+  }
 }
 
 function saveStore(store) {
@@ -97,14 +111,23 @@ function el(tag, className, text) {
 
 const PARAMS = new URLSearchParams(window.location.search);
 const PRACTICE = PARAMS.get("mode") === "practice";
-const HARD = PARAMS.get("hard") === "1";
+const PAIRS = PARAMS.get("mode") === "pairs";
+const HARD = PARAMS.get("hard") === "1" && !PAIRS;
+const COLLECTION = PRACTICE ? PARAMS.get("collection") : null;
+const SEED_PATTERN = /^[0-9a-f]{32}$/;
 
-/** The game page URL for a mode, day and difficulty. */
-function pageUrl({ practice = PRACTICE, hard = HARD, day = null } = {}) {
+/** The game page URL for a mode, day and difficulty; without a mode argument, the current one. */
+function pageUrl({ practice, pairs, hard = HARD, day = null } = {}) {
+  if (practice === undefined && pairs === undefined) {
+    practice = PRACTICE;
+    pairs = PAIRS;
+  }
   const params = new URLSearchParams();
-  if (practice) params.set("mode", "practice");
-  if (day && !practice) params.set("date", day);
-  if (hard) params.set("hard", "1");
+  if (pairs) params.set("mode", "pairs");
+  else if (practice) params.set("mode", "practice");
+  if (practice && COLLECTION) params.set("collection", COLLECTION);
+  if (day && !practice && !pairs) params.set("date", day);
+  if (hard && !pairs) params.set("hard", "1");
   const query = params.toString();
   return ROOT.dataset.pageUrl + (query ? `?${query}` : "");
 }
@@ -268,6 +291,42 @@ function renderProgress() {
   });
 }
 
+/** The optional hint of a round (country or region, bought for 20% of the round's points). */
+function renderHint(index) {
+  const hint = record.hints && record.hints[index];
+  $("hint-btn").hidden = Boolean(hint);
+  $("hint-text").hidden = !hint;
+  if (hint) $("hint-text").textContent = `Hint: it happened in ${hint.text}.`;
+}
+
+async function requestHint() {
+  if (!record || showingResult || record.guesses.length >= record.rounds.length) return;
+  const index = record.guesses.length;
+  if (record.hints && record.hints[index]) return;
+  const button = $("hint-btn");
+  button.disabled = true;
+  $("game-message").textContent = "";
+  try {
+    const body = PRACTICE
+      ? { index, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
+      : { index, date: puzzle.date, hard: HARD };
+    const response = await fetch(ROOT.dataset.hintUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const hint = await response.json();
+    record.hints = { ...(record.hints || {}), [index]: hint };
+    if (!PRACTICE) saveStore(store);
+    renderHint(index);
+  } catch (e) {
+    $("game-message").textContent = "Could not load the hint. Please try again.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderRound() {
   const index = showingResult ? record.guesses.length - 1 : record.guesses.length;
   const round = record.rounds[index];
@@ -283,6 +342,7 @@ function renderRound() {
   category.lastElementChild.textContent = CATEGORY_LABELS[round.category] || round.category;
   $("round-excerpt").textContent = round.excerpt;
   $("round-excerpt").hidden = !round.excerpt;
+  renderHint(index);
 
   $("round-guess").hidden = showingResult;
   $("round-year").hidden = !HARD;
@@ -295,6 +355,12 @@ function renderRound() {
   const guess = record.guesses[index];
   $("result-points").textContent = formatPoints(guess.points);
   $("result-distance").textContent = `Your pin was ${formatKm(guess.km)} away.`;
+  $("result-hint").hidden = !guess.hint;
+  if (guess.hint) {
+    $("result-hint").textContent = guess.hintPenalty
+      ? `You used the hint: it cost ${formatPoints(guess.hintPenalty)} points (20%).`
+      : "You used the hint: it costs 20% of a round's points.";
+  }
   $("result-breakdown").hidden = !HARD;
   $("result-year").hidden = !HARD;
   if (HARD) {
@@ -326,10 +392,11 @@ function total() {
 function shareText() {
   const max = puzzle.max_points * record.rounds.length;
   const squares = record.guesses.map((g) => emojiFor(g.points, puzzle.max_points)).join("");
+  const hints = record.guesses.filter((g) => g.hint).length;
   const url = new URL(dayUrl(puzzle.date), window.location.origin).href;
   return [
     `History As A Map · Game #${puzzle.number}${HARD ? " (Hard)" : ""}`,
-    `${squares} ${formatPoints(total())} / ${formatPoints(max)}`,
+    `${squares} ${formatPoints(total())} / ${formatPoints(max)}${hints ? ` · 💡${hints}` : ""}`,
     url,
   ].join("\n");
 }
@@ -357,6 +424,43 @@ function renderCountdown() {
   countdownTimer = setInterval(tick, 1000);
 }
 
+let scoreSending = false;
+
+function renderStats() {
+  const stats = puzzle.stats;
+  const line = $("summary-stats");
+  line.hidden = !stats || !stats.count;
+  if (line.hidden) return;
+  line.textContent = `Your score ${formatPoints(total())} vs ${puzzle.is_today ? "today's" : "that day's"}`
+    + ` average ${formatPoints(stats.average)} (${plural(stats.count, "player")})`;
+}
+
+/** Report the finished daily game's total once (anonymous); the answer carries the new average. */
+async function sendScore() {
+  if (PRACTICE || !puzzle.is_today || record.scoreSent || scoreSending) return;
+  scoreSending = true;
+  try {
+    const response = await fetch(ROOT.dataset.scoreUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: puzzle.date, hard: HARD, points: total() }),
+    });
+    if (response.status === 429) {
+      record.scoreSent = true; // this device already reported its scores today: do not retry
+      saveStore(store);
+      return;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    record.scoreSent = true;
+    saveStore(store);
+    puzzle.stats = data.stats;
+    renderStats();
+  } catch (e) { /* the summary works without the average */ } finally {
+    scoreSending = false;
+  }
+}
+
 function currentStreak() {
   const { current, last } = streakOf();
   // A streak survives until the day after its last game ends.
@@ -379,6 +483,7 @@ function renderSummary() {
       el("span", "game-summary-emoji", emojiFor(guess.points, puzzle.max_points)),
       el("span", "game-summary-title", HARD ? guess.answer.title : round.title),
       el("span", "game-summary-points", `${formatPoints(guess.points)} · ${formatKm(guess.km)}`
+        + (guess.hint ? " · hint" : "")
         + (HARD ? ` · ${guess.yearError === 0 ? "exact year" : `${plural(guess.yearError, "year")} off`}` : "")),
     );
     list.append(item);
@@ -395,6 +500,8 @@ function renderSummary() {
   $("summary-streak").textContent = `${HARD ? "Hard streak" : "Streak"}: ${streak} ${streak === 1 ? "day" : "days"}`
     + ` · best ${streakOf().best}`;
   renderCountdown();
+  renderStats();
+  sendScore();
 }
 
 function render() {
@@ -431,9 +538,10 @@ async function submitGuess() {
   $("game-message").textContent = "";
   try {
     const guessed = { index: record.guesses.length, lat: pin[0], lon: pin[1] };
+    if (record.hints && record.hints[guessed.index]) guessed.hint = true;
     if (HARD) Object.assign(guessed, { hard: true, year: yearGuess });
     const body = PRACTICE
-      ? { ...guessed, seed: puzzle.seed, era: puzzle.era, category: puzzle.category }
+      ? { ...guessed, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
       : { ...guessed, date: puzzle.date };
     const response = await fetch(PRACTICE ? ROOT.dataset.practiceCheckUrl : ROOT.dataset.checkUrl, {
       method: "POST",
@@ -442,7 +550,10 @@ async function submitGuess() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const result = await response.json();
-    const guess = { lat: pin[0], lon: pin[1], km: result.km, points: result.points, answer: result.answer };
+    const guess = {
+      lat: pin[0], lon: pin[1], km: result.km, points: result.points, answer: result.answer,
+      hint: Boolean(result.hint), hintPenalty: result.hint_penalty || 0,
+    };
     if (HARD) {
       Object.assign(guess, {
         year: yearGuess,
@@ -486,6 +597,7 @@ function nextRound() {
 $("guess-btn").addEventListener("click", submitGuess);
 $("guess-btn-map").addEventListener("click", submitGuess);
 $("next-btn").addEventListener("click", nextRound);
+$("hint-btn").addEventListener("click", requestHint);
 
 // ---------------------------------------------------------------- start
 
@@ -507,11 +619,14 @@ function renderHeader() {
 }
 
 function renderModes() {
-  $("mode-daily").classList.toggle("active", !PRACTICE);
+  $("mode-daily").classList.toggle("active", !PRACTICE && !PAIRS);
   $("mode-practice").classList.toggle("active", PRACTICE);
-  $(PRACTICE ? "mode-practice" : "mode-daily").setAttribute("aria-current", "page");
+  $("mode-pairs").classList.toggle("active", PAIRS);
+  $(PAIRS ? "mode-pairs" : PRACTICE ? "mode-practice" : "mode-daily").setAttribute("aria-current", "page");
   $("mode-daily").href = pageUrl({ practice: false });
   $("mode-practice").href = pageUrl({ practice: true });
+  $("mode-pairs").href = pageUrl({ pairs: true });
+  $("hard-label").hidden = PAIRS;
   $("day-today").href = pageUrl({ practice: false });
   $("practice-filters").hidden = !PRACTICE;
   $("hard-toggle").checked = HARD;
@@ -532,23 +647,35 @@ function resetBoard() {
   map.setView([30, 10], 2);
 }
 
+let sharedSeed = SEED_PATTERN.test(PARAMS.get("seed") || "") ? PARAMS.get("seed") : null;
+
 async function loadPractice() {
   const params = new URLSearchParams();
   if ($("practice-era").value) params.set("era", $("practice-era").value);
   if ($("practice-category").value) params.set("category", $("practice-category").value);
   if (HARD) params.set("hard", "1");
+  if (COLLECTION) params.set("collection", COLLECTION);
+  // A shared link plays its set once; "New set" and filter changes draw a new one.
+  if (sharedSeed) params.set("seed", sharedSeed);
+  sharedSeed = null;
+  $("challenge-btn").hidden = true;
   $("game-message").textContent = "";
   $("game-meta").textContent = "Loading a practice set…";
   try {
     const query = params.toString();
     const response = await fetch(ROOT.dataset.practiceUrl + (query ? `?${query}` : ""));
+    if (response.status === 404 && COLLECTION) {
+      $("game-meta").textContent = "That collection is not available for a quiz.";
+      return;
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     puzzle = await response.json();
   } catch (e) {
     $("game-meta").textContent = "The practice set could not be loaded. Please try again.";
     return;
   }
-  $("game-meta").textContent = `Practice${HARD ? " · Hard" : ""} · random events, not counted for your streak`;
+  $("game-meta").textContent = `Practice${HARD ? " · Hard" : ""}`
+    + (COLLECTION ? " · quiz from a collection" : " · random events") + ", not counted for your streak";
   resetBoard();
   if (!puzzle.rounds.length) {
     record = null;
@@ -556,9 +683,10 @@ async function loadPractice() {
     $("game-round").hidden = true;
     $("game-summary").hidden = true;
     $("guess-btn-map").hidden = true;
-    $("game-message").textContent = "No events match these filters. Try another era or category.";
+    $("game-message").textContent = puzzle.message || "No events match these filters. Try another era or category.";
     return;
   }
+  $("challenge-btn").hidden = false;
   record = { rounds: puzzle.rounds, guesses: [] };
   render();
 }
@@ -571,9 +699,184 @@ $("practice-era").addEventListener("change", loadPractice);
 $("practice-category").addEventListener("change", loadPractice);
 $("practice-again").addEventListener("click", loadPractice);
 
+/** A link to the page with this practice set's seed and filters, for a friend to play the same five. */
+function challengeUrl() {
+  const url = new URL(pageUrl({ practice: true }), window.location.origin);
+  url.searchParams.set("seed", puzzle.seed);
+  if (HARD) url.searchParams.set("hard", "1"); // the same five events are drawn in hard mode only
+  if (puzzle.era !== null && puzzle.era !== undefined) url.searchParams.set("era", String(puzzle.era));
+  if (puzzle.category) url.searchParams.set("category", puzzle.category);
+  return url.href;
+}
+
+$("challenge-btn").addEventListener("click", async () => {
+  if (!puzzle || !puzzle.seed) return;
+  const label = $("challenge-btn").lastElementChild;
+  const url = challengeUrl();
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(url);
+    copied = true;
+  } catch (e) { /* no clipboard access: show the link instead */ }
+  if (!copied) window.prompt("Send this link to a friend:", url);
+  label.textContent = copied ? "Link copied" : "Challenge a friend";
+  setTimeout(() => { label.textContent = "Challenge a friend"; }, 2500);
+});
+
+// ---------------------------------------------------------------- which came first
+
+let pairsPuzzle = null; // { seed, rounds: [{ index, a, b }] }
+let pairsGuesses = []; // { choice, correct, answer }
+let pairsShowing = false; // the last pick is revealed, waiting for "Next"
+
+const pairsCard = (side) => $(side === 0 ? "pairs-a" : "pairs-b");
+const pairsCorrect = () => pairsGuesses.filter((g) => g.correct).length;
+
+function renderPairsProgress() {
+  const list = $("game-progress");
+  list.replaceChildren();
+  pairsPuzzle.rounds.forEach((round, i) => {
+    const guess = pairsGuesses[i];
+    const item = el("li", "game-step");
+    if (guess) {
+      item.classList.add("done");
+      item.textContent = guess.correct ? "🟩" : "🟥";
+    } else {
+      item.textContent = String(i + 1);
+      if (i === pairsGuesses.length) item.classList.add("current");
+    }
+    list.append(item);
+  });
+}
+
+function renderPairs() {
+  renderPairsProgress();
+  const total = pairsPuzzle.rounds.length;
+  const finished = pairsGuesses.length >= total && !pairsShowing;
+  $("pairs-cards").hidden = finished;
+  $("pairs-question").hidden = finished;
+  $("pairs-num").hidden = finished;
+  $("pairs-summary").hidden = !finished;
+  $("pairs-result").hidden = !pairsShowing;
+  if (finished) {
+    renderPairsSummary();
+    return;
+  }
+  const index = pairsShowing ? pairsGuesses.length - 1 : pairsGuesses.length;
+  const round = pairsPuzzle.rounds[index];
+  $("pairs-num").textContent = `Pair ${index + 1} of ${total}`;
+  const guess = pairsShowing ? pairsGuesses[index] : null;
+  [0, 1].forEach((side) => {
+    const clue = side === 0 ? round.a : round.b;
+    const card = pairsCard(side);
+    card.querySelector(".pairs-title").textContent = clue.title;
+    card.querySelector(".pairs-excerpt").textContent = clue.excerpt;
+    card.disabled = pairsShowing;
+    card.classList.toggle("chosen", Boolean(guess) && guess.choice === side);
+    card.classList.toggle("earlier", Boolean(guess) && guess.answer.earlier === side);
+    const date = card.querySelector(".pairs-date");
+    date.hidden = !guess;
+    date.textContent = guess ? (side === 0 ? guess.answer.a : guess.answer.b).date : "";
+  });
+  if (!guess) return;
+  const letter = guess.answer.earlier === 0 ? "A" : "B";
+  $("pairs-verdict").textContent = guess.correct ? "Correct!" : `Not quite: ${letter} came first.`;
+  for (const [id, side] of [["pairs-wiki-a", guess.answer.a], ["pairs-wiki-b", guess.answer.b]]) {
+    const wiki = safeWikipediaUrl(side.wiki_url);
+    $(id).hidden = !wiki;
+    if (wiki) $(id).href = wiki;
+  }
+  $("pairs-next").textContent = pairsGuesses.length >= total ? "See your score" : "Next pair";
+  $("pairs-next").focus({ preventScroll: true });
+}
+
+function renderPairsSummary() {
+  $("pairs-total").textContent = String(pairsCorrect());
+  $("pairs-max").textContent = `/ ${pairsPuzzle.rounds.length} correct`;
+  const list = $("pairs-list");
+  list.replaceChildren();
+  pairsGuesses.forEach((g) => {
+    const first = g.answer.earlier === 0 ? g.answer.a : g.answer.b;
+    const second = g.answer.earlier === 0 ? g.answer.b : g.answer.a;
+    const item = el("li");
+    item.append(
+      el("span", "game-summary-emoji", g.correct ? "🟩" : "🟥"),
+      el("span", "game-summary-title", `${first.title} (${first.date}) before ${second.title} (${second.date})`),
+    );
+    list.append(item);
+  });
+  $("pairs-again").focus({ preventScroll: true });
+}
+
+async function pickPair(choice) {
+  if (pairsShowing || !pairsPuzzle || pairsGuesses.length >= pairsPuzzle.rounds.length) return;
+  $("game-message").textContent = "";
+  try {
+    const response = await fetch(ROOT.dataset.pairsCheckUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seed: pairsPuzzle.seed, index: pairsGuesses.length, choice }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const answer = await response.json();
+    pairsGuesses.push({ choice, correct: answer.correct, answer });
+    pairsShowing = true;
+    renderPairs();
+  } catch (e) {
+    $("game-message").textContent = "Could not check your answer. Please try again.";
+  }
+}
+
+async function loadPairs() {
+  $("game-message").textContent = "";
+  $("game-meta").textContent = "Loading ten pairs…";
+  $("pairs").hidden = true;
+  try {
+    const response = await fetch(ROOT.dataset.pairsUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    pairsPuzzle = await response.json();
+  } catch (e) {
+    $("game-meta").textContent = "The pairs could not be loaded. Please try again.";
+    return;
+  }
+  pairsGuesses = [];
+  pairsShowing = false;
+  if (!pairsPuzzle.rounds.length) {
+    $("game-progress").replaceChildren();
+    $("game-meta").textContent = "Which came first?";
+    $("game-message").textContent = "There are not enough events for pairs yet.";
+    return;
+  }
+  $("game-meta").textContent = "Which came first? · pick the earlier event of each pair, years hidden";
+  $("pairs").hidden = false;
+  renderPairs();
+}
+
+async function initPairs() {
+  ROOT.classList.add("game-layout-pairs");
+  $("game-archive-note").hidden = true;
+  [0, 1].forEach((side) => pairsCard(side).addEventListener("click", () => pickPair(side)));
+  $("pairs-next").addEventListener("click", () => {
+    pairsShowing = false;
+    renderPairs();
+  });
+  $("pairs-again").addEventListener("click", loadPairs);
+  await loadPairs();
+}
+
 async function init() {
   renderModes();
+  if (PAIRS) {
+    await initPairs();
+    return;
+  }
   if (PRACTICE) {
+    const era = PARAMS.get("era");
+    const category = PARAMS.get("category");
+    if (era !== null && [...$("practice-era").options].some((o) => o.value === era)) $("practice-era").value = era;
+    if (category !== null && [...$("practice-category").options].some((o) => o.value === category)) {
+      $("practice-category").value = category;
+    }
     await loadPractice();
     return;
   }

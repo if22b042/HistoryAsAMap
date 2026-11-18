@@ -39,11 +39,11 @@ def test_describe_cuts_at_a_word():
 
 def test_event_page_renders_server_side(client, make_event):
     event = make_event("Battle of Zama", year=-202, date_label="19 October 202 BC",
-                       summary="The Battle of Zama was fought in 202 BC.", lat=36.3, lon=9.4)
+                       summary="The Battle of Zama was fought in 202 BC.", lat=36.3, lon=9.4, wiki_page_id=3141)
     event.tags.append(db.session.query(Tag).filter_by(name="World War II").one())
     db.session.commit()
 
-    response = client.get(f"/event/{event.id}-battle-of-zama")
+    response = client.get("/event/3141-battle-of-zama")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "<h1>Battle of Zama</h1>" in html
@@ -53,9 +53,9 @@ def test_event_page_renders_server_side(client, make_event):
     assert "World War II" in html
     assert "https://en.wikipedia.org/wiki/Battle_of_Zama" in html
     assert "CC BY-SA 4.0" in html
-    assert f'href="/?event={event.id}"' in html
+    assert 'href="/?event=3141"' in html
     assert "tile.openstreetmap.org/6/" in html
-    canonical = f"{SITE}/event/{event.id}-battle-of-zama"
+    canonical = f"{SITE}/event/3141-battle-of-zama"
     assert f'<link rel="canonical" href="{canonical}">' in html
     assert "<title>Battle of Zama (202 BC) · History As A Map</title>" in html
     assert meta(html, "og:url") == canonical
@@ -119,11 +119,11 @@ def test_map_has_meta_and_canonical(client):
 
 
 def test_map_link_to_one_event_previews_that_event(client, make_event):
-    event = make_event("Battle of Zama", year=-202, summary="Rome defeated Carthage.")
-    html = client.get(f"/?event={event.id}").get_data(as_text=True)
+    make_event("Battle of Zama", year=-202, summary="Rome defeated Carthage.", wiki_page_id=3141)
+    html = client.get("/?event=3141").get_data(as_text=True)
     assert "<title>Battle of Zama (202 BC) · Map · History As A Map</title>" in html
     assert meta(html, "og:description") == "Rome defeated Carthage."
-    assert meta(html, "og:url") == f"{SITE}/event/{event.id}-battle-of-zama"
+    assert meta(html, "og:url") == f"{SITE}/event/3141-battle-of-zama"
     assert 'rel="canonical"' not in html
 
 

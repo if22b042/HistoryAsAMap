@@ -1,39 +1,55 @@
 """Pages for visitors: the map, event pages, the about page and the submission flow."""
 
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from datetime import date
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from sqlalchemy import func, select
 
 from haam import events, feed, seo
 from haam.dates import format_year
 from haam.events import EventData, EventError
 from haam.extensions import db
-from haam.forms import EventForm, LinkForm
+from haam.forms import EventForm, EventReportForm, LinkForm
 from haam.models import Event, Status, event_tags
+from haam.ratelimit import limit
 
 bp = Blueprint("public", __name__)
 
 RELATED_LIMIT = 8
 
 
-def _approved_event(event_id: int) -> Event | None:
-    event = db.session.get(Event, event_id)
-    return event if event is not None and event.status == Status.APPROVED else None
+def _map_page(embed: bool):
+    """The map (or its embeddable form). ``?event=<public id>`` previews that event, not the whole map."""
+    pid = request.args.get("event", type=int)
+    event = events.find_approved(pid) if pid else None
+    if event is None and pid:
+        old = events.moved_event(pid)  # a link made with a row id, before addresses used page ids
+        if old is not None:
+            args = request.args.to_dict(flat=False)
+            args["event"] = [str(events.public_id(old))]
+            return redirect(url_for(request.endpoint, **args), 301)
+    # The map starts loading its chunks straight away, without asking for the manifest.
+    return render_template("map.html", manifest=feed.manifest(url_for), shared_event=event, embed=embed)
 
 
 @bp.get("/")
 def index():
-    # A shared link to one event (/?event=7) previews that event, not the whole map.
-    event_id = request.args.get("event", type=int)
-    event = _approved_event(event_id) if event_id else None
-    # The map starts loading its chunks straight away, without asking for the manifest.
-    return render_template("map.html", manifest=feed.manifest(url_for), shared_event=event)
+    return _map_page(embed=False)
+
+
+@bp.get("/embed")
+def embed():
+    """Just the map, for an <iframe> on another site (see ``security_headers`` in haam/__init__.py)."""
+    return _map_page(embed=True)
 
 
 def _related(event: Event) -> tuple[object | None, list[Event]]:
     """Events from the same tag (the most specific one), closest in time first."""
     if not event.tags:
         return None, []
-    tag = min(event.tags, key=lambda t: (t.end_year or 10**6) - (t.start_year or -10**6))
+    # An ongoing tag (no end year) runs up to this year.
+    tag = min(event.tags, key=lambda t: (t.end_year if t.end_year is not None else date.today().year)
+              - (t.start_year or -10**6))
     related = db.session.scalars(
         select(Event)
         .join(event_tags, event_tags.c.event_id == Event.id)
@@ -47,12 +63,27 @@ def _related(event: Event) -> tuple[object | None, list[Event]]:
 @bp.get("/event/<int:event_id>")
 @bp.get("/event/<int:event_id>-<slug>")
 def event_page(event_id: int, slug: str = ""):
-    event = _approved_event(event_id)
-    if event is None:
-        abort(404)
+    event = _approved_or_redirect(event_id)
+    if not isinstance(event, Event):
+        return event
     canonical_slug = seo.slugify(event.title)
     if slug != canonical_slug:
-        return redirect(url_for("public.event_page", event_id=event.id, slug=canonical_slug), 301)
+        return redirect(seo.event_path(event), 301)
+    return _render_event(event, EventReportForm())
+
+
+def _approved_or_redirect(pid: int):
+    """The approved event with public id ``pid``; for an old row-id link, a redirect to the event's address."""
+    event = events.find_approved(pid)
+    if event is not None:
+        return event
+    old = events.moved_event(pid)
+    if old is not None:
+        return redirect(seo.event_path(old), 301)
+    abort(404)
+
+
+def _render_event(event: Event, report_form: EventReportForm, status: int = 200):
     tag, related = _related(event)
     return render_template(
         "event.html",
@@ -60,7 +91,23 @@ def event_page(event_id: int, slug: str = ""):
         tile_map=seo.tile_map(event.lat, event.lon),
         related_tag=tag,
         related=related,
-    )
+        report_form=report_form,
+    ), status
+
+
+@bp.post("/event/<int:event_id>/report")
+@limit("event-report", 5, 3600)
+def report_event(event_id: int):
+    """"Report a problem": what is wrong, and optionally the corrected year, date or place."""
+    event = events.find_approved(event_id)
+    if event is None:
+        abort(404)
+    form = EventReportForm()
+    if not form.validate_on_submit():
+        return _render_event(event, form, 400)
+    events.create_report(event, form)
+    flash("Thank you. An editor will look at your report.", "success")
+    return redirect(seo.event_path(event) + "#report")
 
 
 @bp.get("/about")
@@ -80,16 +127,19 @@ def _render_duplicate(form, error: EventError):
                            existing=existing if approved else None)
 
 
-def _render_preview(form: EventForm, year: int | None):
+def _render_preview(form: EventForm, year: int | None, dated_by_wikidata: bool | None = None):
+    # dated_by_wikidata is None when unknown (no hidden value came back): no warning then.
     return render_template(
         "preview.html",
         form=form,
         tags=events.all_tags(),
         suggested=events.suggested_tag_ids(year),
+        dated_by_wikidata=dated_by_wikidata,
     )
 
 
 @bp.post("/submit")
+@limit("submit", 10, 60)
 def preview():
     form = LinkForm()
     if not form.validate_on_submit():
@@ -109,16 +159,20 @@ def preview():
         lat=None if article.lat is None else round(article.lat, 6),
         lon=None if article.lon is None else round(article.lon, 6),
         category=form.category.data or "other",
+        dated_by_wikidata="1" if article.dated_by_wikidata else "0",
     )
-    return _render_preview(event_form, article.year)
+    return _render_preview(event_form, article.year, article.dated_by_wikidata)
 
 
 @bp.post("/submit/confirm")
+@limit("submit-confirm", 10, 60)
 def confirm():
     form = EventForm()
     if not form.validate_on_submit():
         year = getattr(form.year, "year", None)
-        return _render_preview(form, year), 400
+        # Only decides whether the warning is shown again; the value is never used for anything else.
+        dated = {"1": True, "0": False}.get(form.dated_by_wikidata.data)
+        return _render_preview(form, year, dated), 400
     try:
         event = events.submit(form.url.data, EventData.from_form(form))
     except EventError as error:

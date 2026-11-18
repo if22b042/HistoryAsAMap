@@ -8,7 +8,7 @@ import pytest
 from haam import importer
 from haam.data.event_types import AREA_ROOTS, EVENT_TYPES, PLACE_ROOTS
 from haam.extensions import db
-from haam.models import Category, Event, Status
+from haam.models import Category, Event, Status, Tag
 from haam.dates import ParsedDate
 from haam.wikidata import Candidate, Location, export, is_specific_place, validate
 
@@ -315,22 +315,22 @@ def test_full_csv_imports_offline(app, wiki, tmp_path):
 
 # -------------------------------------------------------------------- API
 
-def test_event_list_is_compact_and_details_are_separate(client, make_event):
+def test_event_details_are_public_only_when_approved(client, make_event):
     event = make_event(summary="word " * 100)
     pending = make_event(title="Pending", status=Status.PENDING)
-    item = client.get("/api/events").json[0]
-    assert "summary" not in item and len(item["excerpt"]) <= Event.EXCERPT_LENGTH + 1 and item["excerpt"].endswith("…")
     assert client.get(f"/api/events/{event.id}").json["summary"].startswith("word word")
     assert client.get(f"/api/events/{pending.id}").status_code == 404
+    assert client.get("/api/events").status_code == 404  # the old one-response list is gone
 
 
-def test_event_list_is_gzipped(client, make_event):
-    for n in range(30):
-        make_event(title=f"Battle {n}")
-    response = client.get("/api/events", headers={"Accept-Encoding": "gzip, br"})
+def test_large_json_responses_are_gzipped(client):
+    db.session.add_all([Tag(name=f"Tag number {n}", start_year=1000, end_year=1001) for n in range(60)])
+    db.session.commit()
+    expected = len(client.get("/api/tags").json)
+    response = client.get("/api/tags", headers={"Accept-Encoding": "gzip, br"})
     assert response.headers["Content-Encoding"] == "gzip"
-    assert len(json.loads(gzip.decompress(response.data))) == 30
-    assert "Content-Encoding" not in client.get("/api/events").headers
+    assert len(json.loads(gzip.decompress(response.data))) == expected
+    assert "Content-Encoding" not in client.get("/api/tags").headers
 
 
 def test_pick_introduction_skips_template_leftovers():

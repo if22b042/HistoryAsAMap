@@ -243,6 +243,10 @@ start time, which filters out towns, buildings and other places.
 | `GEOCODING_ENABLED` | `true` | Look up each event's country |
 | `SESSION_COOKIE_SECURE` | `true` | Set `false` only for plain-HTTP setups |
 | `AUTO_SETUP_DATABASE` | `true` | Apply migrations and load tags on startup |
+| `SMTP_HOST` | *(email disabled)* | Mail server for emailing the collection links once; without it the email field on "New collection" is hidden |
+| `SMTP_PORT` | `587` | `465` uses SSL, any other port STARTTLS |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | *(no login)* | Credentials for the mail server |
+| `MAIL_FROM` | `SMTP_USERNAME` | Sender address of that email |
 
 ## Deploying to Vercel
 
@@ -268,7 +272,8 @@ The old tables (`entries`, `locations`, `tags`, `entry_tags`) are only read by
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/events` | Approved events |
+| GET | `/api/events/manifest` | Map data: the version and the URLs of the event chunks |
+| GET | `/api/events/<id>` | One approved event, with its full summary |
 | GET | `/api/tags` | All tags |
 | GET | `/api/categories` | Category values and labels |
 | GET | `/api/health` | `{"status": "ok"}` |

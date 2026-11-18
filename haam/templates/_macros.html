@@ -22,6 +22,7 @@
 <form class="card event-form" method="post" action="{{ action }}" novalidate>
   {{ form.csrf_token }}
   {{ form.url }}
+  {{ form.dated_by_wikidata }}
 
   {{ text_field(form.title, icon='heading', required=True) }}
 

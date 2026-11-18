@@ -12,6 +12,7 @@ from xml.sax.saxutils import escape
 from flask import current_app, request, url_for
 from sqlalchemy import func, select
 
+from haam.events import PUBLIC_ID, public_id
 from haam.extensions import db
 from haam.models import Event, Status
 
@@ -38,7 +39,8 @@ def slugify(text: str) -> str:
 
 
 def event_path(event: Event) -> str:
-    return url_for("public.event_page", event_id=event.id, slug=slugify(event.title))
+    """The event's address: /event/<Wikipedia page id>-<slug> (the row id when it has no page id)."""
+    return url_for("public.event_page", event_id=public_id(event), slug=slugify(event.title))
 
 
 def site_url() -> str:
@@ -129,7 +131,7 @@ def event_count() -> int:
 
 
 def event_urls(offset: int = 0, limit: int | None = None) -> list[SitemapUrl]:
-    query = (select(Event.id, Event.title, Event.updated_at)
+    query = (select(PUBLIC_ID, Event.title, Event.updated_at)
              .where(Event.status == Status.APPROVED).order_by(Event.id).offset(offset))
     if limit is not None:
         query = query.limit(limit)

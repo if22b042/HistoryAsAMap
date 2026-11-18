@@ -10,7 +10,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Enum, ForeignKey, Index, String, Text, false
+from sqlalchemy import Enum, ForeignKey, Index, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from haam.extensions import db
@@ -29,7 +29,7 @@ def make_excerpt(text: str | None) -> str:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _enum_column(enum_cls: type[enum.Enum]) -> Enum:
@@ -147,6 +147,9 @@ class Event(db.Model):
     collection_entries: Mapped[list["CollectionEntry"]] = relationship(
         back_populates="event", cascade="all, delete-orphan"
     )
+    reports: Mapped[list["EventReport"]] = relationship(
+        back_populates="event", cascade="all, delete-orphan", order_by="EventReport.created_at.desc()"
+    )
 
     @validates("date_label")
     def _set_month_day(self, _key: str, label: str | None) -> str | None:
@@ -166,22 +169,6 @@ class Event(db.Model):
     @property
     def excerpt(self) -> str:
         return make_excerpt(self.summary)
-
-    def to_list_dict(self) -> dict:
-        """One event as an object: the old /api/events format (the map now uses haam.feed)."""
-        return {
-            "id": self.id,
-            "title": self.title,
-            "year": self.year,
-            "display_year": self.display_year,
-            "date": self.date_label,
-            "excerpt": self.excerpt,
-            "wiki_url": self.wiki_url,
-            "lat": self.lat,
-            "lon": self.lon,
-            "category": self.category.value,
-            "tags": [tag.id for tag in self.tags],
-        }
 
     def to_dict(self) -> dict:
         return {
@@ -216,6 +203,8 @@ class Collection(db.Model):
     description: Mapped[str] = mapped_column(Text, default="")
     is_public: Mapped[bool] = mapped_column(default=False)  # listed on the Collections page
     is_hidden: Mapped[bool] = mapped_column(default=False)  # hidden by an editor after reports
+    # Chosen by an editor for the map's welcome card.
+    is_featured: Mapped[bool] = mapped_column(default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
 
@@ -226,6 +215,9 @@ class Collection(db.Model):
     )
     reports: Mapped[list["CollectionReport"]] = relationship(
         back_populates="collection", cascade="all, delete-orphan", order_by="CollectionReport.created_at.desc()"
+    )
+    suggestions: Mapped[list["CollectionSuggestion"]] = relationship(
+        back_populates="collection", cascade="all, delete-orphan", order_by="CollectionSuggestion.created_at"
     )
 
     @property
@@ -354,7 +346,7 @@ class CollectionEntry(db.Model):
         }
 
     def to_map_dict(self) -> dict:
-        """The shape of ``Event.to_list_dict`` (the main map's data), plus the full text and note."""
+        """One entry as the map's data: the shape of an event in the map's feed, plus the full text and note."""
         summary = self.summary
         excerpt = make_excerpt(summary)
         return {
@@ -387,3 +379,102 @@ class CollectionReport(db.Model):
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
     collection: Mapped[Collection] = relationship(back_populates="reports")
+
+
+class CollectionSuggestion(db.Model):
+    """A visitor's suggestion for a collection: a main-map event, or a free-text title with a link."""
+
+    __tablename__ = "haam_collection_suggestions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection_id: Mapped[int] = mapped_column(ForeignKey("haam_collections.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[int | None] = mapped_column(ForeignKey("haam_events.id", ondelete="CASCADE"))
+    title: Mapped[str | None] = mapped_column(String(300))
+    link: Mapped[str | None] = mapped_column(String(500))
+    message: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+    collection: Mapped[Collection] = relationship(back_populates="suggestions")
+    event: Mapped[Event | None] = relationship()
+
+    @property
+    def display_title(self) -> str:
+        return self.event.title if self.event else (self.title or "")
+
+
+class RateLimitHit(db.Model):
+    """Requests counted per scope, client and time window (see haam.ratelimit)."""
+
+    __tablename__ = "haam_rate_limits"
+    __table_args__ = (UniqueConstraint("scope", "client_hash", "window_start", name="uq_haam_rate_limits_window"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scope: Mapped[str] = mapped_column(String(40))
+    client_hash: Mapped[str] = mapped_column(String(64))  # SHA-256 of the client address, never the address
+    window_start: Mapped[int] = mapped_column(index=True)  # Unix time of the window's start
+    count: Mapped[int] = mapped_column(default=1)
+
+
+class ReportStatus(enum.Enum):
+    OPEN = "open"
+    APPLIED = "applied"
+    DISMISSED = "dismissed"
+
+
+class EventReport(db.Model):
+    """A visitor's report of a problem with an event, optionally with corrected values."""
+
+    __tablename__ = "haam_event_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("haam_events.id", ondelete="CASCADE"), index=True)
+    message: Mapped[str] = mapped_column(String(1000))
+    proposed_year: Mapped[int | None]
+    proposed_date_label: Mapped[str | None] = mapped_column(String(120))
+    proposed_lat: Mapped[float | None]
+    proposed_lon: Mapped[float | None]
+    status: Mapped[ReportStatus] = mapped_column(_enum_column(ReportStatus), default=ReportStatus.OPEN)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+    event: Mapped[Event] = relationship(back_populates="reports")
+
+    @property
+    def has_proposal(self) -> bool:
+        return any(value is not None for value in (
+            self.proposed_year, self.proposed_date_label, self.proposed_lat, self.proposed_lon))
+
+
+# ---------------------------------------------------------------- game
+
+import datetime as _dt  # noqa: E402
+from sqlalchemy import Date, UniqueConstraint  # noqa: E402
+
+
+class DailyGame(db.Model):
+    """The events of one day's game, fixed on the day's first request.
+
+    ``refs`` is a JSON list in play order: "p<wikipedia page id>", or
+    "i<row id>" for an event without a page id (row ids change on re-import).
+    """
+
+    __tablename__ = "haam_daily_games"
+    __table_args__ = (UniqueConstraint("date", "hard", name="uq_haam_daily_games_date_hard"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[_dt.date] = mapped_column(Date)
+    hard: Mapped[bool] = mapped_column(default=False)
+    refs: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+
+class GameScore(db.Model):
+    """The total of one finished daily game, for "your score vs today's average". No user data."""
+
+    __tablename__ = "haam_game_scores"
+    __table_args__ = (Index("ix_haam_game_scores_date_hard", "date", "hard"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[_dt.date] = mapped_column(Date)
+    hard: Mapped[bool] = mapped_column(default=False)
+    points: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)

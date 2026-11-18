@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import pytest
 
 from haam import game
+from haam.events import public_id
 from haam.models import Category, Status
 
 LONG = "The event was important. " * 20  # passes MIN_SUMMARY_LENGTH
@@ -28,8 +29,9 @@ PLACES = [
 def events(make_event):
     made = [
         make_event(title, year=year, lat=lat, lon=lon, category=category, country=country,
-                   summary=f"The {title} took place in {country or 'the Pacific'}. {LONG}")
-        for title, year, lat, lon, category, country in PLACES
+                   summary=f"The {title} took place in {country or 'the Pacific'}. {LONG}",
+                   wiki_page_id=60_000 + n)  # page ids, as in the real data: they differ from the row ids
+        for n, (title, year, lat, lon, category, country) in enumerate(PLACES)
     ]
     make_event("Too short", year=1500, summary="Short.")
     make_event("Pending one", year=1600, status=Status.PENDING, summary=LONG)
@@ -144,9 +146,9 @@ def test_check_scores_and_reveals(app, client, events):
     assert response.status_code == 200
     data = response.json
     assert data["points"] == game.MAX_POINTS and data["km"] == pytest.approx(0, abs=0.1)
-    assert data["answer"]["id"] == event.id
+    assert data["answer"]["id"] == public_id(event)
     assert data["answer"]["lat"] == event.lat and data["answer"]["wiki_url"] == event.wiki_url
-    assert data["answer"]["map_url"] == f"/?event={event.id}"
+    assert data["answer"]["map_url"] == f"/?event={public_id(event)}"
 
 
 def test_check_far_guess(client, events):
@@ -184,7 +186,7 @@ def test_excerpt_hides_country(app, make_event):
     event = make_event("Battle of Somewhere", country="France",
                        summary="The battle was fought in northern France in spring. " + LONG)
     text = game.excerpt(event)
-    assert "France" not in text and game.HIDDEN in text
+    assert "France" not in text and "[Western Europe]" in text
     assert len(text) <= game.EXCERPT_MAX + 1
 
 
@@ -198,6 +200,8 @@ def test_excerpt_hides_nationalities(app, make_event):
     for word in ("Spanish", "Anglo-Allied", "Franco-Italian", "Romans"):
         assert word not in text
     assert "port of Tarragona" in text and "turkey" in text
+    # Words with a known region name it; compounds without one stay a plain blank.
+    assert "[Southern Europe] port" in text and "[Mediterranean]" in text and game.HIDDEN in text
 
 
 def test_game_tiles_are_allowed_by_csp(client):
@@ -393,8 +397,8 @@ def test_hard_check_uses_the_hard_events(client, events):
     normal = game.daily_events(game.today_utc())[0]
     hard = game.daily_events(game.today_utc(), hard=True)[0]
     body = {"date": "today", "index": 0, "lat": hard.lat, "lon": hard.lon}
-    assert client.post("/api/game/check", json={**body, "hard": True, "year": hard.year}).json["answer"]["id"] == hard.id
-    assert client.post("/api/game/check", json=body).json["answer"]["id"] == normal.id
+    assert client.post("/api/game/check", json={**body, "hard": True, "year": hard.year}).json["answer"]["id"] == public_id(hard)
+    assert client.post("/api/game/check", json=body).json["answer"]["id"] == public_id(normal)
 
 
 def test_hard_check_scores_place_and_year(client, events):
@@ -426,3 +430,435 @@ def test_hard_practice(client, events):
         "seed": data["seed"], "index": 0, "lat": event.lat, "lon": event.lon,
         "hard": True, "year": event.year}).json
     assert result["points"] == game.MAX_POINTS
+
+
+# ---------------------------------------------------------------- fixed daily game
+
+def test_daily_game_is_stored_and_fixed(app, events, make_event):
+    from haam.extensions import db
+    from haam.models import DailyGame
+
+    day = date(2026, 11, 10)
+    first = game.daily_event_ids(day)
+    row = db.session.query(DailyGame).one()
+    assert (row.date, row.hard) == (day, False) and len(json.loads(row.refs)) == game.EVENTS_PER_DAY
+    # New events and a cold cache (another server instance) do not change the day.
+    for i in range(30):
+        make_event(f"Another battle {i}", year=100 + i * 60, summary=LONG)
+    app.extensions["haam_game_cache"].clear()
+    assert game.daily_event_ids(day) == first
+
+
+def test_daily_game_refs_use_page_id_with_row_id_fallback(app, make_event):
+    from haam.extensions import db
+    from haam.models import DailyGame
+
+    with_page = make_event("With page", year=1000, summary=LONG, wiki_page_id=4242)
+    without = make_event("Without page", year=1900, summary=LONG, lat=-30, lon=150)
+    day = date(2026, 11, 11)
+    game.daily_event_ids(day)
+    refs = json.loads(db.session.query(DailyGame).one().refs)
+    assert f"p{with_page.wiki_page_id}" in refs and f"i{without.id}" in refs
+
+
+def test_daily_game_survives_a_reimport(app, make_event):
+    """Row ids change on re-import; the stored page ids still find the events."""
+    from haam.extensions import db
+    from haam.models import Event
+
+    for i in range(6):
+        make_event(f"Event {i}", year=-600 + i * 400, summary=LONG, wiki_page_id=1000 + i,
+                   lat=i * 20, lon=i * 40 - 100)
+    day = date(2026, 11, 12)
+    before = [e.title for e in game.daily_events(day)]
+    assert before
+    db.session.execute(Event.__table__.update().values(id=Event.id + 500))
+    db.session.commit()
+    app.extensions["haam_game_cache"].clear()
+    assert [e.title for e in game.daily_events(day)] == before
+
+
+def test_daily_game_skips_a_deleted_event(app, events):
+    from haam.extensions import db
+
+    day = date(2026, 11, 10)
+    picked = game.daily_events(day)
+    titles = [e.title for e in picked]
+    db.session.delete(picked[1])
+    db.session.commit()
+    app.extensions["haam_game_cache"].clear()
+    assert [e.title for e in game.daily_events(day)] == [t for i, t in enumerate(titles) if i != 1]
+
+
+def db_events(ids):
+    from haam.extensions import db
+    from haam.models import Event
+    return [db.session.get(Event, i) for i in ids]
+
+
+def test_daily_game_race_reads_the_winning_row(app, events, monkeypatch):
+    from haam.extensions import db
+    from haam.models import DailyGame
+
+    day = date(2026, 11, 10)
+    real = game._compute_daily_ids
+    winner_ids = real(day, False)[:2]
+    winner = [f"p{e.wiki_page_id}" for e in db_events(winner_ids)]
+
+    def racing(day_, hard):
+        ids = real(day_, hard)
+        db.session.add(DailyGame(date=day_, hard=hard, refs=json.dumps(winner)))  # another instance won
+        db.session.commit()
+        return ids
+
+    monkeypatch.setattr(game, "_compute_daily_ids", racing)
+    assert game.daily_event_ids(day) == winner_ids
+    assert db.session.query(DailyGame).count() == 1
+
+
+def test_hard_game_is_stored_separately(app, events):
+    from haam.extensions import db
+    from haam.models import DailyGame
+
+    day = date(2026, 11, 10)
+    normal, hard = game.daily_event_ids(day), game.daily_event_ids(day, hard=True)
+    assert not set(normal) & set(hard)
+    assert {r.hard for r in db.session.query(DailyGame)} == {False, True}
+
+
+# ---------------------------------------------------------------- daily scores
+
+def test_score_is_recorded_and_averaged(client, events):
+    day = _today()
+    assert client.get("/api/game/today").json["stats"] == {"count": 0, "average": None}
+    first = client.post("/api/game/score", json={"date": day, "hard": False, "points": 3000})
+    assert first.status_code == 200 and first.json["stats"] == {"count": 1, "average": 3000}
+    second = client.post("/api/game/score", json={"date": day, "points": 4000})
+    assert second.json["stats"] == {"count": 2, "average": 3500}
+    assert client.get("/api/game/today").json["stats"]["count"] == 2
+    # The hard game has its own scores.
+    assert client.get("/api/game/today?hard=1").json["stats"]["count"] == 0
+
+
+@pytest.mark.parametrize("body", [
+    {"date": "today", "points": 5001},
+    {"date": "today", "points": -1},
+    {"date": "today", "points": 10.5},
+    {"date": "today", "points": True},
+    {"date": "today", "points": "100"},
+    {"date": "today", "points": 100, "hard": "yes"},
+    {"points": 100},
+])
+def test_score_rejects_bad_input(client, events, body):
+    assert client.post("/api/game/score", json=body).status_code == 400
+
+
+def test_score_for_a_future_day(client, events):
+    tomorrow = (game.today_utc() + timedelta(days=1)).isoformat()
+    assert client.post("/api/game/score", json={"date": tomorrow, "points": 10}).status_code == 404
+
+
+# ---------------------------------------------------------------- challenge a friend
+
+def test_practice_with_a_seed_gives_the_same_set(client, events):
+    first = client.get("/api/game/practice").json
+    again = client.get(f"/api/game/practice?seed={first['seed']}").json
+    assert again["seed"] == first["seed"] and again["rounds"] == first["rounds"]
+
+
+@pytest.mark.parametrize("seed", ["abc", "G" * 32, "0" * 31, ""])
+def test_practice_rejects_a_bad_seed(client, events, seed):
+    assert client.get(f"/api/game/practice?seed={seed}").status_code == 400
+
+
+# ---------------------------------------------------------------- quiz from a collection
+
+@pytest.fixture
+def quiz_collection(app, events):
+    from haam import collections_service as cs
+
+    collection, _ = cs.create_collection("Quiz me", "", True)
+    for event in events[:6]:
+        cs.add_event(collection, event.id, "")
+    return collection
+
+
+def test_practice_from_a_collection(client, events, quiz_collection):
+    data = client.get(f"/api/game/practice?collection={quiz_collection.view_token}").json
+    in_collection = {e.title for e in events[:6]}
+    assert len(data["rounds"]) == game.EVENTS_PER_DAY
+    assert {r["title"] for r in data["rounds"]} <= in_collection
+    by_title = {e.title: e for e in events}
+    for round_ in data["rounds"]:
+        event = by_title[round_["title"]]
+        result = client.post("/api/game/practice/check", json={
+            "seed": data["seed"], "collection": quiz_collection.view_token,
+            "index": round_["index"], "lat": event.lat, "lon": event.lon})
+        assert result.status_code == 200 and result.json["answer"]["title"] == event.title
+
+
+def test_collection_quiz_needs_five_events(client, events, quiz_collection):
+    from haam import collections_service as cs
+
+    small, _ = cs.create_collection("Small", "", False)
+    for event in events[:4]:
+        cs.add_event(small, event.id, "")
+    data = client.get(f"/api/game/practice?collection={small.view_token}").json
+    assert data["rounds"] == [] and "at least 5" in data["message"]
+
+
+def test_collection_quiz_counts_only_approved_events(app, client, events):
+    from haam import collections_service as cs
+    from haam.extensions import db
+
+    collection, _ = cs.create_collection("Mixed", "", True)
+    for event in events[:5]:
+        cs.add_event(collection, event.id, "")
+    assert len(client.get(f"/api/game/practice?collection={collection.view_token}").json["rounds"]) == 5
+    events[0].status = Status.PENDING
+    db.session.commit()
+    assert client.get(f"/api/game/practice?collection={collection.view_token}").json["rounds"] == []
+
+
+def test_collection_quiz_unknown_or_hidden(client, events, quiz_collection):
+    from haam import collections_service as cs
+
+    assert client.get("/api/game/practice?collection=nope").status_code == 404
+    cs.set_hidden(quiz_collection, True)
+    assert client.get(f"/api/game/practice?collection={quiz_collection.view_token}").status_code == 404
+
+
+def test_collection_page_links_to_the_quiz(client, quiz_collection):
+    html = client.get(f"/collections/{quiz_collection.view_token}").get_data(as_text=True)
+    assert f"mode=practice&amp;collection={quiz_collection.view_token}" in html
+
+
+# ---------------------------------------------------------------- which came first
+
+@pytest.fixture
+def many_events(make_event):
+    return [
+        make_event(f"Event number {i}", year=800 + i * 40, summary=f"Something happened in {800 + i * 40}. " + LONG,
+                   lat=i, lon=i, date_label=str(800 + i * 40))
+        for i in range(30)
+    ]
+
+
+def test_pairs_hide_the_years_and_ids(client, many_events):
+    response = client.get("/api/game/pairs")
+    data = response.json
+    assert game.SEED_PATTERN.fullmatch(data["seed"]) and len(data["rounds"]) == game.PAIRS_PER_SET
+    for round_ in data["rounds"]:
+        assert set(round_) == {"index", "a", "b"}
+        for side in (round_["a"], round_["b"]):
+            assert set(side) == {"title", "excerpt", "category"}
+            assert not any(ch.isdigit() for ch in side["excerpt"])
+    raw = response.get_data(as_text=True)
+    assert '"id"' not in raw and '"lat"' not in raw and '"year"' not in raw
+
+
+def test_pairs_are_five_to_three_hundred_years_apart(app, many_events):
+    pairs = game.pair_events("0" * 32)
+    assert len(pairs) == game.PAIRS_PER_SET
+    ids = [e.id for pair in pairs for e in pair]
+    assert len(ids) == len(set(ids))
+    for first, second in pairs:
+        assert game.MIN_GAP_YEARS <= abs(first.year - second.year) <= game.MAX_GAP_YEARS
+
+
+def test_pairs_same_seed_same_pairs(client, many_events):
+    seed = client.get("/api/game/pairs").json["seed"]
+    assert client.get(f"/api/game/pairs?seed={seed}").json == client.get(f"/api/game/pairs?seed={seed}").json
+    assert client.get("/api/game/pairs?seed=zz").status_code == 400
+
+
+def test_pairs_check_reveals_both_dates(client, many_events):
+    data = client.get("/api/game/pairs").json
+    seed = data["seed"]
+    by_title = {e.title: e for e in many_events}
+    for round_ in data["rounds"]:
+        a, b = by_title[round_["a"]["title"]], by_title[round_["b"]["title"]]
+        earlier = 0 if a.year < b.year else 1
+        right = client.post("/api/game/pairs/check", json={"seed": seed, "index": round_["index"], "choice": earlier})
+        assert right.status_code == 200 and right.json["correct"] is True and right.json["earlier"] == earlier
+        assert right.json["a"]["date"] == a.date_label and right.json["b"]["date"] == b.date_label
+        wrong = client.post("/api/game/pairs/check", json={"seed": seed, "index": round_["index"], "choice": 1 - earlier})
+        assert wrong.json["correct"] is False
+
+
+@pytest.mark.parametrize("body", [
+    {"index": 0, "choice": 0},
+    {"seed": "0" * 32, "index": "0", "choice": 0},
+    {"seed": "0" * 32, "index": 0, "choice": 2},
+    {"seed": "0" * 32, "index": 0, "choice": True},
+])
+def test_pairs_check_rejects_bad_input(client, many_events, body):
+    assert client.post("/api/game/pairs/check", json=body).status_code == 400
+
+
+def test_pairs_check_index_out_of_range(client, many_events):
+    assert client.post("/api/game/pairs/check", json={"seed": "0" * 32, "index": 10, "choice": 0}).status_code == 404
+
+
+def test_pairs_without_events(client):
+    assert client.get("/api/game/pairs").json["rounds"] == []
+
+
+# ---------------------------------------------------------------- clues: regions and stems
+
+def test_excerpt_names_regions_instead_of_blanks(app, make_event):
+    event = make_event("Siege of Somewhere", country="Philippines",
+                       summary="Troops of the Philippine National Police and the Armed Forces of the "
+                               "Philippines took part. The Ottoman Turks and the British watched. " + LONG)
+    text = game.excerpt(event)
+    assert "Philippine" not in text
+    assert text.count("[Southeast Asia]") == 2
+    assert "[Middle East]" in text and "[British Isles]" in text
+    assert "[[" not in text  # a label is never matched again by a later pass
+
+
+def test_excerpt_merges_one_region_and_never_cuts_a_label(app, make_event):
+    event = make_event("Siege of Somewhere", summary="The Ottoman Turks marched. " + LONG)
+    assert game.excerpt(event).startswith("The [Middle East] marched.")
+    long_text = "Word " * 59 + "the Spanish troops of Spain. " + LONG
+    text = game.excerpt(make_event("Siege of Elsewhere", summary=long_text))
+    assert text.count("[") == text.count("]") and len(text) <= game.EXCERPT_MAX + 1
+
+
+@pytest.mark.parametrize("country, word", [
+    ("Tunisia", "Tunisian"), ("Philippines", "Philippine"), ("Sri Lanka", "Sri Lankan"),
+    ("Chad", "Chadian"), ("Kingdom of Spain", "Spain"), ("Iran", "Iranian"),
+])
+def test_country_stems_are_hidden(app, make_event, country, word):
+    event = make_event("Battle of Somewhere", country=country, summary=f"A {word} force attacked. " + LONG)
+    assert word not in game.excerpt(event)
+
+
+def test_country_stem_does_not_hide_the_city_or_other_words(app, make_event):
+    event = make_event("Run for Tunis", country="Tunisia", summary="The Run for Tunis began. Chadwick came. " + LONG)
+    assert "Run for Tunis" in game.excerpt(event)
+    assert game.names_a_country("Tunisian campaign", "Tunisia")
+    assert not game.names_a_country("Chadwick fire", "Chad")
+
+
+def test_hide_years_when_a_calendar_note_touches_the_year():
+    assert game.hide_years("on 7 August 1714Greg. during") == "on 7 August ____Greg. during"
+
+
+def test_hide_years_after_a_bracketed_old_style_date():
+    assert game.hide_years("on 27 July [O.S. 7 August] 1714 at Gangut") == "on 27 July [O.S. 7 August] ____ at Gangut"
+
+
+# ---------------------------------------------------------------- daily: no recent repeats
+
+@pytest.fixture
+def many(make_event):
+    """Enough events over all eras that a day can avoid the last days' events."""
+    for n in range(40):
+        make_event(f"Event {n}", year=[-300, 900, 1650, 1850, 1960][n % 5] + n, lat=-60 + n * 3, lon=-170 + n * 8,
+                   category=list(Category)[n % 6], country=None, summary=LONG, wiki_page_id=70_000 + n)
+
+
+def test_daily_game_avoids_the_last_days_events(app, many):
+    first = game.daily_event_ids(date(2026, 11, 2))
+    assert game._recent_event_ids(date(2026, 11, 3)) == set(first)
+    second = game._compute_daily_ids(date(2026, 11, 3), hard=False)
+    assert len(second) == game.EVENTS_PER_DAY and not set(second) & set(first)
+
+
+def test_recent_window_is_bounded(app, many):
+    old = game.daily_event_ids(date(2026, 11, 2))
+    assert game._recent_event_ids(date(2026, 11, 2) + timedelta(days=game.RECENT_DAYS + 1)) == set()
+    assert game._recent_event_ids(date(2026, 11, 2) + timedelta(days=game.RECENT_DAYS)) == set(old)
+
+
+def test_daily_game_repeats_rather_than_shrinks(app, make_event):
+    for n in range(5):
+        make_event(f"Only {n}", year=[-300, 900, 1650, 1850, 1960][n], lat=n * 20, lon=n * 50,
+                   category=list(Category)[n], country=None, summary=LONG, wiki_page_id=80_000 + n)
+    first = game.daily_event_ids(date(2026, 11, 2))
+    assert len(first) == 5
+    assert sorted(game._compute_daily_ids(date(2026, 11, 3), hard=False)) == sorted(first)
+
+
+# ---------------------------------------------------------------- hints
+
+def _today_event(index, hard=False):
+    from haam.extensions import db
+    from haam.models import Event
+    return db.session.get(Event, game.daily_event_ids(game.today_utc(), hard=hard)[index])
+
+
+def test_hint_costs_a_fifth_of_the_points(client, events):
+    answer = _today_event(0)
+    body = {"date": _today(), "index": 0, "lat": answer.lat, "lon": answer.lon}
+    plain = client.post("/api/game/check", json=body).json
+    hinted = client.post("/api/game/check", json={**body, "hint": True}).json
+    assert plain["points"] == 1000 and plain["hint"] is False and plain["hint_penalty"] == 0
+    assert hinted["points"] == 800 and hinted["hint"] is True and hinted["hint_penalty"] == 200
+
+
+def test_hint_in_hard_mode_scales_place_and_year(client, events):
+    answer = _today_event(0, hard=True)
+    body = {"date": _today(), "hard": True, "index": 0, "lat": answer.lat, "lon": answer.lon, "year": answer.year}
+    plain = client.post("/api/game/check", json=body).json
+    hinted = client.post("/api/game/check", json={**body, "hint": True}).json
+    assert plain["points"] == 1000
+    assert (hinted["location_points"], hinted["year_points"], hinted["points"]) == (400, 400, 800)
+    assert hinted["hint_penalty"] == 200
+
+
+def test_check_rejects_a_bad_hint_flag(client, events):
+    body = {"date": _today(), "index": 0, "lat": 0, "lon": 0, "hint": "yes"}
+    assert client.post("/api/game/check", json=body).status_code == 400
+
+
+def test_hint_endpoint_names_the_country_or_the_region(client, events):
+    day = game.today_utc()
+    for index in range(game.EVENTS_PER_DAY):
+        event = _today_event(index)
+        data = client.post("/api/game/hint", json={"date": day.isoformat(), "index": index}).json
+        assert data == ({"kind": "country", "text": event.country} if event.country
+                        else {"kind": "region", "text": game.region_at(event.lat, event.lon)})
+        assert set(data) == {"kind", "text"}  # no coordinates, id or title
+
+
+def test_hint_endpoint_for_practice_and_bad_input(client, events):
+    seed = game.new_practice_seed()
+    practice = client.post("/api/game/hint", json={"seed": seed, "index": 0})
+    assert practice.status_code == 200 and practice.json["text"]
+    assert client.post("/api/game/hint", json={"seed": seed, "index": 9}).status_code == 404
+    assert client.post("/api/game/hint", json={"seed": "nope", "index": 0}).status_code == 400
+    assert client.post("/api/game/hint", json={"index": 0}).status_code == 400
+    assert client.post("/api/game/hint", json={"date": _today(), "index": True}).status_code == 400
+    assert client.post("/api/game/hint", json={"date": "2020-01-01", "index": 0}).status_code == 404
+
+
+@pytest.mark.parametrize("lat, lon, region", [
+    (48.85, 2.35, "Western Europe"), (35.7, 139.7, "East Asia"), (-33.9, 151.2, "Australia and Oceania"),
+    (28.2, -177.35, "the Pacific Ocean"), (30.0, 31.2, "North Africa"), (-13.0, -77.0, "South America"),
+])
+def test_region_at(lat, lon, region):
+    assert game.region_at(lat, lon) == region
+
+
+# ---------------------------------------------------------------- abuse limits
+
+def test_hint_is_rate_limited(app, client, events):
+    app.config["RATELIMIT_ENABLED"] = True
+    for _ in range(60):
+        assert client.post("/api/game/hint", json={"date": _today(), "index": 0}).status_code == 200
+    assert client.post("/api/game/hint", json={"date": _today(), "index": 0}).status_code == 429
+
+
+def test_a_client_can_report_only_a_few_scores_a_day(app, client, events):
+    app.config["RATELIMIT_ENABLED"] = True
+    for _ in range(5):
+        assert client.post("/api/game/score", json={"date": _today(), "points": 100}).status_code == 200
+    assert client.post("/api/game/score", json={"date": _today(), "points": 5000}).status_code == 429
+    # The hard game and other clients have their own allowance.
+    assert client.post("/api/game/score", json={"date": _today(), "hard": True, "points": 100}).status_code == 200
+    other = client.post("/api/game/score", json={"date": _today(), "points": 100},
+                        headers={"X-Forwarded-For": "203.0.113.9"})
+    assert other.status_code == 200
+    assert game.score_stats(game.today_utc(), False)["count"] == 6

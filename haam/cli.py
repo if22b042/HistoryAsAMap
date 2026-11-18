@@ -117,13 +117,14 @@ def sync_wikidata_command(path, dry_run):
     """Make the database's imported Wikidata events match the final CSV.
 
     Adds events that are missing, removes imported events no longer in the file,
-    and sets every imported event's tags to the file's. Offline and safe to re-run.
+    sets every imported event's tags to the file's, and updates the title, date, place
+    and summary of imported events no editor has changed. Offline and safe to re-run.
     Events submitted on the website, and events used in a collection, are never removed.
     """
     stats = importer.sync_wikidata(path, dry_run=dry_run, report=click.echo)
     prefix = "Would" if dry_run else "Done:"
     click.echo(f"{prefix} add {stats.added}, remove {stats.removed}, re-tag {stats.retagged}, "
-               f"re-categorize {stats.recategorized} events "
+               f"re-categorize {stats.recategorized}, update fields of {stats.updated} events "
                f"({stats.unchanged} already up to date; {stats.adopted} older rows linked to their Wikidata id)")
     if stats.kept_in_collections:
         click.echo("Kept although not in the file, because a collection uses them: "
