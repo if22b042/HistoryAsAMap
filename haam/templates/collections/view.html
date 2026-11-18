@@ -28,10 +28,19 @@
         <a class="btn btn-secondary" href="{{ url_for('collections.full_map', view_token=collection.view_token) }}"
            title="The full map – filters, search, timeline – with only this collection's entries">
           <i class="fas fa-map" aria-hidden="true"></i> Map view</a>
+        <a class="btn btn-secondary" href="{{ url_for('game.page', mode='practice', collection=collection.view_token) }}"
+           title="Five questions: pin where this collection's events happened">
+          <i class="fas fa-gamepad" aria-hidden="true"></i> Play as a quiz</a>
       {% endif %}
       {% if editable %}
         <a class="btn btn-primary" href="{{ url_for('collections.manage', view_token=collection.view_token) }}"><i class="fas fa-edit" aria-hidden="true"></i> Edit collection</a>
       {% endif %}
+      <form method="post" action="{{ url_for('collections.copy', view_token=collection.view_token) }}">
+        {{ action_form.csrf_token }}
+        <button class="btn btn-secondary" type="submit"
+                title="A new unlisted collection with the same entries, which you can change freely">
+          <i class="fas fa-copy" aria-hidden="true"></i> Use as a base for my own collection</button>
+      </form>
     </div>
   </header>
 
@@ -72,6 +81,37 @@
     {{ copy_field('share-url', 'Share link (view only)', share_url) }}
   </section>
 
+  {% if not editable %}
+    <details class="card suggest-card" id="suggest">
+      <summary><i class="fas fa-lightbulb" aria-hidden="true"></i> Suggest an entry</summary>
+      <p class="form-hint">Know an event that belongs here? The owner of the collection will see it and decide.</p>
+      <form method="post" action="{{ url_for('collections.suggest', view_token=collection.view_token) }}" data-event-picker>
+        {{ suggestion_form.csrf_token }}
+        <div class="form-group">
+          <label class="form-label" for="event-search">Search confirmed events</label>
+          <input id="event-search" class="form-input" type="search" placeholder="e.g. Hastings, 1815, Rome…" autocomplete="off">
+          <div class="event-results" aria-live="polite"></div>
+          {{ suggestion_form.event_id(type='hidden') }}
+          <p class="form-hint chosen-event">No event chosen.</p>
+        </div>
+        <p class="form-hint">Not on the main map? Leave the search empty and give a title instead.</p>
+        <div class="form-group">
+          <label class="form-label" for="{{ suggestion_form.title.id }}">{{ suggestion_form.title.label.text }}</label>
+          {{ suggestion_form.title(class_='form-input', maxlength=300) }}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="{{ suggestion_form.link.id }}">Link (optional)</label>
+          {{ suggestion_form.link(class_='form-input', maxlength=500, placeholder='https://') }}
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="{{ suggestion_form.message.id }}">Message (optional)</label>
+          {{ suggestion_form.message(class_='form-input', rows=2, maxlength=500) }}
+        </div>
+        <button class="btn btn-primary btn-small" type="submit">Send suggestion</button>
+      </form>
+    </details>
+  {% endif %}
+
   {% if collection.is_public and not editable %}
     <details class="card report-card">
       <summary><i class="fas fa-flag" aria-hidden="true"></i> Report this collection</summary>
@@ -100,4 +140,5 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{{ url_for('static', filename='js/copy.js') }}" defer></script>
   <script type="module" src="{{ url_for('static', filename='js/collection-map.js') }}"></script>
+  {% if not editable %}<script type="module" src="{{ url_for('static', filename='js/event-picker.js') }}"></script>{% endif %}
 {% endblock %}

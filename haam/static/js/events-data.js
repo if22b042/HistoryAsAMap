@@ -40,6 +40,7 @@ export function decodeCore(chunk) {
       id: chunk.id[i],
       title: chunk.title[i],
       year,
+      md: chunk.md ? chunk.md[i] : 0, // month * 100 + day, 0 = no day (sorts last within its year)
       display_year: displayYear,
       date: chunk.date[i] || displayYear,
       excerpt: "",
@@ -73,9 +74,12 @@ export function chunkOrder(manifest, firstId) {
   return order;
 }
 
-/** Events sorted by year, then title (how the server sorts each chunk). */
+/** Events sorted by year, then date within the year (undated last), then title (as the server sorts each chunk). */
 export function compareEvents(a, b) {
   if (a.year !== b.year) return a.year - b.year;
+  const dayA = a.md || 9999;
+  const dayB = b.md || 9999;
+  if (dayA !== dayB) return dayA - dayB;
   if (a.title !== b.title) return a.title < b.title ? -1 : 1;
   return a.id - b.id;
 }

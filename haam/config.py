@@ -28,6 +28,8 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = _database_url()
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    # Forms stay valid as long as the session: a map or form left open for an hour still works.
+    WTF_CSRF_TIME_LIMIT = None
 
     # Admin login: a Werkzeug password hash (create with `flask haam hash-password`).
     ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
@@ -47,6 +49,14 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
+
+    # Optional: email the collection links once after creation (see haam/mail.py).
+    # Without SMTP_HOST the email field is hidden. Port 465 uses SSL, other ports STARTTLS.
+    SMTP_HOST = os.environ.get("SMTP_HOST")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT") or "587")
+    SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+    MAIL_FROM = os.environ.get("MAIL_FROM")
 
     # Public address used in canonical links, share previews and the sitemap.
     # Empty means "the address of the current request".
@@ -71,6 +81,7 @@ class TestingConfig(Config):
     GEOCODING_ENABLED = False
     AUTO_SETUP_DATABASE = False  # tests build their own schema
     SITE_URL = "https://haam.test"
+    FEED_STATE_TTL = 0  # tests change data and read the map's version straight away
 
 
 CONFIGS = {

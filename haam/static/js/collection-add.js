@@ -61,7 +61,7 @@ export function createCollectionAdder(url) {
 
   const containing = (eventId) => (data ? data.collections.filter((c) => c.event_ids.has(eventId)) : []);
 
-  async function add(collection, eventId) {
+  async function add(collection, eventId, retried = false) {
     let response;
     let body = {};
     try {
@@ -80,6 +80,14 @@ export function createCollectionAdder(url) {
       // The collection just changed: it goes to the top, like on the collections page.
       data.collections = [collection, ...data.collections.filter((c) => c !== collection)];
       return { ok: true, message: body.message };
+    }
+    if (response.status === 400 && !retried) {
+      // Most likely the form token expired (the map was open a long time): fetch a fresh
+      // token with the collections and try once more.
+      await load();
+      const fresh = data.collections.find((c) => c.add_url === collection.add_url);
+      if (fresh) return add(fresh, eventId, true);
+      return { ok: false, message: "Could not add the event. Reload the page and try again." };
     }
     if (response.status === 409) collection.event_ids.add(eventId);
     if (response.status === 403) data.collections = data.collections.filter((c) => c !== collection);

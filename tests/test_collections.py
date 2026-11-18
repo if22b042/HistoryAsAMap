@@ -100,8 +100,8 @@ def test_add_custom_entry(client):
     entry = collection.entries[0]
     assert (entry.title, entry.year, entry.lat, entry.note) == ("My grandfather's village", -44, 45.5, "Family history")
     assert not entry.is_event and not entry.has_wikipedia
-    # Custom entries never reach the main map.
-    assert client.get("/api/events").json == []
+    # Custom entries never become events on the main map.
+    assert db.session.scalar(db.select(db.func.count(Event.id))) == 0
 
 
 def test_custom_entry_with_wikipedia_link_gets_star(client, wiki):

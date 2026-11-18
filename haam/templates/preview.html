@@ -19,6 +19,9 @@
   {% if not form.year.data %}
     <div class="alert alert-warning" role="status">We could not find a year in the article. Please enter it.</div>
   {% endif %}
+  {% if dated_by_wikidata is false %}
+    <div class="alert alert-warning" role="status">This article may not be an event: Wikidata gives it no date. Please check the year.</div>
+  {% endif %}
   {% if form.lat.data is none or form.lon.data is none %}
     <div class="alert alert-warning" role="status">This article has no coordinates. Please enter where the event took place.</div>
   {% endif %}

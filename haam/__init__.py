@@ -4,7 +4,8 @@ import hashlib
 import logging
 import os
 
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template, request
+from flask_wtf.csrf import CSRFError
 
 from haam.config import BASE_DIR, CONFIGS, INSTANCE_DIR
 
@@ -26,6 +27,10 @@ CSP = "; ".join([
     "base-uri 'self'",
     "form-action 'self'",
 ])
+
+
+# /embed is made to be framed by other sites: any page may embed it.
+EMBED_CSP = CSP.replace("frame-ancestors 'none'", "frame-ancestors *")
 
 
 def _config_name() -> str:
@@ -127,6 +132,9 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.after_request
     def security_headers(response):
+        if request.endpoint == "public.embed":
+            response.headers["Content-Security-Policy"] = EMBED_CSP
+            response.headers["X-Robots-Tag"] = "noindex"  # the full map is what search engines should list
         response.headers.setdefault("Content-Security-Policy", CSP)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -191,6 +199,7 @@ def _register_template_helpers(app: Flask) -> None:
     from haam import seo
     from haam.auth import is_admin
     from haam.dates import format_year
+    from haam.events import public_id
     from haam.models import Category
 
     app.jinja_env.filters["year"] = format_year
@@ -199,6 +208,7 @@ def _register_template_helpers(app: Flask) -> None:
         absolute_url=seo.absolute,
         external_url=seo.external_url,
         event_path=seo.event_path,
+        public_id=public_id,
         site_name=seo.SITE_NAME,
         default_description=seo.DEFAULT_DESCRIPTION,
     )
@@ -208,10 +218,37 @@ def _register_template_helpers(app: Flask) -> None:
         return {"is_admin": is_admin(), "categories": list(Category)}
 
 
+def _error_response(code: int, message: str):
+    """The error page, or ``{"error": ...}`` for a client that asks for JSON (the map's scripts)."""
+    if request.accept_mimetypes.best_match(["text/html", "application/json"]) == "application/json":
+        return jsonify(error=message), code
+    return render_template("error.html", code=code, message=message), code
+
+
 def _register_error_pages(app: Flask) -> None:
+    @app.errorhandler(400)
+    def bad_request(_error):
+        return _error_response(400, "The request could not be understood.")
+
+    @app.errorhandler(CSRFError)
+    def csrf_expired(_error):
+        return _error_response(400, "This page has expired – reload it and try again.")
+
+    @app.errorhandler(403)
+    def forbidden(_error):
+        return _error_response(403, "You are not allowed to do that.")
+
     @app.errorhandler(404)
     def not_found(_error):
         return render_template("error.html", code=404, message="This page does not exist."), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(_error):
+        return _error_response(405, "This action is not supported here.")
+
+    @app.errorhandler(429)
+    def too_many_requests(_error):
+        return _error_response(429, "Too many requests. Wait a moment and try again.")
 
     @app.errorhandler(500)
     def server_error(_error):

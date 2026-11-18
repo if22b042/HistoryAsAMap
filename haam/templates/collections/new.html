@@ -9,10 +9,18 @@
     <p>No account needed. You'll get a <strong>share link</strong> to show the collection and a secret <strong>edit link</strong> to change it.</p>
   </header>
 
-  <form class="card" method="post" novalidate>
+  <form class="card" method="post" novalidate
+        {%- if search_count is defined %} action="{{ url_for('collections.create_from_search') }}"{% endif %}>
     {{ form.csrf_token }}
+    {% if search_count is defined %}
+      {{ form.ids }}
+      {{ field_errors(form.ids) }}
+      <p class="first-entry"><i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+        <strong>{{ search_count }} event{{ '' if search_count == 1 else 's' }}</strong> will be added, oldest first.
+        {%- if search_total > search_count %} ({{ search_total - search_count }} more did not fit: a collection holds at most {{ max_entries }}.){% endif %}</p>
+    {% endif %}
     {% if first_event %}
-      <input type="hidden" name="event" value="{{ first_event.id }}">
+      <input type="hidden" name="event" value="{{ public_id(first_event) }}">
       <p class="first-entry"><i class="fas fa-map-marker-alt" aria-hidden="true"></i>
         <strong>{{ first_event.title }}</strong> ({{ first_event.display_year }}) will be its first entry.</p>
     {% endif %}
@@ -23,12 +31,18 @@
       <p class="form-hint">Unlisted collections can only be seen by people you give the share link to.</p>
       {{ field_errors(form.is_public) }}
     </div>
+    {% if mail_enabled %}
+      {{ text_field(form.email, icon='envelope', type='email', placeholder='you@example.com') }}
+      <p class="form-hint">We send the share and edit links once and do not store your address.</p>
+    {% endif %}
+    {% if search_count is not defined %}
     <fieldset class="tag-start">
       <legend>Start from an official tag <span class="form-hint">(optional)</span></legend>
       <p class="form-hint">All confirmed events with that tag are added – oldest first, at most 500 – and you can
         remove or add entries afterwards. Leave the years empty to take the whole tag.</p>
       {{ tag_fields(form) }}
     </fieldset>
+    {% endif %}
     <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-layer-group" aria-hidden="true"></i> Create collection</button>
   </form>
 </div>

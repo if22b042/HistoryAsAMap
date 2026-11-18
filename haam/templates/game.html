@@ -40,7 +40,9 @@
 </noscript>
 <section class="game-layout" id="game" data-puzzle-url="{{ url_for('game.puzzle', value='DAY') }}"
          data-check-url="{{ url_for('game.check') }}" data-page-url="{{ url_for('game.page') }}"
-         data-practice-url="{{ url_for('game.practice') }}" data-practice-check-url="{{ url_for('game.practice_check') }}">
+         data-practice-url="{{ url_for('game.practice') }}" data-practice-check-url="{{ url_for('game.practice_check') }}"
+         data-score-url="{{ url_for('game.score') }}" data-hint-url="{{ url_for('game.hint') }}" data-pairs-url="{{ url_for('game.pairs') }}"
+         data-pairs-check-url="{{ url_for('game.pairs_check') }}">
   <aside class="game-panel" aria-label="Game">
     <header class="game-header">
       <div>
@@ -61,8 +63,10 @@
         <i class="far fa-calendar-check" aria-hidden="true"></i> Daily</a>
       <a class="game-mode" id="mode-practice" href="{{ url_for('game.page', mode='practice') }}">
         <i class="fas fa-dumbbell" aria-hidden="true"></i> Practice</a>
+      <a class="game-mode" id="mode-pairs" href="{{ url_for('game.page', mode='pairs') }}">
+        <i class="fas fa-hourglass-half" aria-hidden="true"></i> Which first?</a>
     </nav>
-    <label class="game-hard">
+    <label class="game-hard" id="hard-label">
       <input type="checkbox" id="hard-toggle">
       <span><strong>Hard mode</strong> · guess the year too</span>
     </label>
@@ -84,6 +88,9 @@
       </label>
       <button class="btn btn-secondary btn-small" type="submit">
         <i class="fas fa-random" aria-hidden="true"></i> New set</button>
+      <button class="btn btn-secondary btn-small" type="button" id="challenge-btn" hidden
+              title="Copy a link to this exact set of five">
+        <i class="fas fa-link" aria-hidden="true"></i> <span>Challenge a friend</span></button>
     </form>
 
     <p class="game-note" id="game-archive-note" hidden>
@@ -102,6 +109,12 @@
       <p class="game-round-excerpt" id="round-excerpt"></p>
 
       <div id="round-guess">
+        <div class="game-hint-box" id="hint-box">
+          <button class="btn btn-secondary btn-small" type="button" id="hint-btn"
+                  title="Reveal the country (or region) of this event. It costs 20% of this round's points.">
+            <i class="far fa-lightbulb" aria-hidden="true"></i> Hint <span class="game-hint-cost">(−20% of this round)</span></button>
+          <p class="game-hint-text" id="hint-text" hidden aria-live="polite"></p>
+        </div>
         <div class="game-year" id="round-year" hidden>
           <label for="year-input">Your year</label>
           <div class="game-year-row">
@@ -123,6 +136,7 @@
       <div class="game-result" id="round-result" hidden aria-live="polite">
         <p class="game-points"><strong id="result-points"></strong> points</p>
         <p class="game-breakdown" id="result-breakdown" hidden></p>
+        <p class="game-distance" id="result-hint" hidden></p>
         <p class="game-distance" id="result-distance"></p>
         <p class="game-distance" id="result-year" hidden></p>
         <p class="game-answer" id="result-answer"></p>
@@ -133,6 +147,40 @@
         <button class="btn btn-primary btn-block" type="button" id="next-btn"></button>
       </div>
     </article>
+
+    <section class="game-pairs" id="pairs" hidden>
+      <p class="game-round-num" id="pairs-num"></p>
+      <h2 id="pairs-question">Which came first?</h2>
+      <div class="pairs-cards" id="pairs-cards">
+        <button class="pairs-card" type="button" id="pairs-a" data-choice="0">
+          <span class="pairs-letter" aria-hidden="true">A</span>
+          <strong class="pairs-title"></strong>
+          <span class="pairs-excerpt"></span>
+          <span class="pairs-date" hidden></span>
+        </button>
+        <button class="pairs-card" type="button" id="pairs-b" data-choice="1">
+          <span class="pairs-letter" aria-hidden="true">B</span>
+          <strong class="pairs-title"></strong>
+          <span class="pairs-excerpt"></span>
+          <span class="pairs-date" hidden></span>
+        </button>
+      </div>
+      <div class="game-result" id="pairs-result" hidden aria-live="polite">
+        <p class="game-points" id="pairs-verdict"></p>
+        <p class="game-links">
+          <a id="pairs-wiki-a" target="_blank" rel="noopener">A on Wikipedia <i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+          <a id="pairs-wiki-b" target="_blank" rel="noopener">B on Wikipedia <i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+        </p>
+        <button class="btn btn-primary btn-block" type="button" id="pairs-next"></button>
+      </div>
+      <div id="pairs-summary" hidden>
+        <h2>Your score</h2>
+        <p class="game-total"><strong id="pairs-total"></strong> <span id="pairs-max"></span></p>
+        <ol class="game-summary-list" id="pairs-list"></ol>
+        <button class="btn btn-primary btn-block" type="button" id="pairs-again">
+          <i class="fas fa-redo" aria-hidden="true"></i> Play another set</button>
+      </div>
+    </section>
 
     <article class="game-summary" id="game-summary" hidden>
       <h2>Your score</h2>
@@ -145,6 +193,7 @@
         <button class="btn btn-secondary btn-block" type="button" data-copy="#share-text">
           <i class="far fa-copy" aria-hidden="true"></i> Copy result</button>
 
+        <p class="game-stats" id="summary-stats" hidden></p>
         <p class="game-streak" id="summary-streak"></p>
         <p class="game-countdown" id="summary-countdown"></p>
       </div>

@@ -1336,6 +1336,11 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .game-category { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 400; font-size: 0.85rem; color: var(--text-muted); }
 .game-round-excerpt { margin: 0 0 1rem; font-size: 0.92rem; line-height: 1.5; color: var(--text); }
 .game-hint { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+.game-hint-box { margin: 0 0 0.75rem; }
+.game-hint-box[hidden] { display: none; }
+.game-hint-cost { color: var(--text-muted); font-weight: 400; }
+.game-hint-text { margin: 0; padding: 0.5rem 0.7rem; font-size: 0.9rem; font-weight: 600; color: var(--text-strong); border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: var(--radius-sm); }
+.game-hint-text[hidden] { display: none; }
 .game-result { padding-top: 0.75rem; border-top: 1px solid var(--border); }
 .game-points { margin: 0; font-size: 1rem; color: var(--text-muted); }
 .game-points strong { font-size: 1.8rem; color: var(--text-strong); }
@@ -1402,6 +1407,32 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 }
 .game-mode:hover { color: var(--link); text-decoration: none; }
 .game-mode.active { background: var(--surface); color: var(--text-strong); box-shadow: var(--shadow-sm); }
+.game-hard[hidden] { display: none; }
+.game-stats { margin: 0.75rem 0 0; font-size: 0.9rem; color: var(--text-muted); }
+.game-stats[hidden], .game-pairs[hidden], .game-pairs [hidden] { display: none; }
+.game-layout-pairs { grid-template-columns: 1fr; }
+.game-layout-pairs .game-map-wrap { display: none; }
+.game-layout-pairs .game-panel { border-right: 0; }
+.game-layout-pairs .game-panel > * { max-width: 640px; margin-left: auto; margin-right: auto; }
+.game-pairs { margin-top: 0.5rem; }
+.game-pairs h2 { margin: 0.25rem 0 0.75rem; font-size: 1.25rem; color: var(--text-strong); }
+.pairs-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.pairs-card {
+  display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; text-align: left;
+  padding: 0.85rem; font: inherit; color: var(--text);
+  background: var(--surface-alt); border: 2px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pairs-card:hover:not(:disabled) { border-color: var(--accent); }
+.pairs-card:disabled { cursor: default; opacity: 1; }
+.pairs-card.chosen { border-color: var(--accent); }
+.pairs-card.earlier { background: var(--accent-soft); }
+.pairs-letter { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+.pairs-title { color: var(--text-strong); overflow-wrap: anywhere; }
+.pairs-excerpt { font-size: 0.85rem; color: var(--text-muted); }
+.pairs-date { font-weight: 700; color: var(--link); }
+.game-pairs .game-result { margin-top: 0.75rem; }
+@media (max-width: 560px) { .pairs-cards { grid-template-columns: 1fr; } }
 .game-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; margin: 0.75rem 0 0; }
 .game-filters[hidden] { display: none; }
 .game-filter { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 8rem; font-size: 0.75rem; color: var(--text-muted); }
@@ -1652,11 +1683,8 @@ a.tag-pill { text-decoration: none; }
 
 
 /* welcome card on the map: on this day, today's game, featured collections */
+.map-quick { position: absolute; top: 1rem; right: 1rem; z-index: 560; display: flex; gap: 0.5rem; }
 .welcome-open {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 560;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1677,7 +1705,7 @@ a.tag-pill { text-decoration: none; }
 .welcome-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .welcome-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cat-military); }
 .welcome-dot[hidden] { display: none; }
-.sidebar-open .welcome-open, .welcome-shown .welcome-open { display: none; }
+.sidebar-open .map-quick, .welcome-shown .map-quick, .near-shown .map-quick { display: none; }
 
 .welcome {
   position: absolute;
@@ -1774,7 +1802,8 @@ a.tag-pill { text-decoration: none; }
 .welcome-more { display: inline-block; margin: 0.3rem 0.45rem 0; font-size: 0.85rem; }
 
 @media (max-width: 860px) {
-  .welcome-open { top: 0.6rem; right: 0.6rem; height: 36px; }
+  .map-quick { top: 0.6rem; right: 0.6rem; }
+  .welcome-open { height: 36px; }
   .welcome {
     position: fixed;
     top: auto;
@@ -1790,7 +1819,7 @@ a.tag-pill { text-decoration: none; }
 
 /* Phone: the "Today" button sits under the floating "All events" button, not on it. */
 @media (max-width: 860px) {
-  .welcome-open { top: calc(0.75rem + 48px); right: 0.75rem; }
+  .map-quick { top: calc(0.75rem + 48px); right: 0.75rem; }
 }
 
 /* "All historical events": oldest or newest first */
@@ -1814,3 +1843,45 @@ a.tag-pill { text-decoration: none; }
    and unlike setZIndexOffset() it never moves the marker) */
 .leaflet-marker-icon.marker-selected,
 .leaflet-marker-icon.cluster-selected { z-index: 100000 !important; }
+
+.report-card .form-group, .report-card .form-row { width: 100%; }
+.report-compare { border-collapse: collapse; margin: 0 0 0.75rem; font-size: 0.9rem; }
+.report-compare th, .report-compare td { text-align: left; padding: 0.25rem 1rem 0.25rem 0; }
+
+/* "Near here": the same card as the welcome card, with the distance beside each event */
+.near-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.7rem 0 0; }
+.near-status { margin: 0.5rem 0 0.3rem; font-size: 0.82rem; color: var(--text-muted); }
+.near-list .welcome-event { grid-template-columns: 3.4rem auto minmax(0, 1fr) auto; }
+.near-distance { font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* time-lapse button beside the year slider */
+.year-slider-row { display: flex; align-items: center; gap: 0.5rem; }
+.year-slider-row .year-slider { flex: 1; min-width: 0; margin-left: 0.4rem; }
+.timelapse-btn { flex: none; }
+.timelapse-btn.active { background: var(--accent); color: #fff; }
+
+/* "Embed this map" (filter panel) */
+.embed-box { display: grid; gap: 0.4rem; justify-items: start; padding: 0.75rem 0; border-top: 1px solid var(--border); }
+.embed-code { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; resize: vertical; }
+.embed-box .form-hint { margin: 0; }
+
+/* "New collection from these N events" (filter panel and big search) */
+.collection-from-search .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.collection-from-search .form-hint { margin-top: 0.4rem; }
+.search-collection { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.8rem; padding: 0.4rem 1rem; border-top: 1px solid var(--border); }
+.search-collection .form-hint { margin: 0; }
+
+.detail-report { margin: 0.9rem 0 0; font-size: 0.82rem; color: var(--text-muted); }
+.detail-report i { margin-right: 0.15rem; }
+
+/* /embed: the map alone, no site around it (the filters stay behind their button) */
+.page-embed { --nav-height: 0px; overflow: hidden; }
+.page-embed .map-layout { min-height: 0; }
+.embed-brand {
+  position: absolute; top: 0.75rem; right: 0.75rem; z-index: 450;
+  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.7rem;
+  background: var(--surface); color: var(--text-strong); border-radius: 999px; box-shadow: var(--shadow);
+  font-size: 0.8rem; font-weight: 600; text-decoration: none;
+}
+.embed-brand i { color: var(--accent); }
+.embed-brand:hover { text-decoration: none; background: var(--surface-alt); }

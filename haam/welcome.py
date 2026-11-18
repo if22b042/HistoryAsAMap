@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from haam import game
 from haam.dates import MONTHS, valid_month_day
+from haam.events import public_id
 from haam.extensions import db
 from haam.models import Collection, CollectionEntry, CollectionReport, Event, Status
 
@@ -55,14 +56,16 @@ def days_without_events() -> list[tuple[int, int]]:
 
 
 def featured_collections(limit: int = FEATURED_COLLECTIONS) -> list[tuple[Collection, int]]:
-    """Public collections that are neither hidden nor reported: most entries first, then newest."""
+    """Collections an editor has featured that are public, not hidden and not reported, newest first."""
     entries = (select(CollectionEntry.collection_id, func.count(CollectionEntry.id).label("n"))
                .group_by(CollectionEntry.collection_id).subquery())
     reported = select(CollectionReport.id).where(CollectionReport.collection_id == Collection.id).exists()
     rows = db.session.execute(
         select(Collection, entries.c.n).join(entries, entries.c.collection_id == Collection.id)
-        .where(Collection.is_public.is_(True), Collection.is_hidden.is_(False), ~reported)
-        .order_by(entries.c.n.desc(), Collection.created_at.desc(), Collection.id.desc())
+        .options(selectinload(Collection.entries).joinedload(CollectionEntry.event))
+        .where(Collection.is_featured.is_(True), Collection.is_public.is_(True),
+               Collection.is_hidden.is_(False), ~reported)
+        .order_by(Collection.created_at.desc(), Collection.id.desc())
         .limit(limit)
     ).all()
     return [(collection, count) for collection, count in rows]
@@ -73,7 +76,7 @@ def payload(month: int, day: int) -> dict:
     return {
         "day_label": f"{day} {MONTH_NAMES[month - 1]}",
         "on_this_day": [
-            {"id": e.id, "title": e.title, "year": e.year, "display_year": e.display_year,
+            {"id": public_id(e), "title": e.title, "year": e.year, "display_year": e.display_year,
              "date": e.date_label, "excerpt": e.excerpt, "category": e.category.value}
             for e in on_this_day(month, day)
         ],

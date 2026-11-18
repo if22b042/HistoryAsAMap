@@ -1,16 +1,19 @@
 """Map collections: gallery, creation, sharing and editing via secret links."""
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_wtf.csrf import generate_csrf
 from sqlalchemy import func, select
 
 from haam import collections_service as service
+from haam import mail
 from haam.auth import is_admin
 from haam.collections_service import CollectionError, CustomEntryData, DuplicateEntry
 from haam.dates import format_year
-from haam.extensions import db
+from haam.events import find_approved, public_id, public_ids_to_events
+from haam.extensions import csrf, db
 from haam.forms import (ActionForm, CollectionForm, CustomEntryForm, EntryEventEditForm, EventEntryForm,
-                        NewCollectionForm, ReportForm, TagEntriesForm)
+                        NewCollectionForm, ReportForm, SearchCollectionForm, SuggestionForm, TagEntriesForm)
+from haam.ratelimit import limit
 from haam.models import Event, Status, Tag, event_tags
 
 bp = Blueprint("collections", __name__, url_prefix="/collections")
@@ -58,6 +61,12 @@ def _viewable_or_410(view_token: str):
     return collection, editable
 
 
+def _row_id(public: int | None) -> int:
+    """The row id of the approved event with this public id; -1 when there is none (an id no row has)."""
+    event = find_approved(public)
+    return event.id if event is not None else -1
+
+
 def _tag_choices(first: str) -> list[tuple[int, str]]:
     """Tags that have approved events, oldest first, as "Name (years) – N events"."""
     counts = dict(db.session.execute(
@@ -91,11 +100,26 @@ def _share_url(collection) -> str:
     return url_for("collections.view", view_token=collection.view_token, _external=True)
 
 
+def _claim_url(collection, edit_token: str) -> str:
+    return url_for("collections.claim", view_token=collection.view_token, edit_token=edit_token, _external=True)
+
+
 def _edit_url(collection) -> str | None:
-    token = service.edit_token_for(collection)
-    if token is None:
-        return None
-    return url_for("collections.claim", view_token=collection.view_token, edit_token=token, _external=True)
+    """The edit link, only on the first manage page after creating or claiming (it is not kept)."""
+    token = service.pop_fresh_edit_token(collection)
+    return _claim_url(collection, token) if token else None
+
+
+def _email_links(email: str, collection, edit_token: str) -> None:
+    """Send the share and edit links once; a failure only produces a warning."""
+    try:
+        mail.send_links(email, collection.title, _share_url(collection), _claim_url(collection, edit_token))
+    except mail.MailError:
+        current_app.logger.warning("Could not email the links of collection %s", collection.id)
+        flash("We could not send the email. Copy your edit link from this page now: it is shown only once.",
+              "warning")
+    else:
+        flash("We emailed you the share and edit links. We have not stored your address.", "success")
 
 
 # ------------------------------------------------------------------ public
@@ -114,27 +138,89 @@ def index():
 
 
 @bp.route("/new", methods=["GET", "POST"])
+@limit("collection-create", 10, 3600, methods=("POST",))
 def new():
     form = NewCollectionForm()
     form.tag_id.choices = _tag_choices("No – start empty")
-    # "New collection with this event" on the map links here with ?event=<id>.
-    first_event = db.session.get(Event, request.values.get("event", type=int) or 0)
-    if first_event is not None and first_event.status != Status.APPROVED:
-        first_event = None
+    # "New collection with this event" on the map links here with ?event=<public id>.
+    first_event = find_approved(request.values.get("event", type=int))
     if form.validate_on_submit():
         collection, edit_token = service.create_collection(
             form.title.data, form.description.data or "", form.is_public.data)
         service.remember(collection, edit_token)
-        flash("Collection created. Save your edit link somewhere safe – it is the only way to edit "
-              "this collection from another browser.", "success")
+        flash("Collection created. Save your edit link somewhere safe – it is shown only once and is the "
+              "only way to edit this collection from another browser.", "success")
         if first_event is not None:
             service.add_event(collection, first_event.id, "")
         tag = db.session.get(Tag, form.tag_id.data) if form.tag_id.data else None
         if tag is not None:
             result = service.add_tag_events(collection, tag.id, form.year_from.year, form.year_to.year)
             flash(*_tag_message(result, tag.name))
+        email = (form.email.data or "").strip()
+        if email and mail.configured():
+            _email_links(email, collection, edit_token)
         return redirect(url_for("collections.manage", view_token=collection.view_token))
-    return render_template("collections/new.html", form=form, first_event=first_event),         400 if form.errors else 200
+    return render_template("collections/new.html", form=form, first_event=first_event,
+                           mail_enabled=mail.configured()), 400 if form.errors else 200
+
+
+# --------------------------------------------------- a collection from a search
+
+MAX_SEARCH_IDS = 2000  # ids read from a request; far more than a collection holds
+
+
+def _search_events(raw: str) -> list[Event]:
+    """The approved events named by comma-separated public ids, oldest first (unknown ids are ignored)."""
+    ids = []
+    for part in (raw or "").replace(" ", "").split(",")[:MAX_SEARCH_IDS]:
+        if part.isdecimal() and len(part) <= 10:
+            ids.append(int(part))
+    return service.date_order(public_ids_to_events(ids))
+
+
+def _render_from_search(form, found: list[Event], status: int = 200):
+    return render_template("collections/new.html", form=form, first_event=None, mail_enabled=mail.configured(),
+                           search_count=min(len(found), service.MAX_ENTRIES), search_total=len(found),
+                           max_entries=service.MAX_ENTRIES), status
+
+
+@bp.post("/from-search")
+@csrf.exempt  # shows a form and changes nothing; the form that creates the collection carries a CSRF token
+@limit("collection-search", 30, 3600)
+def from_search():
+    """The map's "New collection from these N events": the ``ids`` shown, and a suggested ``title``."""
+    found = _search_events(request.form.get("ids", ""))
+    if not found:
+        flash("None of those events could be found. Try the search again.", "error")
+        return redirect(url_for("public.index"))
+    form = SearchCollectionForm(formdata=None, title=request.form.get("title", "").strip()[:200],
+                                ids=",".join(str(public_id(e)) for e in found[:service.MAX_ENTRIES]))
+    return _render_from_search(form, found)
+
+
+@bp.post("/from-search/create")
+@limit("collection-create", 10, 3600)
+def create_from_search():
+    form = SearchCollectionForm()
+    found = _search_events(form.ids.data)
+    if not found:
+        flash("None of those events could be found. Try the search again.", "error")
+        return redirect(url_for("public.index"))
+    if not form.validate_on_submit():
+        return _render_from_search(form, found, 400)
+    collection, edit_token = service.create_collection(form.title.data, form.description.data or "",
+                                                       form.is_public.data)
+    service.remember(collection, edit_token)
+    result = service.add_events(collection, found)
+    flash("Collection created. Save your edit link somewhere safe – it is shown only once and is the "
+          "only way to edit this collection from another browser.", "success")
+    flash(f"Added {result.added} event{'s' if result.added != 1 else ''} from your search"
+          + (f"; {result.no_room} did not fit (a collection holds at most {service.MAX_ENTRIES})."
+             if result.no_room else "."), "warning" if result.no_room else "success")
+    email = (form.email.data or "").strip()
+    if email and mail.configured():
+        _email_links(email, collection, edit_token)
+    return redirect(url_for("collections.manage", view_token=collection.view_token))
 
 
 @bp.get("/mine.json")
@@ -176,6 +262,8 @@ def view(view_token: str):
         share_url=_share_url(collection),
         entries_data=[entry.to_dict() for entry in collection.entries],
         report_form=ReportForm(),
+        suggestion_form=SuggestionForm(formdata=None),
+        action_form=ActionForm(),
     )
 
 
@@ -194,6 +282,7 @@ def map_data(view_token: str):
 
 
 @bp.post("/<view_token>/report")
+@limit("collection-report", 5, 3600)
 def report(view_token: str):
     collection = _collection_or_404(view_token)
     form = ReportForm()
@@ -215,6 +304,38 @@ def claim(view_token: str, edit_token: str):
     return redirect(url_for("collections.manage", view_token=view_token))
 
 
+@bp.post("/<view_token>/copy")
+def copy(view_token: str):
+    """Use as a base for my own collection: an unlisted copy that this browser can edit."""
+    source, _ = _viewable_or_410(view_token)
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    new_collection, edit_token = service.copy_collection(source)
+    service.remember(new_collection, edit_token)
+    flash("This is your own copy. Save your edit link – it is shown only once. "
+          "The copy is unlisted until you list it in the settings.", "success")
+    return redirect(url_for("collections.manage", view_token=new_collection.view_token))
+
+
+@bp.post("/<view_token>/suggest")
+def suggest(view_token: str):
+    """A visitor suggests an entry; the owner decides on the manage page."""
+    collection, _ = _viewable_or_410(view_token)
+    form = SuggestionForm()
+    if form.validate_on_submit():
+        try:
+            service.suggest(collection, _row_id(form.event_id.data) if form.event_id.data else None, form.title.data or "", form.link.data or "",
+                            form.message.data or "")
+        except CollectionError as error:
+            flash(error.message, "error")
+        else:
+            flash("Thank you. The owner of the collection will see your suggestion.", "success")
+    else:
+        errors = [message for messages in form.errors.values() for message in messages]
+        flash(errors[0] if errors else "Please check the form and try again.", "error")
+    return redirect(url_for("collections.view", view_token=view_token, _anchor="suggest"))
+
+
 # ----------------------------------------------------------------- editing
 
 @bp.get("/<view_token>/manage")
@@ -222,11 +343,17 @@ def manage(view_token: str):
     collection, denied = _editable_or_redirect(view_token)
     if denied:
         return denied
-    return _render_manage(collection)
+    custom_form, suggestion_id = None, None
+    suggestion = service.get_suggestion(collection, request.args.get("suggestion", type=int) or 0)
+    if suggestion is not None and not suggestion.event_id:  # "Accept" on a free-text suggestion
+        custom_form = CustomEntryForm(formdata=None, title=suggestion.title, link=suggestion.link or "",
+                                      note=suggestion.message)
+        suggestion_id = suggestion.id
+    return _render_manage(collection, custom_form=custom_form, suggestion_id=suggestion_id)
 
 
 def _render_manage(collection, *, settings_form=None, custom_form=None, event_form=None, tag_form=None,
-                   status=200):
+                   suggestion_id=None, status=200):
     settings_form = settings_form or CollectionForm(
         formdata=None, title=collection.title, description=collection.description,
         is_public=collection.is_public)
@@ -243,6 +370,7 @@ def _render_manage(collection, *, settings_form=None, custom_form=None, event_fo
         tag_form=tag_form,
         max_entries=service.MAX_ENTRIES,
         action_form=ActionForm(),
+        suggestion_id=suggestion_id,
     ), status
 
 
@@ -268,7 +396,7 @@ def add_event(view_token: str):
     if not form.validate_on_submit():
         return _render_manage(collection, event_form=form, status=400)
     try:
-        entry = service.add_event(collection, form.event_id.data, form.note.data or "")
+        entry = service.add_event(collection, _row_id(form.event_id.data), form.note.data or "")
     except CollectionError as error:
         flash(error.message, "error")
         return _render_manage(collection, event_form=form, status=400)
@@ -278,7 +406,7 @@ def add_event(view_token: str):
 
 @bp.post("/<view_token>/entries/event.json")
 def add_event_json(view_token: str):
-    """Add a main-map event from the map's details panel: ``{"event_id": 123}``.
+    """Add a main-map event from the map's details panel: ``{"event_id": <public id>}``.
 
     CSRF is checked like every POST (the page sends the token in ``X-CSRFToken``).
     """
@@ -289,7 +417,7 @@ def add_event_json(view_token: str):
     if not isinstance(event_id, int) or isinstance(event_id, bool):
         return jsonify(error="Say which event to add."), 400
     try:
-        entry = service.add_event(collection, event_id, "")
+        entry = service.add_event(collection, _row_id(event_id), "")
     except DuplicateEntry as error:
         return jsonify(error=error.message), 409
     except CollectionError as error:
@@ -322,15 +450,48 @@ def add_custom(view_token: str):
     if denied:
         return denied
     form = CustomEntryForm()
+    suggestion = service.get_suggestion(collection, request.form.get("suggestion_id", type=int) or 0)
+    suggestion_id = suggestion.id if suggestion else None
     if not form.validate_on_submit():
-        return _render_manage(collection, custom_form=form, status=400)
+        return _render_manage(collection, custom_form=form, suggestion_id=suggestion_id, status=400)
     try:
         entry = service.add_custom(collection, CustomEntryData.from_form(form))
     except CollectionError as error:
         flash(error.message, "error")
-        return _render_manage(collection, custom_form=form, status=400)
+        return _render_manage(collection, custom_form=form, suggestion_id=suggestion_id, status=400)
+    if suggestion is not None:  # the suggestion that prefilled the form is dealt with
+        service.dismiss_suggestion(suggestion)
     flash(f"Added “{entry.title}”." + (" ★ Wikipedia article found." if entry.wiki_verified else ""), "success")
     return redirect(url_for("collections.manage", view_token=view_token, _anchor="entries"))
+
+
+@bp.post("/<view_token>/suggestions/<int:suggestion_id>/<any(accept, dismiss):action>")
+def decide_suggestion(view_token: str, suggestion_id: int, action: str):
+    """Accept (an event becomes an entry) or dismiss a suggestion."""
+    collection, denied = _editable_or_redirect(view_token)
+    if denied:
+        return denied
+    suggestion = service.get_suggestion(collection, suggestion_id)
+    if suggestion is None:
+        abort(404)
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    anchor = "suggestions"
+    if action == "dismiss":
+        service.dismiss_suggestion(suggestion)
+        flash("Suggestion dismissed.", "success")
+    elif suggestion.event_id:
+        try:
+            entry = service.accept_suggestion(collection, suggestion)
+        except CollectionError as error:
+            flash(error.message, "error")
+        else:
+            flash(f"Added “{entry.title}”." if entry else "That event is already in the collection.", "success")
+            anchor = "entries"
+    else:
+        return redirect(url_for("collections.manage", view_token=view_token, suggestion=suggestion.id,
+                                _anchor="add-custom"))
+    return redirect(url_for("collections.manage", view_token=view_token, _anchor=anchor))
 
 
 @bp.route("/<view_token>/entries/<int:entry_id>/edit", methods=["GET", "POST"])

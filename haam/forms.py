@@ -1,5 +1,7 @@
 """HTML forms (Flask-WTF handles CSRF protection for all of them)."""
 
+from datetime import date
+import re
 from urllib.parse import urlparse
 
 from flask_wtf import FlaskForm
@@ -22,6 +24,14 @@ from haam.wikipedia import title_from_url
 
 CATEGORY_CHOICES = [(c.value, c.label) for c in Category]
 
+EARLIEST_YEAR = -10000  # 10000 BC
+
+
+def _check_year_range(year: int) -> None:
+    last_year = date.today().year
+    if not EARLIEST_YEAR <= year <= last_year:
+        raise ValidationError(f"Enter a year between 10000 BC and {last_year}.")
+
 
 def _english_wikipedia_url(form, field):
     if title_from_url(field.data or "") is None:
@@ -35,6 +45,7 @@ class YearField(StringField):
         self.year = parse_year_input(self.data or "")
         if self.year is None:
             raise ValidationError("Enter a year such as 1066, 44 BC or AD 9.")
+        _check_year_range(self.year)
 
 
 class LinkForm(FlaskForm):
@@ -44,6 +55,9 @@ class LinkForm(FlaskForm):
 
 class EventForm(FlaskForm):
     url = HiddenField(validators=[DataRequired(), _english_wikipedia_url])
+    # "1" / "0": did Wikidata give the article a date? Carried through the preview only to keep
+    # showing the "may not be an event" warning when the form is shown again; nothing trusts it.
+    dated_by_wikidata = HiddenField()
     title = StringField("Title", validators=[DataRequired(), Length(max=300)])
     year = YearField("Year")
     date_label = StringField("Date", validators=[Length(max=120)])
@@ -76,6 +90,8 @@ class OptionalYearField(StringField):
         self.year = parse_year_input(self.data) if (self.data or "").strip() else None
         if (self.data or "").strip() and self.year is None:
             raise ValidationError("Enter a year such as 1066, 44 BC or AD 9, or leave it empty.")
+        if self.year is not None:
+            _check_year_range(self.year)
 
 
 class TagEntriesForm(FlaskForm):
@@ -86,12 +102,27 @@ class TagEntriesForm(FlaskForm):
     year_to = OptionalYearField("To year")
 
 
+def _email(form, field):
+    value = (field.data or "").strip()
+    if value and not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+", value):
+        raise ValidationError("Enter a valid email address or leave it empty.")
+
+
 class NewCollectionForm(CollectionForm):
     """A new collection, optionally starting with all events of a tag."""
 
+    email = StringField("Email me the links (optional)", validators=[Length(max=254), _email])
     tag_id = SelectField("Start with the events of a tag (optional)", coerce=int, validate_choice=False, default=0)
     year_from = OptionalYearField("From year")
     year_to = OptionalYearField("To year")
+
+
+class SearchCollectionForm(CollectionForm):
+    """A new collection holding the events a search or filter showed on the map (carried in ``ids``)."""
+
+    email = StringField("Email me the links (optional)", validators=[Length(max=254), _email])
+    # Public ids of the events, comma-separated; unknown ones are ignored when the collection is made.
+    ids = HiddenField(validators=[DataRequired(), Length(max=20000)])
 
 
 class EntryEventEditForm(FlaskForm):
@@ -125,6 +156,22 @@ class EventEntryForm(FlaskForm):
     note = TextAreaField("Your note", validators=[Length(max=2000)])
 
 
+class SuggestionForm(FlaskForm):
+    """A visitor's suggestion for a collection: a main-map event, or a title with an optional link."""
+
+    event_id = IntegerField(validators=[Optional()])
+    title = StringField("Title", validators=[Length(max=300)])
+    link = StringField("Link", validators=[Length(max=500), _web_link])
+    message = TextAreaField("Message", validators=[Length(max=500)])
+
+    def validate(self, extra_validators=None):
+        valid = super().validate(extra_validators)
+        if valid and not self.event_id.data and not (self.title.data or "").strip():
+            self.title.errors = ["Choose an event from the list or give a title."]
+            return False
+        return valid
+
+
 class NoteForm(FlaskForm):
     note = TextAreaField("Your note", validators=[Length(max=2000)])
 
@@ -140,3 +187,20 @@ class LoginForm(FlaskForm):
 
 class ActionForm(FlaskForm):
     """Empty form used only for its CSRF token on approve/reject/delete buttons."""
+
+
+class EventReportForm(FlaskForm):
+    """A visitor's report of a problem with an event, optionally with the corrected values."""
+
+    message = TextAreaField("What is wrong?", validators=[DataRequired(), Length(max=1000)])
+    proposed_year = OptionalYearField("Correct year")
+    proposed_date_label = StringField("Correct date", validators=[Length(max=120)])
+    proposed_lat = FloatField("Correct latitude", validators=[Optional(), NumberRange(-90, 90)])
+    proposed_lon = FloatField("Correct longitude", validators=[Optional(), NumberRange(-180, 180)])
+
+    def validate(self, extra_validators=None):
+        valid = super().validate(extra_validators)
+        if valid and (self.proposed_lat.data is None) != (self.proposed_lon.data is None):
+            self.proposed_lon.errors = ["Give both latitude and longitude, or neither."]
+            return False
+        return valid

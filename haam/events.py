@@ -8,9 +8,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from haam.dates import format_year
 from haam.extensions import db
 from haam.geocoding import country_for
-from haam.models import Category, Event, Status, Tag
+from haam.models import Category, Event, EventReport, ReportStatus, Status, Tag
 from haam.wikipedia import Article, WikipediaError, get_client, title_from_url
 
 
@@ -100,7 +101,72 @@ def find_existing(url: str, page_id: int | None = None) -> Event | None:
 
 
 def get_event_or_none(event_id: int) -> Event | None:
+    """An event by its row id (the admin pages; visitors use public ids, below)."""
     return db.session.get(Event, event_id)
+
+
+# ----------------------------------------------------------- public ids
+#
+# Public addresses (/event/<id>-slug, /?event=<id>, the map's data, collections' event
+# pickers, the game's "show on the map" link) name an event by its Wikipedia page id, which
+# survives a re-import; row ids do not. Events without a page id (the column is nullable:
+# some imports and tests create them) fall back to their row id.
+
+MAX_PUBLIC_ID = 2**31 - 1  # Wikipedia page ids are far smaller; anything larger cannot exist
+
+# The same value as ``public_id`` in SQL (the map's chunks are chosen by it).
+PUBLIC_ID = func.coalesce(Event.wiki_page_id, Event.id)
+
+
+def public_id(event: Event) -> int:
+    """The id that names ``event`` in public addresses and in the map's data."""
+    return event.wiki_page_id if event.wiki_page_id is not None else event.id
+
+
+def find_by_public_id(pid: int | None) -> Event | None:
+    """The event (of any status) that ``pid`` names: its page id, else the row id of an event with no page id."""
+    if pid is None or not 0 < pid <= MAX_PUBLIC_ID:
+        return None
+    event = db.session.scalar(select(Event).where(Event.wiki_page_id == pid))
+    if event is not None:
+        return event
+    event = db.session.get(Event, pid)
+    return event if event is not None and event.wiki_page_id is None else None
+
+
+def find_approved(pid: int | None) -> Event | None:
+    event = find_by_public_id(pid)
+    return event if event is not None and event.status == Status.APPROVED else None
+
+
+def moved_event(pid: int | None) -> Event | None:
+    """For an old link made with a row id: the approved event that row holds, if ``pid`` names no event.
+
+    The caller redirects (301) to the event's current address. Never used when ``pid`` is
+    already somebody's page id (or the row id of an event without one): that is a live address.
+    """
+    if pid is None or not 0 < pid <= MAX_PUBLIC_ID or find_by_public_id(pid) is not None:
+        return None
+    event = db.session.get(Event, pid)
+    return event if event is not None and event.status == Status.APPROVED else None
+
+
+def public_ids_to_events(pids) -> list[Event]:
+    """Approved events named by public ids (unknown ids and duplicates are dropped), in the order given."""
+    wanted = [p for p in dict.fromkeys(pids) if isinstance(p, int) and not isinstance(p, bool)
+              and 0 < p <= MAX_PUBLIC_ID]
+    if not wanted:
+        return []
+    found: dict[int, Event] = {}
+    for event in db.session.scalars(select(Event).where(Event.status == Status.APPROVED,
+                                                        Event.wiki_page_id.in_(wanted))):
+        found[event.wiki_page_id] = event
+    rest = [p for p in wanted if p not in found]
+    if rest:
+        for event in db.session.scalars(select(Event).where(
+                Event.status == Status.APPROVED, Event.id.in_(rest), Event.wiki_page_id.is_(None))):
+            found[event.id] = event
+    return [found[p] for p in wanted if p in found]
 
 
 # ------------------------------------------------------------ Wikipedia
@@ -216,3 +282,63 @@ def suggested_tag_ids(year: int | None) -> set[int]:
     if year is None:
         return set()
     return {tag.id for tag in all_tags() if tag.covers(year)}
+
+
+# ------------------------------------------------------------- reports
+
+def create_report(event: Event, form) -> EventReport:
+    """Store a visitor's report (from a validated ``EventReportForm``)."""
+    report = EventReport(
+        event=event,
+        message=form.message.data.strip(),
+        proposed_year=form.proposed_year.year,
+        proposed_date_label=(form.proposed_date_label.data or "").strip() or None,
+        proposed_lat=form.proposed_lat.data,
+        proposed_lon=form.proposed_lon.data,
+    )
+    db.session.add(report)
+    db.session.commit()
+    return report
+
+
+def open_report_count() -> int:
+    return db.session.scalar(select(func.count(EventReport.id)).where(EventReport.status == ReportStatus.OPEN)) or 0
+
+
+def open_reports() -> list[EventReport]:
+    stmt = (
+        select(EventReport)
+        .where(EventReport.status == ReportStatus.OPEN)
+        .order_by(EventReport.created_at, EventReport.id)
+        .options(selectinload(EventReport.event))
+    )
+    return list(db.session.scalars(stmt))
+
+
+def apply_report(report: EventReport) -> Event:
+    """Write the report's proposed values to the event, like an editor's edit, and close the report."""
+    event = report.event
+    year = report.proposed_year if report.proposed_year is not None else event.year
+    date_label = report.proposed_date_label
+    if date_label is None:
+        # A new year with no new date: keep the date text only if the year did not change.
+        date_label = event.date_label if year == event.year else format_year(year)
+    has_place = report.proposed_lat is not None and report.proposed_lon is not None
+    update_event(event, EventData(
+        title=event.title,
+        year=year,
+        date_label=date_label,
+        summary=event.summary,
+        lat=report.proposed_lat if has_place else event.lat,
+        lon=report.proposed_lon if has_place else event.lon,
+        category=event.category,
+        tag_ids=[tag.id for tag in event.tags],
+    ))
+    report.status = ReportStatus.APPLIED
+    db.session.commit()
+    return event
+
+
+def dismiss_report(report: EventReport) -> None:
+    report.status = ReportStatus.DISMISSED
+    db.session.commit()

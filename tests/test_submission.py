@@ -1,3 +1,4 @@
+from haam.events import public_id
 from haam.extensions import db
 from haam.models import Event, Status, Tag
 
@@ -69,7 +70,7 @@ def test_submission_is_pending_until_approved(client, wiki, app):
     assert event.status == Status.PENDING
     assert event.modified is False
     assert [t.name for t in event.tags] == ["Norman Conquest of England"]
-    assert client.get("/api/events").json == []
+    assert client.get(f"/api/events/{public_id(event)}").status_code == 404  # pending: not public
 
 
 def test_edited_submission_is_flagged(client, wiki):
@@ -107,7 +108,8 @@ def test_duplicate_detected_through_url_variants(client, wiki, make_event):
 def test_html_in_submissions_is_escaped(client, wiki):
     wiki.add("Battle of Hastings")
     client.post("/submit/confirm", data=form_data(title="<script>alert(1)</script>"))
-    db.session.scalar(db.select(Event)).status = Status.APPROVED
+    event = db.session.scalar(db.select(Event))
+    event.status = Status.APPROVED
     db.session.commit()
     # Stored verbatim, delivered as JSON; the map renders it with textContent.
-    assert client.get("/api/events").json[0]["title"] == "<script>alert(1)</script>"
+    assert client.get(f"/api/events/{public_id(event)}").json["title"] == "<script>alert(1)</script>"

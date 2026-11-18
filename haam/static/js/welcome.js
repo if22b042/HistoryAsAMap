@@ -132,7 +132,10 @@ if (card && openButton) {
 
   // The card and the event details share one place: opening an event closes the card.
   new MutationObserver(() => {
-    if (document.body.classList.contains("sidebar-open")) close({ restoreFocus: false });
+    // …and so does the "Near here" card, which sits in the same place.
+    if (document.body.classList.contains("sidebar-open") || document.body.classList.contains("near-shown")) {
+      close({ restoreFocus: false });
+    }
   }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
   // A shared link to one event goes straight to it; the card waits for a later visit.

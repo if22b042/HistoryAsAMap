@@ -11,10 +11,10 @@ def add(client, collection, event_id, **kwargs):
 
 
 def test_mine_lists_editable_collections_with_their_events(app, client, make_event):
-    event = make_event()
+    make_event(wiki_page_id=31415)
     assert client.get("/collections/mine.json").get_json()["collections"] == []
     collection, _ = create(client)
-    add(client, collection, event.id)
+    add(client, collection, 31415)
 
     data = client.get("/collections/mine.json").get_json()
     assert data["csrf_token"]
@@ -23,7 +23,7 @@ def test_mine_lists_editable_collections_with_their_events(app, client, make_eve
         "title": "Roman battles",
         "url": f"/collections/{collection.view_token}",
         "add_url": f"/collections/{collection.view_token}/entries/event.json",
-        "event_ids": [event.id],
+        "event_ids": [31415],  # the public id (Wikipedia page id), not the row id
     }]
     # Another browser sees nothing and gets no CSRF token (so no session cookie).
     assert app.test_client().get("/collections/mine.json").get_json() == {

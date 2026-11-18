@@ -9,11 +9,13 @@ from haam.dates import format_year
 from haam.events import EventData
 from haam.forms import ActionForm, EventForm, LoginForm
 from haam.extensions import db
-from haam.models import Collection, Status
+from haam.models import Collection, EventReport, ReportStatus, Status
+from haam.ratelimit import limit
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 REVIEW_PER_PAGE = 50
+COLLECTIONS_PER_PAGE = 20
 
 
 def _safe_next(target: str | None) -> str:
@@ -31,6 +33,7 @@ def _event_or_404(event_id: int):
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@limit("admin-login", 5, 60, methods=("POST",))
 def login():
     form = LoginForm()
     if form.validate_on_submit():
@@ -63,6 +66,7 @@ def review():
         events=events.events_page(status, page, REVIEW_PER_PAGE),
         status=status,
         counts=counts,
+        open_reports=events.open_report_count(),
         page=max(page, 1),
         pages=pages,
         action_form=ActionForm(),
@@ -140,13 +144,14 @@ def edit(event_id: int):
 @bp.get("/collections")
 @auth.admin_required
 def collections():
-    items = collections_service.all_collections()
-    # Reported collections first, then most recently changed.
-    items.sort(key=lambda c: (not c.reports, not c.is_public), reverse=False)
-    return render_template("admin/collections.html", collections=items, action_form=ActionForm())
+    page = max(request.args.get("page", 1, type=int), 1)
+    items, total = collections_service.all_collections(page=page, per_page=COLLECTIONS_PER_PAGE)
+    # Reported collections first, then public ones, then most recently changed.
+    return render_template("admin/collections.html", collections=items, action_form=ActionForm(), page=page,
+                           pages=max((total + COLLECTIONS_PER_PAGE - 1) // COLLECTIONS_PER_PAGE, 1))
 
 
-@bp.post("/collections/<int:collection_id>/<any(hide, unhide, delete):action>")
+@bp.post("/collections/<int:collection_id>/<any(hide, unhide, feature, unfeature, delete):action>")
 @auth.admin_required
 def moderate_collection(collection_id: int, action: str):
     if not ActionForm().validate_on_submit():
@@ -158,7 +163,38 @@ def moderate_collection(collection_id: int, action: str):
     if action == "delete":
         collections_service.delete_collection(collection)
         flash(f"Deleted collection “{title}”.", "success")
+    elif action in ("feature", "unfeature"):
+        collection.is_featured = action == "feature"
+        db.session.commit()
+        flash(f"{'Featured' if collection.is_featured else 'Unfeatured'} collection “{title}”.", "success")
     else:
         collections_service.set_hidden(collection, action == "hide")
         flash(f"{'Hid' if action == 'hide' else 'Restored'} collection “{title}”.", "success")
     return redirect(url_for("admin.collections"))
+
+
+# ---------------------------------------------------------------- reports
+
+@bp.get("/reports")
+@auth.admin_required
+def reports():
+    return render_template("admin/reports.html", reports=events.open_reports(), action_form=ActionForm())
+
+
+@bp.post("/reports/<int:report_id>/<any(apply, dismiss):action>")
+@auth.admin_required
+def moderate_report(report_id: int, action: str):
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    report = db.session.get(EventReport, report_id)
+    if report is None:
+        abort(404)
+    if report.status != ReportStatus.OPEN:
+        flash("This report was already handled.", "error")
+    elif action == "apply":
+        event = events.apply_report(report)
+        flash(f"Applied the report to “{event.title}”.", "success")
+    else:
+        events.dismiss_report(report)
+        flash("Dismissed the report.", "success")
+    return redirect(url_for("admin.reports"))

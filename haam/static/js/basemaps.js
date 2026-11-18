@@ -79,9 +79,11 @@ const ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
  * Add the base map to `map` and a switcher to its bottom-right corner.
  * choices: which BASEMAPS to offer (the first is the default);
  * storageKey: where the choice is remembered (maps that offer other choices,
- * like the Game, use their own key).
+ * like the Game, use their own key);
+ * initial: a style to open with for this visit only (a shared link's): it is not
+ * saved, so the visitor's own preference stays until they pick a style themselves.
  */
-export function addBasemapSwitcher(map, { choices = DEFAULT_CHOICES, storageKey = "basemap", position = "bottomright" } = {}) {
+export function addBasemapSwitcher(map, { choices = DEFAULT_CHOICES, storageKey = "basemap", position = "bottomright", initial = null } = {}) {
   const layers = {};
   let current = null;
   const container = map.getContainer();
@@ -161,7 +163,7 @@ export function addBasemapSwitcher(map, { choices = DEFAULT_CHOICES, storageKey 
     return box;
   };
   control.addTo(map);
-  select(readChoice(storageKey));
+  select(initial && choices.includes(initial) ? initial : readChoice(storageKey));
 
   // Theme-dependent styles switch to their light or dark tiles.
   new MutationObserver(() => {

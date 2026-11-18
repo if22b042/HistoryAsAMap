@@ -7,8 +7,11 @@ Creating a collection returns two links:
   it can change the collection. Only a SHA-256 hash of the edit token is stored,
   so a database leak does not give edit access.
 
-Opening the edit link remembers it in the (signed) session cookie, so the owner
-can keep editing from the same browser without the link.
+Opening the edit link remembers edit access in the (signed) session cookie, so the
+owner can keep editing from the same browser without the link. The cookie holds only
+the collection id and a short proof derived from the token's hash, never the token:
+it stays small, cannot be forged, and cannot be turned back into the edit link. The
+edit link itself is shown once, right after creation or claiming (``remember``).
 """
 
 from __future__ import annotations
@@ -19,15 +22,21 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from flask import session
+from flask import current_app, session
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
+from haam.events import PUBLIC_ID
 from haam.extensions import db
-from haam.models import Category, Collection, CollectionEntry, CollectionReport, Event, Status, Tag
+from haam.models import (Category, Collection, CollectionEntry, CollectionReport, CollectionSuggestion, Event,
+                         Status, Tag)
 from haam.wikipedia import WikipediaError, get_client, title_from_url
 
 MAX_ENTRIES = 500
-SESSION_KEY = "collections"  # {collection id: edit token} for collections this browser may edit
+MAX_PENDING_SUGGESTIONS = 50
+SESSION_KEY = "collections"  # {collection id: proof} for collections this browser may edit
+FRESH_KEY = "fresh_edit_tokens"  # {collection id: edit token}, shown on the next manage page only
+PROOF_PREFIX = "~"  # urlsafe tokens never contain it, so older cookies (a raw token) are recognised
 
 
 class CollectionError(Exception):
@@ -77,12 +86,28 @@ def check_edit_token(collection: Collection, token: str) -> bool:
     return hmac.compare_digest(collection.edit_token_hash, _hash(token or ""))
 
 
-def remember(collection: Collection, edit_token: str) -> None:
-    """Let this browser edit the collection from now on."""
+def _proof(collection: Collection) -> str:
+    """A short value that only the server can compute from the stored token hash."""
+    key = current_app.config["SECRET_KEY"].encode()
+    digest = hmac.new(key, f"collection-edit:{collection.id}:{collection.edit_token_hash}".encode(),
+                      hashlib.sha256).hexdigest()
+    return PROOF_PREFIX + digest[:22]
+
+
+def remember(collection: Collection, edit_token: str | None = None) -> None:
+    """Let this browser edit the collection from now on.
+
+    ``edit_token`` (when the owner just created or claimed it) is kept only until the
+    manage page has shown the edit link once.
+    """
     owned = dict(session.get(SESSION_KEY, {}))
-    owned[str(collection.id)] = edit_token
+    owned[str(collection.id)] = _proof(collection)
     session[SESSION_KEY] = owned
     session.permanent = True
+    if edit_token:
+        fresh = dict(session.get(FRESH_KEY, {}))
+        fresh[str(collection.id)] = edit_token
+        session[FRESH_KEY] = fresh
 
 
 def forget(collection_id: int) -> None:
@@ -92,38 +117,64 @@ def forget(collection_id: int) -> None:
 
 
 def can_edit(collection: Collection) -> bool:
-    token = session.get(SESSION_KEY, {}).get(str(collection.id))
-    return bool(token) and check_edit_token(collection, token)
+    stored = session.get(SESSION_KEY, {}).get(str(collection.id))
+    if not stored or not isinstance(stored, str):
+        return False
+    if stored.startswith(PROOF_PREFIX):
+        return hmac.compare_digest(stored, _proof(collection))
+    if check_edit_token(collection, stored):  # an older cookie holding the raw token: upgrade it
+        remember(collection)
+        return True
+    return False
 
 
-def edit_token_for(collection: Collection) -> str | None:
-    return session.get(SESSION_KEY, {}).get(str(collection.id)) if can_edit(collection) else None
+def pop_fresh_edit_token(collection: Collection) -> str | None:
+    """The edit token if this browser just created or claimed the collection; it is shown once."""
+    fresh = dict(session.get(FRESH_KEY, {}))
+    token = fresh.pop(str(collection.id), None)
+    if token is None:
+        return None
+    if fresh:
+        session[FRESH_KEY] = fresh
+    else:
+        session.pop(FRESH_KEY, None)
+    return token if check_edit_token(collection, token) else None
 
 
 def my_collections() -> list[Collection]:
     ids = [int(i) for i in session.get(SESSION_KEY, {})]
     if not ids:
         return []
-    found = db.session.scalars(select(Collection).where(Collection.id.in_(ids))).all()
+    found = db.session.scalars(
+        select(Collection).options(*_LIST_LOAD).where(Collection.id.in_(ids))).all()
     return sorted((c for c in found if can_edit(c)), key=lambda c: c.updated_at, reverse=True)
 
 
 def my_event_ids(collections: list[Collection]) -> dict[int, list[int]]:
-    """{collection id: ids of the main-map events in it}, in one query."""
+    """{collection id: public ids of the main-map events in it}, in one query."""
     found: dict[int, list[int]] = {c.id: [] for c in collections}
     if found:
         rows = db.session.execute(
-            select(CollectionEntry.collection_id, CollectionEntry.event_id)
-            .where(CollectionEntry.collection_id.in_(found), CollectionEntry.event_id.is_not(None)))
-        for collection_id, event_id in rows:
-            found[collection_id].append(event_id)
+            select(CollectionEntry.collection_id, PUBLIC_ID)
+            .join(Event, Event.id == CollectionEntry.event_id)
+            .where(CollectionEntry.collection_id.in_(found)))
+        for collection_id, public in rows:
+            found[collection_id].append(public)
     return found
 
 
 # ----------------------------------------------------------------- queries
 
+# Entries with their events (what year_span, all_wikipedia and the badges read), so list pages
+# cost a fixed number of queries instead of one per entry.
+_LIST_LOAD = (selectinload(Collection.entries).joinedload(CollectionEntry.event),)
+
+
 def get_by_view_token(view_token: str) -> Collection | None:
-    return db.session.scalar(select(Collection).where(Collection.view_token == view_token))
+    """The collection with its entries, their events and the events' tags (3 queries in all)."""
+    return db.session.scalar(
+        select(Collection).where(Collection.view_token == view_token)
+        .options(selectinload(Collection.entries).joinedload(CollectionEntry.event).selectinload(Event.tags)))
 
 
 def public_collections(page: int = 1, per_page: int = 24) -> tuple[list[Collection], int]:
@@ -132,14 +183,21 @@ def public_collections(page: int = 1, per_page: int = 24) -> tuple[list[Collecti
     where = (Collection.is_public.is_(True), Collection.is_hidden.is_(False), has_entries)
     total = db.session.scalar(select(func.count(Collection.id)).where(*where))
     items = db.session.scalars(
-        select(Collection).where(*where).order_by(Collection.updated_at.desc())
+        select(Collection).options(*_LIST_LOAD).where(*where).order_by(Collection.updated_at.desc())
         .offset((page - 1) * per_page).limit(per_page)
     ).all()
     return list(items), total
 
 
-def all_collections() -> list[Collection]:
-    return list(db.session.scalars(select(Collection).order_by(Collection.updated_at.desc())))
+def all_collections(page: int = 1, per_page: int = 20) -> tuple[list[Collection], int]:
+    """One page of every collection (admin): reported first, then public, then most recently changed."""
+    reported = select(CollectionReport.id).where(CollectionReport.collection_id == Collection.id).exists()
+    total = db.session.scalar(select(func.count(Collection.id)))
+    items = db.session.scalars(
+        select(Collection).options(*_LIST_LOAD, selectinload(Collection.reports))
+        .order_by(reported.desc(), Collection.is_public.desc(), Collection.updated_at.desc(), Collection.id)
+        .offset((page - 1) * per_page).limit(per_page)).all()
+    return list(items), total
 
 
 def get_entry(collection: Collection, entry_id: int) -> CollectionEntry | None:
@@ -150,7 +208,7 @@ def get_entry(collection: Collection, entry_id: int) -> CollectionEntry | None:
 # ----------------------------------------------------------------- changes
 
 def _touch(collection: Collection) -> None:
-    collection.updated_at = datetime.now(timezone.utc)
+    collection.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def create_collection(title: str, description: str, is_public: bool) -> tuple[Collection, str]:
@@ -220,7 +278,7 @@ class TagResult:
 def tag_events(tag_id: int, year_from: int | None = None, year_to: int | None = None) -> list[Event]:
     """Approved events with a tag, oldest first, optionally within some years."""
     stmt = (select(Event).join(Event.tags).where(Tag.id == tag_id, Event.status == Status.APPROVED)
-            .order_by(Event.year, Event.title))
+            .order_by(Event.year, func.coalesce(Event.month * 100 + Event.day, 9999), Event.title))
     if year_from is not None:
         stmt = stmt.where(Event.year >= year_from)
     if year_to is not None:
@@ -233,9 +291,19 @@ def add_tag_events(collection: Collection, tag_id: int, year_from: int | None = 
     """Add every approved event with a tag (oldest first) that is not in the collection yet."""
     if db.session.get(Tag, tag_id) is None:
         raise CollectionError("Choose a tag from the list.")
+    return add_events(collection, tag_events(tag_id, year_from, year_to))
+
+
+def date_order(events: list[Event]) -> list[Event]:
+    """Oldest first, by year, then by month and day (events without a day last), then title."""
+    return sorted(events, key=lambda e: (e.year, e.month * 100 + e.day if e.month and e.day else 9999, e.title))
+
+
+def add_events(collection: Collection, events: list[Event]) -> TagResult:
+    """Add events (in the order given) that are not in the collection yet, up to ``MAX_ENTRIES`` entries."""
     result = TagResult()
     present = {entry.event_id for entry in collection.entries if entry.event_id}
-    for event in tag_events(tag_id, year_from, year_to):
+    for event in events:
         if event.id in present:
             result.already += 1
         elif len(collection.entries) >= MAX_ENTRIES:
@@ -344,6 +412,68 @@ def move_entry_by(entry: CollectionEntry, step: int) -> bool:
     _touch(entry.collection)
     db.session.commit()
     return True
+
+
+def copy_collection(source: Collection) -> tuple[Collection, str]:
+    """A new, unlisted collection with the same entries, notes, custom entries and positions."""
+    copy, edit_token = create_collection(f"{source.title} (copy)"[:200], source.description, False)
+    for entry in source.entries:
+        copy.entries.append(CollectionEntry(
+            event_id=entry.event_id, position=entry.position, note=entry.note,
+            custom_title=entry.custom_title, custom_year=entry.custom_year,
+            custom_date_label=entry.custom_date_label, custom_summary=entry.custom_summary,
+            custom_lat=entry.custom_lat, custom_lon=entry.custom_lon, custom_category=entry.custom_category,
+            link=entry.link, wiki_verified=entry.wiki_verified))
+    db.session.commit()
+    return copy, edit_token
+
+
+def suggest(collection: Collection, event_id: int | None, title: str, link: str,
+            message: str) -> CollectionSuggestion:
+    """Store a visitor's suggestion: a main-map event, or a free-text title with an optional link."""
+    pending = db.session.scalar(select(func.count(CollectionSuggestion.id))
+                                .where(CollectionSuggestion.collection_id == collection.id))
+    if pending >= MAX_PENDING_SUGGESTIONS:
+        raise CollectionError("This collection has too many suggestions waiting. Try again later.")
+    suggestion = CollectionSuggestion(collection_id=collection.id, message=message.strip())
+    if event_id:
+        event = db.session.get(Event, event_id)
+        if event is None or event.status != Status.APPROVED:
+            raise CollectionError("Choose an event from the list.")
+        if any(entry.event_id == event.id for entry in collection.entries):
+            raise DuplicateEntry(f"\u201c{event.title}\u201d is already in this collection.")
+        suggestion.event_id = event.id
+    else:
+        if not title.strip():
+            raise CollectionError("Choose an event from the list or give a title.")
+        suggestion.title, suggestion.link = title.strip(), link.strip() or None
+    db.session.add(suggestion)
+    db.session.commit()
+    return suggestion
+
+
+def get_suggestion(collection: Collection, suggestion_id: int) -> CollectionSuggestion | None:
+    found = db.session.get(CollectionSuggestion, suggestion_id)
+    return found if found is not None and found.collection_id == collection.id else None
+
+
+def dismiss_suggestion(suggestion: CollectionSuggestion) -> None:
+    db.session.delete(suggestion)
+    db.session.commit()
+
+
+def accept_suggestion(collection: Collection, suggestion: CollectionSuggestion) -> CollectionEntry | None:
+    """Turn an event suggestion into an entry (its message becomes the note) and remove it.
+
+    Returns None when the event is already in the collection (the suggestion is still removed).
+    """
+    try:
+        entry = add_event(collection, suggestion.event_id, suggestion.message)
+    except DuplicateEntry:
+        entry = None
+    db.session.delete(suggestion)
+    db.session.commit()
+    return entry
 
 
 def delete_collection(collection: Collection) -> None:

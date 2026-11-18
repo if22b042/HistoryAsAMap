@@ -5,7 +5,8 @@ tags ("core"); the short descriptions ("text") are by far the largest part and
 only matter for the popups, the list and searching descriptions, so they come
 separately, after the core data.
 
-Both are split into ``CHUNKS``: an event belongs to a chunk by ``id % MODULUS``,
+Both are split into ``CHUNKS``: an event belongs to a chunk by ``id % MODULUS``
+(``id`` is its public id, the Wikipedia page id: see ``haam.events.public_id``),
 so every chunk is a thin, even sample of the whole map (the first one draws a
 sparse version of the full picture) and an event's chunk is known from its id
 alone. The first chunk is the smallest, so the first markers appear quickly.
@@ -18,10 +19,13 @@ an unchanged map is never downloaded twice.
 from __future__ import annotations
 
 import hashlib
+import time
 
-from sqlalchemy import func, select
+from flask import current_app
+from sqlalchemy import BigInteger, cast, func, select
 
 from haam.dates import format_year
+from haam.events import PUBLIC_ID
 from haam.extensions import db
 from haam.models import Category, Event, Status, Tag, event_tags, make_excerpt
 
@@ -34,12 +38,37 @@ CHUNKS = len(BOUNDS) - 1
 WIKI_PREFIX = "https://en.wikipedia.org/wiki/"
 CATEGORIES = [c.value for c in Category]
 # Bump when the shape of a chunk changes, so browsers never mix old and new formats.
-FORMAT = 1
+FORMAT = 3
+# How long a process keeps the computed state (seconds); `FEED_STATE_TTL` overrides it.
+STATE_TTL = 30
 
 
 def state() -> dict:
-    """The version fingerprint plus what the page needs before any chunk arrives."""
+    """The version fingerprint plus what the page needs before any chunk arrives.
+
+    Computed with about ten aggregates, so each process keeps it for ``STATE_TTL``
+    seconds (a change shows up in the map's URLs at most that late).
+    """
+    ttl = current_app.config.get("FEED_STATE_TTL", STATE_TTL)
+    cached = current_app.extensions.get("haam_feed_state")
+    now = time.monotonic()
+    if ttl and cached and now - cached[0] < ttl:
+        return dict(cached[1])
+    result = _compute_state()
+    if ttl:
+        current_app.extensions["haam_feed_state"] = (now, result)
+    return dict(result)
+
+
+def _tag_fingerprint() -> str:
+    """A hash of every tag's id, name and years (a few hundred rows), so any rename shows."""
+    rows = db.session.execute(select(Tag.id, Tag.name, Tag.start_year, Tag.end_year).order_by(Tag.id)).all()
+    return hashlib.sha1(repr([tuple(r) for r in rows]).encode()).hexdigest()
+
+
+def _compute_state() -> dict:
     approved = Event.status == Status.APPROVED
+    event_id, tag_id = cast(event_tags.c.event_id, BigInteger), cast(event_tags.c.tag_id, BigInteger)
     row = db.session.execute(select(
         select(func.count(Event.id)).where(approved).scalar_subquery(),
         select(func.min(Event.year)).where(approved).scalar_subquery(),
@@ -48,11 +77,11 @@ def state() -> dict:
         select(func.max(Event.updated_at)).scalar_subquery(),
         select(func.count(Event.id)).scalar_subquery(),
         # Tags changed on an event leave its row alone, so they are fingerprinted separately.
+        # The terms are mixed, so swapping tags between two events changes the sum.
         select(func.count()).select_from(event_tags).scalar_subquery(),
-        select(func.sum(event_tags.c.event_id * 7919 + event_tags.c.tag_id)).scalar_subquery(),
-        select(func.count(Tag.id)).scalar_subquery(),
-        select(func.sum(func.length(Tag.name) * 31 + func.coalesce(Tag.start_year, 0)
-                        + func.coalesce(Tag.end_year, 1))).scalar_subquery(),
+        select(func.sum((event_id * 7919 + tag_id) * (tag_id + 13))).scalar_subquery(),
+        # The chunks carry page ids: a changed page id must change every URL too.
+        select(func.sum(cast(Event.wiki_page_id, BigInteger))).scalar_subquery(),
     )).one()
     total, min_year, max_year = row[0], row[1], row[2]
     # Bulk recategorisations (migrations, `flask haam recategorize`, sync-wikidata) leave
@@ -60,8 +89,8 @@ def state() -> dict:
     # categories itself (the chunks store categories as indexes into it).
     per_category = sorted((c.value, n) for c, n in db.session.execute(
         select(Event.category, func.count(Event.id)).where(approved).group_by(Event.category)))
-    digest = hashlib.sha1(repr((tuple(row), tuple(per_category), tuple(CATEGORIES), MODULUS, BOUNDS,
-                                FORMAT)).encode()).hexdigest()
+    digest = hashlib.sha1(repr((tuple(row), _tag_fingerprint(), tuple(per_category), tuple(CATEGORIES), MODULUS,
+                                BOUNDS, FORMAT)).encode()).hexdigest()
     return {"version": digest[:12], "total": total, "years": [min_year, max_year]}
 
 
@@ -80,7 +109,7 @@ def manifest(url_for) -> dict:
 
 
 def _in_chunk(chunk: int):
-    residue = Event.id % MODULUS
+    residue = PUBLIC_ID % MODULUS
     return (Event.status == Status.APPROVED) & (residue >= BOUNDS[chunk]) & (residue < BOUNDS[chunk + 1])
 
 
@@ -93,12 +122,18 @@ def _wiki_field(url: str, title: str) -> str:
 
 
 def core_chunk(chunk: int, version: str) -> dict:
-    """One chunk of the map's events, as columns (no repeated keys), ordered by year and title."""
+    """One chunk of the map's events, as columns (no repeated keys).
+
+    Ordered by year, then by month and day (events without a day last), then title.
+    ``md`` carries the month and day (``month * 100 + day``, 0 = no day) so the
+    client can merge chunks in exactly this order.
+    """
+    day_key = Event.month * 100 + Event.day  # NULL unless the date is precise to the day
     rows = db.session.execute(
-        select(Event.id, Event.title, Event.year, Event.date_label, Event.wiki_url,
-               Event.lat, Event.lon, Event.category)
+        select(Event.id.label("row_id"), PUBLIC_ID.label("pid"), Event.title, Event.year, Event.date_label,
+               Event.wiki_url, Event.lat, Event.lon, Event.category, func.coalesce(day_key, 0).label("md"))
         .where(_in_chunk(chunk))
-        .order_by(Event.year, Event.title, Event.id)
+        .order_by(Event.year, func.coalesce(day_key, 9999), Event.title, PUBLIC_ID)
     ).all()
     tags: dict[int, list[int]] = {}
     tag_rows = db.session.execute(
@@ -117,9 +152,10 @@ def core_chunk(chunk: int, version: str) -> dict:
         "chunk": chunk,
         "count": len(rows),
         "categories": CATEGORIES,
-        "id": [r.id for r in rows],
+        "id": [r.pid for r in rows],
         "title": [r.title for r in rows],
         "year": [r.year for r in rows],
+        "md": [r.md for r in rows],
         # "" = just the year (the client formats it the same way as format_year).
         "date": [("" if r.date_label == format_year(r.year) else r.date_label) for r in rows],
         "wiki": [_wiki_field(r.wiki_url, r.title) for r in rows],
@@ -127,7 +163,7 @@ def core_chunk(chunk: int, version: str) -> dict:
         "lat": [round(r.lat, 4) for r in rows],
         "lon": [round(r.lon, 4) for r in rows],
         "cat": [category_index[r.category.value] for r in rows],
-        "tags": [tags.get(r.id, []) for r in rows],
+        "tags": [tags.get(r.row_id, []) for r in rows],
     }
 
 
@@ -135,9 +171,9 @@ def text_chunk(chunk: int, version: str) -> dict:
     """The short descriptions of one chunk's events."""
     # One character more than an excerpt, which is enough to tell whether it was cut.
     rows = db.session.execute(
-        select(Event.id, func.substr(Event.summary, 1, Event.EXCERPT_LENGTH + 1))
+        select(PUBLIC_ID, func.substr(Event.summary, 1, Event.EXCERPT_LENGTH + 1))
         .where(_in_chunk(chunk))
-        .order_by(Event.id)
+        .order_by(PUBLIC_ID)
     ).all()
     return {
         "v": version,

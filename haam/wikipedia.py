@@ -64,11 +64,11 @@ def canonical_url(title: str) -> str:
 
 
 class WikipediaClient:
-    def __init__(self, user_agent: str, timeout: float = 10):
+    def __init__(self, user_agent: str, timeout: float = 10, retries: int = 3):
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers["User-Agent"] = user_agent
-        retry = Retry(total=3, backoff_factor=1, status_forcelist=(429, 500, 502, 503, 504),
+        retry = Retry(total=retries, backoff_factor=1, status_forcelist=(429, 500, 502, 503, 504),
                       respect_retry_after_header=True)
         self.session.mount("https://", HTTPAdapter(max_retries=retry))
 
@@ -146,11 +146,23 @@ class WikipediaClient:
         return [item["title"] for item in data.get("query", {}).get("geosearch", [])]
 
 
+def _best_claims(claims: dict, prop: str) -> list[dict]:
+    """Claims of a property with a value, preferred rank first, deprecated dropped.
+
+    The same rule as ``haam.wikidata._best_claims``; it is repeated here because
+    wikidata imports this module.
+    """
+    usable = [c for c in claims.get(prop, [])
+              if c.get("rank") != "deprecated" and c.get("mainsnak", {}).get("snaktype") == "value"]
+    preferred = [c for c in usable if c.get("rank") == "preferred"]
+    return preferred or usable
+
+
 def _claim_value(claims: dict, prop: str):
-    for claim in claims.get(prop, []):
-        snak = claim.get("mainsnak", {})
-        if snak.get("snaktype") == "value":
-            return snak.get("datavalue", {}).get("value")
+    for claim in _best_claims(claims, prop):
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if value is not None:
+            return value
     return None
 
 
@@ -171,10 +183,24 @@ def _wikidata_coordinates(claims: dict) -> tuple[float | None, float | None]:
     return None, None
 
 
-def get_client() -> WikipediaClient:
-    """One shared client per app (keeps the HTTP connection pool alive)."""
+# Web requests (preview, confirm, the link check) wait at most this long for one request.
+WEB_TIMEOUT = 5.0
+
+
+def get_client(patient: bool = False) -> WikipediaClient:
+    """One shared client per app (keeps the HTTP connection pool alive).
+
+    Web requests get a client that gives up quickly (one retry, ``WEB_TIMEOUT``), so a
+    slow Wikipedia cannot hold a page for most of a minute. Command-line imports pass
+    ``patient=True`` for the configured ``HTTP_TIMEOUT`` and three retries. A process is
+    either the web app or a command, so the first caller decides the client's settings.
+    """
     client = current_app.extensions.get("haam_wikipedia")
     if client is None:
-        client = WikipediaClient(current_app.config["HAAM_USER_AGENT"], current_app.config["HTTP_TIMEOUT"])
+        user_agent = current_app.config["HAAM_USER_AGENT"]
+        if patient:
+            client = WikipediaClient(user_agent, current_app.config["HTTP_TIMEOUT"], retries=3)
+        else:
+            client = WikipediaClient(user_agent, WEB_TIMEOUT, retries=1)
         current_app.extensions["haam_wikipedia"] = client
     return client

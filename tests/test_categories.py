@@ -11,7 +11,7 @@ from sqlalchemy import text
 from haam import create_app
 from haam.data.event_types import CATEGORY_CLASSES, EVENT_TYPES
 from haam.extensions import db
-from haam.models import Category
+from haam.models import Category, Tag
 from haam.recategorize import recategorize
 from haam.wikidata import category_classes, refine_category
 
@@ -139,10 +139,10 @@ def test_recategorize_dry_run_changes_nothing(app, make_event):
 
 
 def test_new_categories_show_on_the_map(client, make_event):
-    make_event(title="Great Fire of London", category=Category.DISASTER, year=1666)
+    event = make_event(title="Great Fire of London", category=Category.DISASTER, year=1666)
     page = client.get("/").get_data(as_text=True)
     assert 'data-category="disaster"' in page and 'data-category="violence"' not in page
-    assert client.get("/api/events").json[0]["category"] == "disaster"
+    assert client.get(f"/api/events/{event.id}").json["category"] == "disaster"
 
 
 # --------------------------------------------------------------- migration
@@ -210,3 +210,37 @@ def test_bulk_recategorisation_changes_the_data_version(app, make_event):
     db.session.execute(Event.__table__.update().where(Event.id == event.id).values(category="disaster"))
     db.session.commit()
     assert feed.state()["version"] != before
+
+
+def test_tag_changes_the_data_version_even_when_sums_would_match(app, make_event):
+    """Swapping tags between events, or renaming a tag to a same-length name, must change the version."""
+    from haam import feed
+
+    ww2 = db.session.scalar(db.select(Tag).filter_by(name="World War II"))
+    norman = db.session.scalar(db.select(Tag).filter_by(name="Norman Conquest of England"))
+    first = make_event(title="First", year=1066)
+    second = make_event(title="Second", year=1940)
+    first.tags, second.tags = [norman], [ww2]
+    db.session.commit()
+    before = feed.state()["version"]
+
+    first.tags, second.tags = [ww2], [norman]  # same links, swapped
+    db.session.commit()
+    swapped = feed.state()["version"]
+    assert swapped != before
+
+    ww2.name = "World War II".replace("II", "ZZ")  # same length
+    db.session.commit()
+    assert feed.state()["version"] != swapped
+
+
+def test_state_is_cached_for_a_while(app, make_event):
+    from haam import feed
+
+    app.config["FEED_STATE_TTL"] = 30
+    make_event(title="First", year=1066)
+    before = feed.state()
+    make_event(title="Second", year=1940)
+    assert feed.state() == before  # still the cached value
+    app.extensions.pop("haam_feed_state")
+    assert feed.state()["total"] == 2

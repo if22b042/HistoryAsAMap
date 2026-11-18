@@ -4,7 +4,7 @@
 // once and the others are added as they come in; everything works meanwhile.
 /* global L, noUiSlider */
 import { createCollectionAdder } from "./collection-add.js";
-import { addBasemapSwitcher } from "./basemaps.js";
+import { BASEMAPS, addBasemapSwitcher } from "./basemaps.js";
 import { createTimeline } from "./timeline.js";
 import { branchEventIds, createTagTree, fetchTagTree, findNode, pathTo } from "./tag-tree.js";
 import { chunkOrder, compareEvents, decodeCore, formatYear, getJson, getJsonRetry, mergeSorted } from "./events-data.js";
@@ -47,19 +47,58 @@ const state = {
   // Years the colour scale spans: the earliest and latest event currently shown.
   colorFrom: 0,
   colorTo: 0,
+  colorLock: null, // [from, to]: keeps the colours fixed while the time-lapse runs
   openId: null,
 };
 
 // ------------------------------------------------------------ year colours
 
-// The scale runs once through the spectrum: red (earliest) → violet (latest).
+// The scale runs once through the spectrum: red (earliest) → violet (latest). It is not
+// linear in years: it has the same breakpoints as the year slider (see sliderRange), so
+// the modern centuries, where most events are, get as much of the spectrum as they get
+// room on the slider.
 const HUE_SPAN = 280;
+let colorPoints = [[0, 0], [1, 1]]; // [year, position 0–1 on the scale], ascending
+
+function colorPointsFor(from, to) {
+  const range = sliderRange(from, to);
+  const points = [[range.min, 0], [range.max, 1]];
+  Object.keys(range).forEach((key) => {
+    if (key.endsWith("%")) points.push([range[key], parseFloat(key) / 100]);
+  });
+  return points.sort((a, b) => a[0] - b[0]);
+}
+
+/** Where a year sits on the colour scale: 0 (earliest shown) to 1 (latest). */
+function yearToPosition(year) {
+  const points = colorPoints;
+  if (year <= points[0][0]) return 0;
+  for (let i = 1; i < points.length; i += 1) {
+    if (year <= points[i][0]) {
+      const [y0, t0] = points[i - 1];
+      const [y1, t1] = points[i];
+      return t0 + ((year - y0) / (y1 - y0)) * (t1 - t0);
+    }
+  }
+  return 1;
+}
+
+/** The year at a position of the colour scale (for the legend's ticks). */
+function positionToYear(t) {
+  const points = colorPoints;
+  for (let i = 1; i < points.length; i += 1) {
+    if (t <= points[i][1]) {
+      const [y0, t0] = points[i - 1];
+      const [y1, t1] = points[i];
+      return y0 + ((t - t0) / (t1 - t0)) * (y1 - y0);
+    }
+  }
+  return points[points.length - 1][0];
+}
 
 function hueForYear(year) {
-  const span = state.colorTo - state.colorFrom;
-  if (span <= 0) return 0;
-  const t = Math.min(1, Math.max(0, (year - state.colorFrom) / span));
-  return Math.round(t * HUE_SPAN);
+  if (state.colorTo - state.colorFrom <= 0) return 0;
+  return Math.round(yearToPosition(year) * HUE_SPAN);
 }
 
 const yearColor = (year) => `hsl(${hueForYear(year)} 85% 45%)`;
@@ -95,11 +134,31 @@ function debounce(fn, ms) {
 
 // ---------------------------------------------------------------------- map
 
+// A shared link can carry the view: ?view=5/48.2/16.4&base=terrain&heat=1&color=1
+// (zoom/latitude/longitude, map style, heatmap on, colour by year on or off).
+const urlParams = new URLSearchParams(window.location.search);
+const MIN_ZOOM = 2;
+const MAX_ZOOM = 18;
+
+function parseView(text) {
+  const m = /^(\d{1,2}(?:\.\d+)?)\/(-?\d{1,2}(?:\.\d+)?)\/(-?\d{1,3}(?:\.\d+)?)$/.exec(text || "");
+  if (!m) return null;
+  const view = { zoom: Number(m[1]), lat: Number(m[2]), lng: Number(m[3]) };
+  if (view.zoom < MIN_ZOOM || view.zoom > MAX_ZOOM || Math.abs(view.lat) > 90 || Math.abs(view.lng) > 200) return null;
+  return view;
+}
+
+const linkedView = parseView(urlParams.get("view"));
+// A link's map style applies to this visit only: it is not saved over the visitor's own choice.
+const linkedBase = Object.keys(BASEMAPS).includes(urlParams.get("base")) ? urlParams.get("base") : null;
+// The embeddable map (/embed): no site around it, just the map and its panels.
+const EMBED = document.body.classList.contains("page-embed");
+
 const map = L.map("map", {
-  center: [30, 10],
-  zoom: 3,
-  minZoom: 2,
-  maxZoom: 18,
+  center: linkedView ? [linkedView.lat, linkedView.lng] : [30, 10],
+  zoom: linkedView ? linkedView.zoom : 3,
+  minZoom: MIN_ZOOM,
+  maxZoom: MAX_ZOOM,
   worldCopyJump: true,
   maxBounds: [[-90, -200], [90, 200]],
   maxBoundsViscosity: 0.8,
@@ -107,8 +166,36 @@ const map = L.map("map", {
 });
 // The base map switcher first: it then sits left of the zoom buttons instead of
 // above them, so the corner stays low enough beside the open timeline.
-addBasemapSwitcher(map);
+addBasemapSwitcher(map, { initial: linkedBase });
 L.control.zoom({ position: "bottomright" }).addTo(map);
+
+// Bumped whenever the markers in the clusters change or the colours are re-based, so
+// the cached cluster summaries below are never out of date.
+let clusterEpoch = 0;
+const clusterSummaries = new WeakMap();
+
+/** What a cluster's icon needs, from one pass over its markers (kept while they stay the same). */
+function clusterSummary(cluster, count) {
+  const cached = clusterSummaries.get(cluster);
+  if (cached && cached.count === count && cached.epoch === clusterEpoch) return cached;
+  const markers = cluster.getAllChildMarkers();
+  const first = markers[0].options.category;
+  const byYear = state.colorByYear;
+  let single = true;
+  let hueSum = 0;
+  markers.forEach((m) => {
+    if (m.options.category !== first) single = false;
+    if (byYear) hueSum += hueForYear(m.options.year);
+  });
+  const summary = {
+    count,
+    epoch: clusterEpoch,
+    category: single ? first : null, // null = a mix of categories
+    hue: Math.round(hueSum / markers.length), // the average colour of the events in it
+  };
+  clusterSummaries.set(cluster, summary);
+  return summary;
+}
 
 const clusters = L.markerClusterGroup({
   showCoverageOnHover: false,
@@ -118,23 +205,18 @@ const clusters = L.markerClusterGroup({
   iconCreateFunction(cluster) {
     const count = cluster.getChildCount();
     const size = count < 10 ? "small" : count < 100 ? "medium" : "large";
+    const summary = clusterSummary(cluster, count);
     if (state.colorByYear) {
-      // A cluster takes the colour of the average year of the events in it.
-      const markers = cluster.getAllChildMarkers();
-      const mean = markers.reduce((sum, m) => sum + m.options.year, 0) / markers.length;
       return L.divIcon({
         // Only numbers we computed go into this HTML – safe.
-        html: `<span class="cluster-year-fill" style="background:${yearColor(mean)}">${count}</span>`,
+        html: `<span class="cluster-year-fill" style="background:${hueColor(summary.hue)}">${count}</span>`,
         className: `cluster cluster-year cluster-${size}`,
         iconSize: L.point(40, 40),
       });
     }
     // All events of one category: the cluster takes that category's colour.
     // Mixed clusters keep the default colour (which matches no category).
-    const markers = cluster.getAllChildMarkers();
-    const category = markers[0].options.category;
-    const single = markers.every((m) => m.options.category === category);
-    const catClass = single ? ` cluster-cat cluster-cat-${category}` : "";
+    const catClass = summary.category ? ` cluster-cat cluster-cat-${summary.category}` : "";
     return L.divIcon({
       html: `<span>${count}</span>`, // a number we computed – safe
       className: `cluster cluster-${size}${catClass}`,
@@ -148,13 +230,24 @@ let heatLayer = null;
 // The heatmap has no markers, so a click looks for events right under the pointer:
 // one opens it, several close together zoom in, none does nothing.
 const HEAT_CLICK_RADIUS = 14; // px
+
+/** Shown events within the click radius of a pixel; only those inside the map's view are projected. */
+function heatHitsAt(point, firstOnly = false) {
+  const bounds = map.getBounds().pad(0.05);
+  const hits = [];
+  for (const event of state.filtered) {
+    if (!bounds.contains([event.lat, event.lon])) continue;
+    const distance = map.latLngToContainerPoint([event.lat, event.lon]).distanceTo(point);
+    if (distance > HEAT_CLICK_RADIUS) continue;
+    hits.push({ event, distance });
+    if (firstOnly) break;
+  }
+  return hits;
+}
+
 map.on("click", (e) => {
   if (!state.heatmap) return;
-  const hits = [];
-  state.filtered.forEach((event) => {
-    const distance = map.latLngToContainerPoint([event.lat, event.lon]).distanceTo(e.containerPoint);
-    if (distance <= HEAT_CLICK_RADIUS) hits.push({ event, distance });
-  });
+  const hits = heatHitsAt(e.containerPoint);
   if (!hits.length) return;
   hits.sort((a, b) => a.distance - b.distance);
   const sameSpot = hits.every((h) => h.event.lat === hits[0].event.lat && h.event.lon === hits[0].event.lon);
@@ -171,8 +264,7 @@ map.on("mousemove", (e) => {
   if (!state.heatmap || heatHover) return;
   heatHover = requestAnimationFrame(() => {
     heatHover = 0;
-    const near = state.filtered.some((event) =>
-      map.latLngToContainerPoint([event.lat, event.lon]).distanceTo(e.containerPoint) <= HEAT_CLICK_RADIUS);
+    const near = heatHitsAt(e.containerPoint, true).length > 0;
     map.getContainer().classList.toggle("heat-clickable", near);
   });
 });
@@ -235,7 +327,12 @@ function updateLegend() {
     return;
   }
   const count = to - from >= 4 ? 5 : to > from ? 2 : 1;
-  const values = count === 1 ? [from] : Array.from({ length: count }, (_, i) => Math.round(from + ((to - from) * i) / (count - 1)));
+  // Ticks at equal steps of the colour scale (not of the years), so each tick sits under its own colour.
+  const values = [];
+  for (let i = 0; i < count; i += 1) {
+    const year = i === 0 ? from : i === count - 1 ? to : Math.round(positionToYear(i / (count - 1)));
+    if (!values.length || values[values.length - 1] !== year) values.push(year);
+  }
   ticks.replaceChildren(...values.map((year) => {
     const tick = el("span", "year-legend-tick", formatYear(year));
     tick.style.color = yearColor(year);
@@ -248,12 +345,20 @@ function updateLegend() {
 function updateColorRange() {
   let from = Infinity;
   let to = -Infinity;
-  state.filtered.forEach((e) => {
-    if (e.year < from) from = e.year;
-    if (e.year > to) to = e.year;
-  });
-  state.colorFrom = Number.isFinite(from) ? from : 0;
-  state.colorTo = Number.isFinite(to) ? to : 0;
+  if (state.colorLock) {
+    [from, to] = state.colorLock;
+  } else {
+    state.filtered.forEach((e) => {
+      if (e.year < from) from = e.year;
+      if (e.year > to) to = e.year;
+    });
+  }
+  const nextFrom = Number.isFinite(from) ? from : 0;
+  const nextTo = Number.isFinite(to) ? to : 0;
+  if (nextFrom !== state.colorFrom || nextTo !== state.colorTo) clusterEpoch += 1;
+  state.colorFrom = nextFrom;
+  state.colorTo = nextTo;
+  colorPoints = colorPointsFor(nextFrom, nextTo);
 }
 
 function popupContent(event) {
@@ -283,7 +388,7 @@ const detailsCache = new Map();
 // The data this page shows: every approved event, or one collection's entries
 // (whose list already carries the full text, so no details are fetched).
 const MAP_ELEMENT = document.getElementById("map");
-const EVENTS_URL = MAP_ELEMENT.dataset.eventsUrl || "/api/events";
+const EVENTS_URL = MAP_ELEMENT.dataset.eventsUrl;
 const FULL_TEXT = MAP_ELEMENT.dataset.fullText === "1";
 // "Add to collection": only on the main map (a collection's map has no URL for it).
 const collectionAdder = createCollectionAdder(MAP_ELEMENT.dataset.collectionsUrl);
@@ -305,7 +410,12 @@ async function loadDetails(id) {
   return detailsCache.get(id);
 }
 
-function showEvent(id, { fly = true, zoom = 6 } = {}) {
+/**
+ * Open an event on the right. ``record`` (default): the address gets ``?event=``, as a new
+ * history entry when no event was open (so Back returns to the map as it was), else
+ * replacing the current one. popstate passes ``record: false``: the address is already right.
+ */
+function showEvent(id, { fly = true, zoom = 6, record = true } = {}) {
   const event = state.eventsById.get(id);
   if (!event) return;
 
@@ -373,11 +483,22 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
     // Main-map events have their own page, the link to share or bookmark.
     const page = el("a", "btn btn-secondary", "Event page");
     page.href = `/event/${encodeURIComponent(id)}`;
+    if (EMBED) { page.target = "_blank"; page.rel = "noopener"; } // never inside the frame
     actions.append(page);
   }
   parts.push(actions);
   const adder = collectionAdder.control(id);
   if (adder) parts.push(adder);
+  if (!FULL_TEXT) {
+    // The form is on the event's page (#report).
+    const report = el("p", "detail-report");
+    const reportLink = el("a", null, "Report a problem with this event");
+    reportLink.href = `/event/${encodeURIComponent(id)}#report`;
+    if (EMBED) { reportLink.target = "_blank"; reportLink.rel = "noopener"; }
+    report.append(el("i", "fas fa-flag"), " ", reportLink);
+    report.firstChild.setAttribute("aria-hidden", "true");
+    parts.push(report);
+  }
 
   const newEvent = state.openId !== id;
   state.openId = id;
@@ -392,9 +513,12 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
     openSheet(wasHidden);
   }
 
-  const url = new URL(window.location);
-  url.searchParams.set("event", id);
-  history.replaceState(null, "", url);
+  if (record) {
+    const url = new URL(window.location);
+    const hadEvent = url.searchParams.has("event");
+    url.searchParams.set("event", id);
+    if (url.href !== window.location.href) history[hadEvent ? "replaceState" : "pushState"](null, "", url);
+  }
 
   if (fly) {
     map.closePopup();
@@ -411,7 +535,9 @@ function showEvent(id, { fly = true, zoom = 6 } = {}) {
 let selectedId = null;
 let ringed = null; // the cluster or marker that carries the ring
 let standalone = null; // the selected marker, shown outside the clusters (heatmap, filtered out)
-let clustersLoading = false; // markers are still being added to the clusters in chunks
+let clustersLoading = false; // a chunked addLayers() is still running
+let rebuildQueued = false; // the filters changed meanwhile: rebuild once it is done
+let lastClusterProgress = 0; // when that batch last reported (to notice one that never finishes)
 
 function dropStandalone() {
   if (standalone) {
@@ -467,12 +593,55 @@ clusters.on("animationend spiderfied unspiderfied", placeRing);
 // Large sets go into the clusters in chunks; the last call comes just before the
 // clusters are put on the map, so the ring is placed right after it.
 clusters.options.chunkProgress = (done, total) => {
+  lastClusterProgress = Date.now();
   if (done < total) return;
   setTimeout(() => {
     clustersLoading = false;
-    placeRing();
+    if (rebuildQueued) rebuildMarkers(); // the newest filters, now that the batch is finished
+    else placeRing();
   });
 };
+
+/**
+ * markercluster cannot cancel a chunked addLayers() that is still running, and
+ * clearLayers() would let its rest land on top of the new set. So a rebuild never starts
+ * while a batch runs: it is queued (only the newest state counts) and runs when the
+ * batch reports done. A batch that stops reporting for 10 s is given up on.
+ */
+function clustersBusy() {
+  if (clustersLoading && Date.now() - lastClusterProgress > 10000) clustersLoading = false;
+  return clustersLoading;
+}
+
+function addToClusters(markers) {
+  clusterEpoch += 1;
+  clustersLoading = true;
+  lastClusterProgress = Date.now();
+  clusters.addLayers(markers);
+}
+
+/** Replace everything on the map by the markers (or the heatmap) of the current filters. */
+function rebuildMarkers() {
+  rebuildQueued = false;
+  clusterEpoch += 1;
+  dropStandalone(); // it goes back into the clusters below (unless the heatmap is on)
+  clusters.clearLayers();
+  if (heatLayer) {
+    map.removeLayer(heatLayer);
+    heatLayer = null;
+  }
+  if (state.heatmap) {
+    heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10 });
+    heatLayer.addTo(map);
+  } else {
+    // Markers off the map only store their new icon, so this is cheap.
+    state.filtered.forEach((e) => {
+      state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
+    });
+    addToClusters(state.filtered.map((e) => state.markersById.get(e.id)));
+  }
+  placeRing();
+}
 
 function showSelection(event) {
   selectedId = event.id;
@@ -484,13 +653,14 @@ function releaseSelection() {
   placeRing();
 }
 
-function closeSidebar() {
+function closeSidebar({ record = true } = {}) {
   releaseSelection();
   timeline.setActive(null);
   state.openId = null;
   sidebar.hidden = true;
   document.body.classList.remove("sidebar-open");
   resetSheet();
+  if (!record) return; // Back/Forward: the address is already right
   const url = new URL(window.location);
   url.searchParams.delete("event");
   history.replaceState(null, "", url);
@@ -499,7 +669,8 @@ function closeSidebar() {
 document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.defaultPrevented) return;
-  if (isPhone() && document.body.classList.contains("filters-open")) setFiltersOpen(false);
+  if (isNearOpen()) closeNear();
+  else if (isPhone() && document.body.classList.contains("filters-open")) setFiltersOpen(false);
   else if (!sidebar.hidden) closeSidebar();
 });
 
@@ -704,7 +875,7 @@ window.addEventListener("resize", debounce(() => {
 }, 150));
 
 /** The phone's Filters button says how many filters are on; the drawer's button how many events. */
-function updateFilterSummary() {
+function activeFilterCount() {
   const slider = document.getElementById("year-slider")?.noUiSlider;
   let active = 0;
   if (state.category !== "all") active += 1;
@@ -714,6 +885,11 @@ function updateFilterSummary() {
     const { min, max } = slider.options.range;
     if (state.yearFrom > min || state.yearTo < max) active += 1;
   }
+  return active;
+}
+
+function updateFilterSummary() {
+  const active = activeFilterCount();
   const fab = document.querySelector(".filters-fab");
   if (fab) {
     fab.querySelector("[data-filters-label]").textContent = active ? `Filters (${active} active)` : "Filters";
@@ -729,7 +905,7 @@ function updateFilterSummary() {
 
 const search = {
   terms: [], // lower-case words and "quoted phrases"
-  patterns: [], // one RegExp per term
+  patterns: [], // one {test, all, whole} per term (see matchRanges)
   in: "all", // "all" = titles and descriptions, "title" = titles only
   match: "all", // every term must match, or "any"
   whole: false, // whole words only
@@ -753,10 +929,40 @@ function setQuery(text) {
   search.terms = parseQuery(text);
   search.patterns = search.terms.map((term) => {
     const body = escapeRegExp(term).replace(/\s+/g, "\\s+");
-    return new RegExp(search.whole ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body, "iu");
+    return { test: new RegExp(body, "iu"), all: new RegExp(body, "giu"), whole: search.whole };
   });
   state.query = search.terms.join(" ");
   state.queryText = (text || "").trim(); // as typed, for the page address
+}
+
+// "Whole words only" is checked by looking at the characters around a match, not with a
+// RegExp lookbehind (which throws on Safari before 16.4).
+const WORD_BEFORE = /[\p{L}\p{N}]$/u;
+const WORD_AFTER = /^[\p{L}\p{N}]/u;
+
+/** [start, end] of every match in the text; with "whole words only" just those not touching a letter or digit. */
+function matchRanges(pattern, text) {
+  const ranges = [];
+  const re = pattern.all;
+  re.lastIndex = 0;
+  let m;
+  while ((m = re.exec(text))) {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (!m[0]) {
+      re.lastIndex = start + 1;
+    } else if (!pattern.whole || (!WORD_BEFORE.test(text.slice(Math.max(0, start - 2), start))
+        && !WORD_AFTER.test(text.slice(end, end + 2)))) {
+      ranges.push([start, end]);
+    } else {
+      re.lastIndex = start + 1; // a later match may overlap this one
+    }
+  }
+  return ranges;
+}
+
+function patternMatches(pattern, text) {
+  return pattern.whole ? matchRanges(pattern, text).length > 0 : pattern.test.test(text);
 }
 
 /** Lower-cased texts to search, built once per event. */
@@ -777,8 +983,8 @@ function searchScore(event) {
   let hits = 0;
   search.patterns.forEach((pattern, i) => {
     let s = 0;
-    if (pattern.test(event._title)) s = event._title.startsWith(search.terms[i]) ? 4 : 3;
-    else if (search.in === "all" && pattern.test(event._text)) s = 1;
+    if (patternMatches(pattern, event._title)) s = event._title.startsWith(search.terms[i]) ? 4 : 3;
+    else if (search.in === "all" && patternMatches(pattern, event._text)) s = 1;
     if (s) hits += 1;
     score += s;
   });
@@ -818,6 +1024,10 @@ function tagNames() {
 const URL_KEYS = ["tag", "tagmode", "part", "cat", "q", "from", "to"];
 let restoringUrl = false; // while a link's filters are applied, do not rewrite it
 
+/** The filter part of an address, to tell whether Back/Forward changed the filters. */
+const filterKey = (params) => URL_KEYS.map((key) => params.getAll(key).join(",")).join("|");
+let appliedFilterKey = filterKey(urlParams);
+
 function filtersFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const year = (key) => (params.has(key) ? parseYearText(params.get(key)) : null);
@@ -849,12 +1059,14 @@ function syncUrl(push = false) {
     if (state.yearFrom > min) url.searchParams.set("from", state.yearFrom);
     if (state.yearTo < max) url.searchParams.set("to", state.yearTo);
   }
+  appliedFilterKey = filterKey(url.searchParams);
   if (url.href === window.location.href) return;
   history[push ? "pushState" : "replaceState"](null, "", url);
 }
 
 /** Apply the filters of a link (on load, and when Back/Forward changes the address). */
 function applyUrlFilters(filters) {
+  appliedFilterKey = filterKey(new URLSearchParams(window.location.search));
   restoringUrl = true;
   try {
     state.tagIds = filters.ids;
@@ -933,6 +1145,10 @@ function zoomToEvents(events) {
   const west = quantile(lons, 0.1);
   const east = quantile(lons, 0.9);
   if (north - south > REGIONAL_LAT_SPAN || east - west > REGIONAL_LON_SPAN) return; // worldwide
+  flyToEventBounds(south, west, north, east);
+}
+
+function flyToEventBounds(south, west, north, east) {
   const filtersShown = !document.body.classList.contains("filters-hidden") && !isPhone();
   map.flyToBounds([[south, west], [north, east]], {
     paddingTopLeft: [filtersShown ? 340 : 40, isPhone() ? FAB_SPACE : 40],
@@ -984,6 +1200,25 @@ function clearPart() {
   refilter();
 }
 
+// A shared search link: when only a few events match, fly to where they are.
+const FEW_RESULTS = 100;
+
+function zoomToSearchResults() {
+  const events = state.filtered;
+  if (!search.terms.length || !events.length || events.length > FEW_RESULTS) return;
+  let south = Infinity;
+  let north = -Infinity;
+  let west = Infinity;
+  let east = -Infinity;
+  events.forEach((e) => {
+    if (e.lat < south) south = e.lat;
+    if (e.lat > north) north = e.lat;
+    if (e.lon < west) west = e.lon;
+    if (e.lon > east) east = e.lon;
+  });
+  flyToEventBounds(south, west, north, east);
+}
+
 const addTag = (id) => setTags([...state.tagIds, id]);
 const removeTag = (id) => setTags(state.tagIds.filter((t) => t !== id));
 const onlyTag = (id) => setTags([id]);
@@ -996,7 +1231,19 @@ function setTagMode(mode) {
   refilter();
 }
 
-window.addEventListener("popstate", () => applyUrlFilters(filtersFromUrl()));
+// Back/Forward: the filters, the view and the open event all come from the address.
+window.addEventListener("popstate", () => {
+  const params = new URLSearchParams(window.location.search);
+  if (filterKey(params) !== appliedFilterKey) applyUrlFilters(filtersFromUrl());
+  const view = parseView(params.get("view"));
+  if (view) map.setView([view.lat, view.lng], view.zoom);
+  const id = Number(params.get("event")) || null;
+  if (id === null) {
+    if (state.openId !== null || !sidebar.hidden) closeSidebar({ record: false });
+  } else if (id !== state.openId) {
+    showEvent(id, { record: false, fly: !view });
+  }
+});
 
 /** A tag as a button: click shows only that tag, Ctrl/Shift-click adds it to the selection. */
 function tagButton(tag) {
@@ -1119,11 +1366,13 @@ function timelineRange() {
     .filter((tag) => tag && tag.start_year !== null && tag.start_year !== undefined);
   if (!tags.length) return null;
   const now = new Date().getFullYear();
-  return {
-    from: Math.max(Math.min(...tags.map((t) => t.start_year)), state.yearFrom),
-    to: Math.min(Math.max(...tags.map((t) => t.end_year ?? now)), state.yearTo),
-    label: tagNames(),
-  };
+  let from = Infinity;
+  let to = -Infinity;
+  tags.forEach((t) => {
+    from = Math.min(from, t.start_year);
+    to = Math.max(to, t.end_year ?? now);
+  });
+  return { from: Math.max(from, state.yearFrom), to: Math.min(to, state.yearTo), label: tagNames() };
 }
 
 /**
@@ -1146,36 +1395,20 @@ function applyFilters({ added = null } = {}) {
   const colorRange = [state.colorFrom, state.colorTo];
   updateColorRange();
   const sameColors = !state.colorByYear || (colorRange[0] === state.colorFrom && colorRange[1] === state.colorTo);
-  if (added && !state.heatmap && sameColors) {
+  if (clustersBusy()) {
+    // A batch of markers is still going in: rebuild once it reports done, from the newest filters.
+    rebuildQueued = true;
+  } else if (added && !state.heatmap && sameColors) {
     const markers = added.filter(matches).map((e) => {
       const marker = state.markersById.get(e.id);
       marker.setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
       return marker;
     });
-    clusters.addLayers(markers);
-    placeRing(); // the selected event may have arrived in this batch
-    finishRender();
-    return;
-  }
-
-  dropStandalone(); // it goes back into the clusters below (unless the heatmap is on)
-  clusters.clearLayers();
-  if (heatLayer) {
-    map.removeLayer(heatLayer);
-    heatLayer = null;
-  }
-  if (state.heatmap) {
-    heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10 });
-    heatLayer.addTo(map);
+    addToClusters(markers);
+    placeRing(); // the selected event may have arrived in this batch (placed when the batch is done)
   } else {
-    // Markers off the map only store their new icon, so this is cheap.
-    state.filtered.forEach((e) => {
-      state.markersById.get(e.id).setIcon(state.colorByYear ? yearIcon(e.year) : markerIcon(e.category));
-    });
-    clustersLoading = true; // until chunkProgress says all markers are in
-    clusters.addLayers(state.filtered.map((e) => state.markersById.get(e.id)));
+    rebuildMarkers();
   }
-  placeRing();
   finishRender();
 }
 
@@ -1196,8 +1429,10 @@ function finishRender() {
   if (state.loading) count += " (still loading…)";
   document.getElementById("result-count").textContent = count;
   updateFilterSummary();
+  updateCollectionFromSearch();
   renderList();
   renderSearchResults();
+  if (isNearOpen()) renderNear();
 }
 
 const LIST_PAGE = 60;
@@ -1216,7 +1451,7 @@ function listEvents() {
   if (sortedCache.source !== state.filtered || sortedCache.order !== listSort) {
     const sign = listSort === "newest" ? -1 : 1;
     const events = state.filtered.slice().sort((a, b) =>
-      sign * (a.year - b.year) || a.title.localeCompare(b.title));
+      sign * (a.year - b.year) || sign * ((a.md || 9999) - (b.md || 9999)) || a.title.localeCompare(b.title));
     sortedCache = { source: state.filtered, order: listSort, events };
   }
   return sortedCache.events;
@@ -1241,6 +1476,7 @@ function setupListSort() {
 }
 
 function renderList() {
+  if (EMBED) return; // the list below the map is not part of the embedded map
   const grid = document.getElementById("events-grid");
   const template = document.getElementById("event-card-template");
 
@@ -1302,6 +1538,17 @@ function parseYearText(text) {
   return year || null; // there is no year 0
 }
 
+/** [min, max] of a list of years (a loop: Math.min(...years) overflows the stack on very long lists). */
+function yearExtent(years) {
+  let min = Infinity;
+  let max = -Infinity;
+  years.forEach((y) => {
+    if (y < min) min = y;
+    if (y > max) max = y;
+  });
+  return [min, max];
+}
+
 /** Slider range; over long spans modern centuries get more room (most events are recent). */
 function sliderRange(min, max) {
   if (min === max) { min -= 1; max += 1; } // noUiSlider needs a non-empty range
@@ -1320,6 +1567,7 @@ function matchesIgnoringYears(event) {
   return searchScore(event) > 0;
 }
 
+let refilterSoon = () => {}; // refilter after the slider has settled (set by setupYearSlider)
 let yearScopeKey = "";
 let yearsNarrowed = false;
 let yearsTouched = false; // the years were changed by hand (not by a link or a tag)
@@ -1369,8 +1617,7 @@ function rescaleYears() {
   let min = state.allYears.min;
   let max = state.allYears.max;
   if (years.length) {
-    min = Math.min(...years);
-    max = Math.max(...years);
+    [min, max] = yearExtent(years);
     const what = [hasTags() ? tagNames() : null,
       search.terms.length ? `“${search.terms.join(" ")}”` : null].filter(Boolean).join(" + ");
     scope.textContent = `Slider fitted to ${what}: ${years.length.toLocaleString()} event${years.length === 1 ? "" : "s"}`;
@@ -1385,8 +1632,7 @@ function setupYearSlider(years) {
   const slider = document.getElementById("year-slider");
   const fromInput = document.getElementById("year-from");
   const toInput = document.getElementById("year-to");
-  const min = Math.min(...years);
-  const max = Math.max(...years);
+  const [min, max] = yearExtent(years);
   state.allYears = { min, max };
   const range = sliderRange(min, max);
 
@@ -1399,9 +1645,11 @@ function setupYearSlider(years) {
     handleAttributes: [{ "aria-label": "From year" }, { "aria-label": "To year" }],
   });
 
-  const update = debounce(refilter, 120);
+  refilterSoon = debounce(refilter, 120);
+  const update = refilterSoon;
   slider.noUiSlider.on("start", () => { yearsTouched = true; });
   slider.noUiSlider.on("update", ([from, to]) => {
+    if (!lapseSetting) stopLapse(); // any change but the time-lapse's own stops it
     if (document.activeElement !== fromInput) fromInput.value = formatYear(from);
     if (document.activeElement !== toInput) toInput.value = formatYear(to);
     state.yearFrom = from;
@@ -1587,13 +1835,12 @@ function highlighted(text) {
     box.append(text);
     return box;
   }
-  const source = shown.map((p) => `(?:${p.source})`).join("|");
-  const re = new RegExp(source, "giu");
+  const ranges = shown.flatMap((p) => matchRanges(p, text)).sort((a, b) => a[0] - b[0] || b[1] - a[1]);
   let last = 0;
-  for (const m of text.matchAll(re)) {
-    if (!m[0]) continue;
-    box.append(text.slice(last, m.index), el("mark", null, m[0]));
-    last = m.index + m[0].length;
+  for (const [start, end] of ranges) {
+    if (start < last) continue; // inside an earlier highlight
+    box.append(text.slice(last, start), el("mark", null, text.slice(start, end)));
+    last = end;
   }
   box.append(text.slice(last));
   return box;
@@ -1601,7 +1848,8 @@ function highlighted(text) {
 
 function sortedResults() {
   const results = state.filtered.slice();
-  const byYear = (a, b) => a.year - b.year || a.title.localeCompare(b.title);
+  // Year, then the date within the year (events without a day last), then title.
+  const byYear = (a, b) => a.year - b.year || (a.md || 9999) - (b.md || 9999) || a.title.localeCompare(b.title);
   if (search.sort === "oldest") results.sort(byYear);
   else if (search.sort === "newest") results.sort((a, b) => -byYear(a, b));
   else if (search.sort === "title") results.sort((a, b) => a.title.localeCompare(b.title));
@@ -1739,8 +1987,10 @@ function setupSearch() {
   });
   // "/" or Ctrl+K opens the large search from anywhere except a text field.
   document.addEventListener("keydown", (e) => {
-    const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
-    if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
+    // e.key can be undefined (e.g. for the browser's autofill events).
+    const key = typeof e.key === "string" ? e.key.toLowerCase() : "";
+    const typing = /^(input|textarea|select)$/i.test(e.target?.tagName || "") || e.target?.isContentEditable;
+    if ((key === "/" && !typing) || (key === "k" && (e.ctrlKey || e.metaKey))) {
       e.preventDefault();
       openSearchPanel();
     }
@@ -1749,13 +1999,19 @@ function setupSearch() {
 
 function setupHeatmapToggle() {
   const button = document.getElementById("heatmap-toggle");
-  button.addEventListener("click", () => {
-    state.heatmap = !state.heatmap;
+  const render = () => {
     button.classList.toggle("active", state.heatmap);
     button.setAttribute("aria-pressed", String(state.heatmap));
     button.querySelector("span").textContent = state.heatmap ? "Heatmap on" : "Heatmap";
+  };
+  state.heatmap = urlParams.get("heat") === "1"; // from a shared link
+  render();
+  button.addEventListener("click", () => {
+    state.heatmap = !state.heatmap;
+    render();
     if (!state.heatmap) map.getContainer().classList.remove("heat-clickable");
     applyFilters();
+    syncView();
   });
 }
 
@@ -1771,6 +2027,7 @@ function setupColorToggle() {
   try {
     state.colorByYear = localStorage.getItem(COLOR_PREF) === "1";
   } catch { /* storage blocked: start with the setting off */ }
+  if (urlParams.has("color")) state.colorByYear = urlParams.get("color") === "1"; // a shared link says
   render();
   button.addEventListener("click", () => {
     state.colorByYear = !state.colorByYear;
@@ -1779,6 +2036,7 @@ function setupColorToggle() {
     } catch { /* not remembered, still works */ }
     render();
     applyFilters();
+    syncView();
     if (state.openId !== null && !sidebar.hidden) showEvent(state.openId, { fly: false });
   });
 }
@@ -1794,6 +2052,410 @@ function setupFilterPanelToggle() {
       setTimeout(() => map.invalidateSize(), 310);
     });
   });
+}
+
+// ----------------------------------------------------------- shareable view
+// The address always says where the map is: ?view=zoom/lat/lng&base=terrain&heat=1&color=1
+// next to the filters, so a copied address (or the "Copy link" button) opens the same map.
+
+// A visitor who has touched the map is not moved again when a late chunk or a link would.
+let mapTouched = false;
+["wheel", "pointerdown", "keydown"].forEach((type) => {
+  map.getContainer().addEventListener(type, () => { mapTouched = true; }, { passive: true });
+});
+
+/** The style of the base map now showing: the switcher puts "basemap-<id>" on the map element. */
+function currentBase() {
+  const name = [...map.getContainer().classList].find((c) => c.startsWith("basemap-"));
+  return name ? name.slice("basemap-".length) : null;
+}
+
+function writeViewParams(url) {
+  const centre = map.getCenter().wrap();
+  url.searchParams.set("view", `${+map.getZoom().toFixed(2)}/${centre.lat.toFixed(3)}/${centre.lng.toFixed(3)}`);
+  const base = currentBase();
+  if (base) url.searchParams.set("base", base);
+  if (state.heatmap) url.searchParams.set("heat", "1"); else url.searchParams.delete("heat");
+  url.searchParams.set("color", state.colorByYear ? "1" : "0");
+}
+
+const syncView = debounce(() => {
+  const url = new URL(window.location);
+  writeViewParams(url);
+  if (url.href !== window.location.href) history.replaceState(null, "", url);
+}, 400);
+
+map.on("moveend", syncView);
+let lastBase = currentBase();
+new MutationObserver(() => {
+  const base = currentBase();
+  if (base === lastBase) return;
+  lastBase = base;
+  syncView();
+}).observe(map.getContainer(), { attributes: true, attributeFilter: ["class"] });
+
+function setupCopyView() {
+  const button = document.getElementById("copy-view");
+  if (!button) return;
+  const label = button.querySelector("span");
+  const original = label.textContent;
+  button.addEventListener("click", async () => {
+    const url = new URL(window.location);
+    writeViewParams(url);
+    try {
+      await navigator.clipboard.writeText(url.href);
+    } catch {
+      window.prompt("Copy this link to the view:", url.href); // no clipboard access: let them copy it
+      return;
+    }
+    label.textContent = "Link copied";
+    setTimeout(() => { label.textContent = original; }, 1600);
+  });
+}
+
+// ---------------------------------------------------------- embed this map
+// "Embed this map": the <iframe> HTML for /embed with this view's address. The element is
+// built with DOM calls and serialised, so nothing is ever parsed as HTML.
+
+function embedUrl() {
+  const url = new URL(window.location);
+  writeViewParams(url);
+  return `${url.origin}/embed${url.search}`;
+}
+
+function embedSnippet() {
+  const frame = document.createElement("iframe");
+  frame.src = embedUrl();
+  frame.width = "100%";
+  frame.height = "520";
+  frame.style.border = "0";
+  frame.loading = "lazy";
+  frame.title = "History As A Map";
+  frame.setAttribute("allowfullscreen", "");
+  return frame.outerHTML;
+}
+
+function setupEmbed() {
+  const button = document.getElementById("embed-view");
+  if (!button) return;
+  const box = document.getElementById("embed-box");
+  const code = document.getElementById("embed-code");
+  const copy = document.getElementById("embed-copy");
+  const refresh = () => { code.value = embedSnippet(); };
+  button.addEventListener("click", () => {
+    box.hidden = !box.hidden;
+    button.setAttribute("aria-expanded", String(!box.hidden));
+    if (box.hidden) return;
+    refresh();
+    code.focus();
+    code.select();
+  });
+  map.on("moveend", () => { if (!box.hidden) refresh(); });
+  const label = copy.querySelector("span");
+  copy.addEventListener("click", async () => {
+    refresh(); // the view may have changed since it was opened
+    try {
+      await navigator.clipboard.writeText(code.value);
+    } catch {
+      code.select(); // no clipboard access: leave it selected for Ctrl+C
+      label.textContent = "Press Ctrl+C";
+      setTimeout(() => { label.textContent = "Copy"; }, 1600);
+      return;
+    }
+    label.textContent = "Copied";
+    setTimeout(() => { label.textContent = "Copy"; }, 1600);
+  });
+}
+
+/** In the embedded map the "History As A Map" link opens the full site with the view as it is now. */
+function setupEmbedBrand() {
+  const brand = document.getElementById("embed-brand");
+  if (!brand) return;
+  const refresh = () => { brand.href = `/${window.location.search}`; };
+  ["pointerenter", "focus", "click", "auxclick", "contextmenu"].forEach((type) => brand.addEventListener(type, refresh));
+}
+
+// ------------------------------------------------------ collection from a search
+// "New collection from these N events" (filter panel and big search): sends the shown
+// events' ids to /collections/from-search, which shows the form for the new collection.
+
+const COLLECTION_FROM_MAX = 500; // what a collection holds (haam/collections_service.py MAX_ENTRIES)
+const FROM_SEARCH_URL = MAP_ELEMENT.dataset.fromSearchUrl;
+
+function suggestedCollectionTitle() {
+  const parts = [];
+  const tags = tagNames();
+  if (tags) parts.push(tags);
+  if (state.queryText) parts.push(`“${state.queryText}”`);
+  if (state.category !== "all") parts.push(CATEGORY_LABELS[state.category]);
+  let title = parts.join(" – ");
+  if (!title && Number.isFinite(state.yearFrom) && Number.isFinite(state.yearTo)) {
+    title = `Events ${formatYear(state.yearFrom)} to ${formatYear(state.yearTo)}`;
+  }
+  return (title || "Events from my search").slice(0, 200);
+}
+
+function updateCollectionFromSearch() {
+  if (!FROM_SEARCH_URL) return;
+  const count = state.filtered.length;
+  const incomplete = state.loading || (state.textsLoading && search.terms.length > 0 && search.in === "all");
+  let hint = "";
+  if (incomplete) hint = "Still loading events…";
+  else if (!activeFilterCount()) hint = "Search or choose a filter first.";
+  else if (count === 0) hint = "No events match.";
+  else if (count > COLLECTION_FROM_MAX) hint = `Narrow it to ${COLLECTION_FROM_MAX} events or fewer (now ${count.toLocaleString()}).`;
+  const text = `New collection from ${count === 1 ? "this" : "these"} ${count.toLocaleString()} event${count === 1 ? "" : "s"}`;
+  document.querySelectorAll("[data-collection-from-search]").forEach((button) => {
+    button.disabled = hint !== "";
+    button.querySelector("span").textContent = text;
+  });
+  document.querySelectorAll("[data-collection-from-search-hint]").forEach((node) => { node.textContent = hint; });
+}
+
+function startCollectionFromShown() {
+  if (state.filtered.length < 1 || state.filtered.length > COLLECTION_FROM_MAX) return;
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = FROM_SEARCH_URL;
+  const field = (name, value) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.append(input);
+  };
+  field("ids", state.filtered.map((event) => event.id).join(","));
+  field("title", suggestedCollectionTitle());
+  document.body.append(form);
+  form.submit();
+}
+
+function setupCollectionFromSearch() {
+  if (!FROM_SEARCH_URL) return;
+  document.querySelectorAll("[data-collection-from-search]").forEach((button) => {
+    button.addEventListener("click", startCollectionFromShown);
+  });
+  updateCollectionFromSearch();
+}
+
+// ------------------------------------------------------------- near here
+// A card in the place of the welcome card: the loaded events within 50 km of the map
+// centre (or of the visitor's location), nearest first. Browser only, no server call;
+// the filters apply. Only on the main map (the markup is not on collection maps).
+
+const nearCard = document.getElementById("near");
+const nearButton = document.getElementById("near-open");
+const NEAR_KM = 50;
+const NEAR_MAX = 30;
+let nearOrigin = null; // {lat, lng} from "Use my location"; null = the map centre
+let nearReturnFocus = null;
+
+const isNearOpen = () => Boolean(nearCard) && !nearCard.hidden;
+
+/** Great-circle distance in km. */
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function formatDistance(km) {
+  if (km < 0.05) return "here";
+  if (km < 1) return `${Math.round(km * 100) * 10} m`;
+  return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+}
+
+/** The shown events within NEAR_KM of a point, nearest first. */
+function nearbyEvents(lat, lng) {
+  const dLat = NEAR_KM / 111;
+  const cos = Math.cos((lat * Math.PI) / 180);
+  const dLng = cos > 0.01 ? NEAR_KM / (111 * cos) : 360; // near a pole every longitude is close
+  const found = [];
+  state.filtered.forEach((event) => {
+    if (Math.abs(event.lat - lat) > dLat) return; // a cheap box test before the trigonometry
+    let across = Math.abs(event.lon - lng);
+    if (across > 180) across = 360 - across;
+    if (across > dLng) return;
+    const km = distanceKm(lat, lng, event.lat, event.lon);
+    if (km <= NEAR_KM) found.push({ event, km });
+  });
+  return found.sort((a, b) => a.km - b.km);
+}
+
+function renderNear() {
+  const centre = nearOrigin || map.getCenter().wrap();
+  document.getElementById("near-intro").textContent =
+    `Events within ${NEAR_KM} km of ${nearOrigin ? "your location" : "the centre of the map"}, nearest first.`;
+  document.getElementById("near-locate").hidden = !navigator.geolocation;
+  document.getElementById("near-centre").hidden = !nearOrigin;
+
+  const found = nearbyEvents(centre.lat, centre.lng);
+  const filtered = state.filtered.length < state.events.length;
+  const more = state.loading ? " More events are still loading." : "";
+  const status = document.getElementById("near-status");
+  if (!found.length) {
+    status.textContent = `No loaded event within ${NEAR_KM} km${filtered ? " that matches the filters" : ""}.${more}`;
+  } else {
+    const count = `${found.length.toLocaleString()} event${found.length === 1 ? "" : "s"} within ${NEAR_KM} km`;
+    status.textContent = `${count}${found.length > NEAR_MAX ? `; the nearest ${NEAR_MAX}` : ""}${filtered ? ", with the filters applied" : ""}.${more}`;
+  }
+  document.getElementById("near-list").replaceChildren(...found.slice(0, NEAR_MAX).map(({ event, km }) => {
+    const item = el("li");
+    const button = el("button", "welcome-event");
+    button.type = "button";
+    button.title = event.excerpt || event.title;
+    button.append(
+      el("span", "welcome-event-year", event.display_year),
+      el("span", `dot dot-${event.category}`),
+      el("span", "welcome-event-title", event.title),
+      el("span", "near-distance", formatDistance(km)),
+    );
+    button.addEventListener("click", () => {
+      closeNear({ restoreFocus: false });
+      document.dispatchEvent(new CustomEvent("haam:show-event", { detail: { id: event.id } }));
+    });
+    item.append(button);
+    return item;
+  }));
+}
+
+function openNear() {
+  nearReturnFocus = document.activeElement;
+  nearCard.hidden = false;
+  nearButton.setAttribute("aria-expanded", "true");
+  document.body.classList.add("near-shown");
+  nearCard.focus({ preventScroll: true });
+  renderNear();
+}
+
+function closeNear({ restoreFocus = true } = {}) {
+  if (!isNearOpen()) return;
+  const hadFocus = nearCard.contains(document.activeElement);
+  nearCard.hidden = true;
+  nearButton.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("near-shown");
+  if (restoreFocus && hadFocus) {
+    const target = nearReturnFocus && nearReturnFocus !== document.body && document.contains(nearReturnFocus)
+      && !nearReturnFocus.closest("[hidden]") ? nearReturnFocus : nearButton;
+    target.focus({ preventScroll: true });
+  }
+  nearReturnFocus = null;
+}
+
+function useMyLocation() {
+  const status = document.getElementById("near-status");
+  if (!navigator.geolocation) {
+    status.textContent = "This browser cannot tell where you are.";
+    return;
+  }
+  status.textContent = "Finding your location…";
+  navigator.geolocation.getCurrentPosition((position) => {
+    nearOrigin = { lat: position.coords.latitude, lng: position.coords.longitude };
+    map.flyTo([nearOrigin.lat, nearOrigin.lng], Math.max(map.getZoom(), 8), { duration: 0.8 });
+    renderNear();
+  }, (error) => {
+    status.textContent = error.code === 1
+      ? "Location access was refused. Allow it in the browser to use your location, or move the map instead."
+      : "Could not find your location.";
+  }, { timeout: 10000, maximumAge: 300000 });
+}
+
+function setupNear() {
+  if (!nearCard || !nearButton) return; // collection maps have no "Near here"
+  nearButton.addEventListener("click", () => (isNearOpen() ? closeNear() : openNear()));
+  document.getElementById("near-close").addEventListener("click", () => closeNear());
+  document.getElementById("near-locate").addEventListener("click", useMyLocation);
+  document.getElementById("near-centre").addEventListener("click", () => {
+    nearOrigin = null;
+    renderNear();
+  });
+  // Following the map centre while the card is open.
+  map.on("moveend", debounce(() => { if (isNearOpen() && !nearOrigin) renderNear(); }, 250));
+  // The card, the welcome card and the event details share one place: whichever opens last wins.
+  new MutationObserver(() => {
+    const body = document.body.classList;
+    if (isNearOpen() && (body.contains("sidebar-open") || body.contains("welcome-shown"))) closeNear({ restoreFocus: false });
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+}
+
+// ------------------------------------------------------------- time-lapse
+// A window of years (10, or 1/50 of the range if that is smaller) steps forward through
+// the slider's range on a timer and stops at the end. Any other change of the slider
+// stops it. A step waits while the markers of the previous one are still going in (see
+// clustersBusy), so the map never mixes two windows.
+
+const LAPSE_TICK = 600; // ms between steps
+const LAPSE_WIDTH = 10; // years in the window
+const lapseButton = document.getElementById("timelapse");
+let lapse = null; // {from, to, width, next, last}: the range being traversed and where it is
+let lapseTimer = null;
+let lapseSetting = false; // the time-lapse itself is moving the slider
+
+function setLapseButton() {
+  if (!lapseButton) return;
+  const running = lapseTimer !== null;
+  lapseButton.classList.toggle("active", running);
+  lapseButton.setAttribute("aria-pressed", String(running));
+  const label = running ? "Pause the time-lapse" : "Play the time-lapse";
+  lapseButton.setAttribute("aria-label", label);
+  lapseButton.title = running ? label : "Time-lapse: step a window of years through the slider's range";
+  const icon = lapseButton.querySelector("i");
+  icon.classList.toggle("fa-play", !running);
+  icon.classList.toggle("fa-pause", running);
+}
+
+function stopLapse() {
+  if (lapseTimer === null) return;
+  clearInterval(lapseTimer);
+  lapseTimer = null;
+  if (state.colorLock) {
+    state.colorLock = null;
+    refilterSoon();
+  }
+  setLapseButton();
+}
+
+function lapseStep() {
+  if (clustersBusy() || rebuildQueued) return; // the last window is not all on the map yet
+  const slider = document.getElementById("year-slider").noUiSlider;
+  const start = lapse.next;
+  const end = Math.min(lapse.to, start + lapse.width - 1);
+  lapseSetting = true;
+  try {
+    slider.set([start, end]);
+  } finally {
+    lapseSetting = false;
+  }
+  lapse.last = [start, end];
+  lapse.next = end + 1;
+  if (end >= lapse.to) stopLapse();
+}
+
+function startLapse() {
+  const slider = document.getElementById("year-slider")?.noUiSlider;
+  if (!slider) return;
+  const [from, to] = slider.get().map(Number);
+  const resuming = lapse && lapse.last && lapse.last[0] === from && lapse.last[1] === to;
+  if (resuming) {
+    if (lapse.next > lapse.to) lapse.next = lapse.from; // it had reached the end: from the start again
+  } else {
+    // A new run covers the years the slider spans now.
+    lapse = { from, to, width: Math.max(1, Math.min(LAPSE_WIDTH, Math.round((to - from) / 50))), next: from, last: null };
+  }
+  // One colour scale for the whole run, so the colours do not change from step to step.
+  const [lo, hi] = yearExtent(state.events
+    .filter((e) => e.year >= lapse.from && e.year <= lapse.to && matchesIgnoringYears(e)).map((e) => e.year));
+  state.colorLock = lo <= hi ? [lo, hi] : null;
+  lapseTimer = setInterval(lapseStep, LAPSE_TICK);
+  setLapseButton();
+  lapseStep();
+}
+
+function setupTimelapse() {
+  if (!lapseButton) return;
+  lapseButton.addEventListener("click", () => (lapseTimer === null ? startLapse() : stopLapse()));
 }
 
 // -------------------------------------------------------------------- start
@@ -1848,6 +2510,7 @@ function start(tags, years) {
     setupYearSlider(years);
   } else {
     document.getElementById("year-slider").replaceChildren(el("p", "form-hint", "No events yet."));
+    if (lapseButton) lapseButton.hidden = true;
   }
   // Filters from the page address (?tag=…&q=…&from=…), e.g. a shared link.
   applyUrlFilters(filtersFromUrl());
@@ -1899,6 +2562,13 @@ async function loadChunked(manifest) {
   finishRender(); // the count without "still loading"
   performance.mark("haam:all-markers");
 
+  // A shared link with tags or a search: fly to where its events are now that all are here
+  // (unless the link has its own view or event, or the visitor has already moved the map).
+  if (!requestedId && !linkedView && !mapTouched && state.openId === null) {
+    if (urlParams.has("tag") && hasTags()) zoomToTags();
+    else if (urlParams.has("q")) zoomToSearchResults();
+  }
+
   // The short descriptions: popups, the list and searching in descriptions.
   showProgress(state.events.length, manifest.total, "Loading descriptions…");
   const texts = await Promise.allSettled(manifest.text.map((url) => getJsonRetry(url).then((chunk) => {
@@ -1941,7 +2611,7 @@ async function loadSingle() {
   addEvents(events);
   state.total = events.length;
   const years = events.map((e) => e.year);
-  start(tags, years.length ? [Math.min(...years), Math.max(...years)] : []);
+  start(tags, years.length ? yearExtent(years) : []);
 }
 
 async function init() {
@@ -1952,6 +2622,12 @@ async function init() {
   setupColorToggle();
   setupListSort();
   setupFilterPanelToggle();
+  setupCopyView();
+  setupEmbed();
+  setupEmbedBrand();
+  setupCollectionFromSearch();
+  setupNear();
+  setupTimelapse();
 
   const manifest = MAP_ELEMENT.dataset.manifest ? JSON.parse(MAP_ELEMENT.dataset.manifest) : null;
   if (manifest) await loadChunked(manifest); else await loadSingle();

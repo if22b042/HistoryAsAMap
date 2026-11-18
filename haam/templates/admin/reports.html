@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Reports · Review{% endblock %}
+
+{% macro action(report, name, label, icon, style) %}
+  <form method="post" action="{{ url_for('admin.moderate_report', report_id=report.id, action=name) }}"
+        {% if name == 'apply' %}data-confirm="Write the proposed values to “{{ report.event.title }}”?"{% endif %}>
+    {{ action_form.csrf_token }}
+    <button class="btn btn-small {{ style }}" type="submit"><i class="fas fa-{{ icon }}" aria-hidden="true"></i> {{ label }}</button>
+  </form>
+{% endmacro %}
+
+{% macro row(label, current, proposed) %}
+  <tr>
+    <th scope="row">{{ label }}</th>
+    <td>{{ current }}</td>
+    <td>{% if proposed is not none %}<strong>{{ proposed }}</strong>{% else %}<span class="form-hint">no change</span>{% endif %}</td>
+  </tr>
+{% endmacro %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header">
+    <h1>Reports</h1>
+    <p><a href="{{ url_for('admin.review') }}">← Events</a> · <a href="{{ url_for('admin.collections') }}">Review collections</a> · Open reports, oldest first.</p>
+  </header>
+
+  {% if not reports %}<p class="empty-state">No open reports.</p>{% endif %}
+
+  <div class="review-list">
+    {% for report in reports %}
+      {% set event = report.event %}
+      <article class="card review-card">
+        <header>
+          <span class="year-pill">{{ event.display_year }}</span>
+          <h2><a href="{{ event_path(event) }}" target="_blank" rel="noopener">{{ event.title }}</a></h2>
+        </header>
+        <p class="review-meta">reported {{ report.created_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+        <p>“{{ report.message }}”</p>
+        {% if report.has_proposal %}
+          <table class="report-compare">
+            <thead><tr><th></th><th scope="col">Now</th><th scope="col">Proposed</th></tr></thead>
+            <tbody>
+              {{ row('Year', event.display_year, report.proposed_year|year if report.proposed_year is not none else none) }}
+              {{ row('Date', event.date_label or '–', report.proposed_date_label) }}
+              {{ row('Place', '%.4f, %.4f'|format(event.lat, event.lon),
+                     '%.4f, %.4f'|format(report.proposed_lat, report.proposed_lon) if report.proposed_lat is not none and report.proposed_lon is not none else none) }}
+            </tbody>
+          </table>
+        {% endif %}
+        <div class="button-row">
+          {% if report.has_proposal %}{{ action(report, 'apply', 'Apply', 'check', 'btn-success') }}{% endif %}
+          {{ action(report, 'dismiss', 'Dismiss', 'ban', 'btn-secondary') }}
+          <a class="btn btn-small btn-secondary" href="{{ url_for('admin.edit', event_id=event.id) }}"><i class="fas fa-edit" aria-hidden="true"></i> Edit event</a>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
+{% endblock %}

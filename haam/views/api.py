@@ -31,15 +31,6 @@ def health():
     return jsonify(status="ok")
 
 
-@bp.get("/events")
-def list_events():
-    """All approved events as objects in one response (the map uses the chunks below)."""
-    response = jsonify([event.to_list_dict() for event in events.approved_events()])
-    response.cache_control.public = True
-    response.cache_control.max_age = 60
-    return response
-
-
 # ------------------------------------------------- the map's chunked data (haam.feed)
 
 YEAR = 365 * 24 * 3600
@@ -98,10 +89,11 @@ def feed_tags(version: str):
 
 @bp.get("/events/<int:event_id>")
 def get_event(event_id: int):
-    event = events.get_event_or_none(event_id)
-    if event is None or event.status != Status.APPROVED:
+    """One event by its public id (the Wikipedia page id; see haam.events.public_id)."""
+    event = events.find_approved(event_id)
+    if event is None:
         abort(404)
-    return jsonify(event.to_dict())
+    return jsonify({**event.to_dict(), "id": events.public_id(event)})
 
 
 @bp.get("/tags")

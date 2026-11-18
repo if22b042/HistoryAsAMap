@@ -285,11 +285,13 @@ export function createTimeline({ map, onSelect, limit = 150, colorFor = () => nu
     }).sort((a, b) => pos.get(a.id) - pos.get(b.id));
     const widthOf = (item) => 22 + Math.min(item.title.length, LABEL_CHARS) * 6.6;
     const lanes = assignLanes(shown, at, widthOf, width);
-    const rows = Math.max(1, ...lanes.filter(Boolean).map((l) => l.lane + 1));
+    let rows = 1;
+    lanes.forEach((l) => { if (l && l.lane + 1 > rows) rows = l.lane + 1; });
     const dotItems = shown.filter((_, i) => lanes[i] === null);
     const dotRows = new Map(assignDotRows(dotItems.map(at)).map((row, i) => [dotItems[i].id, row]));
     const dots = dotItems.length;
-    const usedDotRows = dots ? Math.max(...dotRows.values()) + 1 : 0;
+    let usedDotRows = 0;
+    dotRows.forEach((row) => { if (row + 1 > usedDotRows) usedDotRows = row + 1; });
     const dotTop = rows * LANE_HEIGHT + 2;
 
     const nodes = [];
@@ -367,10 +369,15 @@ export function createTimeline({ map, onSelect, limit = 150, colorFor = () => nu
      */
     update(next, range = null) {
       items = next;
-      const years = items.map((item) => item.year);
-      let from = Math.min(...years, range ? range.from : Infinity);
+      // Loops, not Math.min(...years): a spread of a very long list overflows the call stack.
+      let from = range ? range.from : Infinity;
+      let to = range ? range.to : -Infinity;
+      items.forEach((item) => {
+        if (item.year < from) from = item.year;
+        if (item.year > to) to = item.year;
+      });
       // The axis runs to the end of the last year (events sit inside their year).
-      let to = Math.max(...years, range ? range.to : -Infinity) + 1;
+      to += 1;
       if (!Number.isFinite(from)) {
         from = 0;
         to = 1;
