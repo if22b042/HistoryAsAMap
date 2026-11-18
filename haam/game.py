@@ -42,7 +42,7 @@ from haam.models import (
 )
 
 EVENTS_PER_DAY = 5
-MAX_POINTS = 1000
+MAX_POINTS = 5000
 # A daily game never reuses an event of the last RECENT_DAYS days (if enough others exist).
 RECENT_DAYS = 180
 # Share of a round's points a hint costs.
@@ -71,7 +71,7 @@ HIDDEN = "____"
 # between the place and the year. The year points follow a piecewise-linear curve
 # through these anchors (years off → share of the year points): exact = all,
 # 50 years off = 1/2, 100 = 1/3, 200 = 1/5, then down to nothing at 500 years.
-HARD_LOCATION_POINTS = 500
+HARD_LOCATION_POINTS = 2500
 HARD_YEAR_POINTS = MAX_POINTS - HARD_LOCATION_POINTS
 YEAR_CURVE = ((0, 1.0), (50, 1 / 2), (100, 1 / 3), (200, 1 / 5), (500, 0.0))
 MIN_YEAR_GUESS, MAX_YEAR_GUESS = -10000, 2100
