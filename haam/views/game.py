@@ -96,6 +96,15 @@ def _json_body() -> dict:
     return data
 
 
+def _hint_level(value) -> int:
+    """0 = no hint, 1 = the description, 2 = the country too (true/false from older pages = 1/0)."""
+    if isinstance(value, bool):
+        return int(value)
+    if not isinstance(value, int) or not 0 <= value < len(game.HINT_PENALTIES):
+        abort(400)
+    return value
+
+
 def _score(data: dict, events: list):
     """Score the guess in ``data`` against ``events[data["index"]]`` and reveal it."""
     index = data.get("index")
@@ -104,8 +113,8 @@ def _score(data: dict, events: list):
     lat = _number(data, "lat", -90, 90)
     lon = game.normalize_lon(_number(data, "lon", -1e6, 1e6))
     hard = data.get("hard", False)
-    hint = data.get("hint", False)
-    if not isinstance(hard, bool) or not isinstance(hint, bool):
+    level = _hint_level(data.get("hint", 0))
+    if not isinstance(hard, bool):
         abort(400)
     year = None
     if hard:
@@ -119,12 +128,14 @@ def _score(data: dict, events: list):
     km = game.haversine_km(lat, lon, event.lat, event.lon)
     answer = game.answer_dict(event)
     answer["map_url"] = url_for("public.index", event=public_id(event))
-    # A hint costs HINT_PENALTY of the round's points (of both parts in hard mode).
-    keep = game.apply_hint if hint else (lambda points: points)
+    # The hints used cost a share of the round's points (of both parts in hard mode).
+    def keep(points: int) -> int:
+        return game.apply_hint(points, level)
+
     if not hard:
         full = game.score_distance(km)
         points = keep(full)
-        return jsonify(km=round(km, 1), points=points, hint=hint, hint_penalty=full - points, answer=answer)
+        return jsonify(km=round(km, 1), points=points, hint=level, hint_penalty=full - points, answer=answer)
     full_location = game.score_hard_location(km)
     full_year = game.score_year(year, event.year)
     location_points, year_points = keep(full_location), keep(full_year)
@@ -134,7 +145,7 @@ def _score(data: dict, events: list):
         location_points=location_points,
         year_points=year_points,
         year_error=game.year_error(year, event.year),
-        hint=hint,
+        hint=level,
         hint_penalty=full_location + full_year - location_points - year_points,
         answer=answer,
     )
@@ -256,7 +267,10 @@ def hint():
         abort(400)
     if not 0 <= index < len(events):
         abort(404)
-    response = jsonify(game.hint_dict(events[index]))
+    level = data.get("level", 1)
+    if isinstance(level, bool) or level not in (1, 2):
+        abort(400)
+    response = jsonify(game.hint_dict(events[index], level, hard=data.get("hard") is True))
     response.cache_control.no_store = True
     return response
 

@@ -7,7 +7,7 @@ from flask import Blueprint, abort, jsonify, request, url_for
 from haam import events, feed, welcome
 from haam import tag_tree as tag_trees
 from haam.extensions import db
-from haam.models import Category, Status, Tag
+from haam.models import Category, Tag
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 

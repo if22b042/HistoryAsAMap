@@ -111,8 +111,8 @@
       <div id="round-guess">
         <div class="game-hint-box" id="hint-box">
           <button class="btn btn-secondary btn-small" type="button" id="hint-btn"
-                  title="Reveal the country (or region) of this event. It costs 20% of this round's points.">
-            <i class="far fa-lightbulb" aria-hidden="true"></i> Hint <span class="game-hint-cost">(−20% of this round)</span></button>
+                  title="Reveal more of the description (costs 20% of this round's points); a second hint then gives the country (50% in total).">
+            <i class="far fa-lightbulb" aria-hidden="true"></i> <span id="hint-label">Hint: more of the description</span> <span class="game-hint-cost" id="hint-cost">(−20% of this round)</span></button>
           <p class="game-hint-text" id="hint-text" hidden aria-live="polite"></p>
         </div>
         <div class="game-year" id="round-year" hidden>

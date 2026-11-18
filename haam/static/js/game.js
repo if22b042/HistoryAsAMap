@@ -291,25 +291,48 @@ function renderProgress() {
   });
 }
 
-/** The optional hint of a round (country or region, bought for 20% of the round's points). */
+/** Hints bought for a round: {1: description, 2: country}. The second one costs 50% of the round in total. */
+const HINT_COSTS = { 1: "20%", 2: "50%" };
+
+function hintsOf(index) {
+  const stored = (record.hints && record.hints[index]) || {};
+  return stored.kind ? { [stored.level || 2]: stored } : stored; // an older save held one country hint
+}
+
+function hintLevel(index) {
+  const hints = hintsOf(index);
+  return hints[2] ? 2 : hints[1] ? 1 : 0;
+}
+
 function renderHint(index) {
-  const hint = record.hints && record.hints[index];
-  $("hint-btn").hidden = Boolean(hint);
-  $("hint-text").hidden = !hint;
-  if (hint) $("hint-text").textContent = `Hint: it happened in ${hint.text}.`;
+  const hints = hintsOf(index);
+  const level = hintLevel(index);
+  const box = $("hint-text");
+  box.replaceChildren();
+  if (hints[1]) {
+    const line = hints[1].kind === "region" ? `Hint: it happened in ${hints[1].text}.` : `Hint: ${hints[1].text}`;
+    box.append(el("span", "game-hint-line", line));
+  }
+  if (hints[2]) box.append(el("span", "game-hint-line", `Second hint: it happened in ${hints[2].text}.`));
+  box.hidden = !level;
+  const button = $("hint-btn");
+  button.hidden = level >= 2;
+  $("hint-label").textContent = level === 0 ? "Hint: more of the description" : "Second hint: the country";
+  $("hint-cost").textContent = `(−${HINT_COSTS[level + 1] || ""} of this round${level ? " in total" : ""})`;
 }
 
 async function requestHint() {
   if (!record || showingResult || record.guesses.length >= record.rounds.length) return;
   const index = record.guesses.length;
-  if (record.hints && record.hints[index]) return;
+  const level = hintLevel(index) + 1;
+  if (level > 2) return;
   const button = $("hint-btn");
   button.disabled = true;
   $("game-message").textContent = "";
   try {
     const body = PRACTICE
-      ? { index, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
-      : { index, date: puzzle.date, hard: HARD };
+      ? { index, level, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
+      : { index, level, date: puzzle.date, hard: HARD };
     const response = await fetch(ROOT.dataset.hintUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -317,7 +340,7 @@ async function requestHint() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const hint = await response.json();
-    record.hints = { ...(record.hints || {}), [index]: hint };
+    record.hints = { ...(record.hints || {}), [index]: { ...hintsOf(index), [level]: hint } };
     if (!PRACTICE) saveStore(store);
     renderHint(index);
   } catch (e) {
@@ -357,9 +380,11 @@ function renderRound() {
   $("result-distance").textContent = `Your pin was ${formatKm(guess.km)} away.`;
   $("result-hint").hidden = !guess.hint;
   if (guess.hint) {
+    const share = HINT_COSTS[guess.hint] || "20%";
+    const what = guess.hint === 2 ? "both hints" : "the hint";
     $("result-hint").textContent = guess.hintPenalty
-      ? `You used the hint: it cost ${formatPoints(guess.hintPenalty)} points (20%).`
-      : "You used the hint: it costs 20% of a round's points.";
+      ? `You used ${what}: it cost ${formatPoints(guess.hintPenalty)} points (${share}).`
+      : `You used ${what}: it costs ${share} of a round's points.`;
   }
   $("result-breakdown").hidden = !HARD;
   $("result-year").hidden = !HARD;
@@ -538,7 +563,8 @@ async function submitGuess() {
   $("game-message").textContent = "";
   try {
     const guessed = { index: record.guesses.length, lat: pin[0], lon: pin[1] };
-    if (record.hints && record.hints[guessed.index]) guessed.hint = true;
+    const used = hintLevel(guessed.index);
+    if (used) guessed.hint = used;
     if (HARD) Object.assign(guessed, { hard: true, year: yearGuess });
     const body = PRACTICE
       ? { ...guessed, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
@@ -552,7 +578,7 @@ async function submitGuess() {
     const result = await response.json();
     const guess = {
       lat: pin[0], lon: pin[1], km: result.km, points: result.points, answer: result.answer,
-      hint: Boolean(result.hint), hintPenalty: result.hint_penalty || 0,
+      hint: Number(result.hint) || 0, hintPenalty: result.hint_penalty || 0,
     };
     if (HARD) {
       Object.assign(guess, {
