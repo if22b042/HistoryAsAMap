@@ -59,9 +59,9 @@ MAX_PER_CATEGORY = 2
 ERAS = ((None, 500), (500, 1500), (1500, 1800), (1800, 1914), (1914, None))
 
 # Scoring: full points within FULL_KM, half points at HALF_KM, none from ZERO_KM.
-FULL_KM = 25
-HALF_KM = 500
-ZERO_KM = 3000
+FULL_KM = 50
+HALF_KM = 1000
+ZERO_KM = 6000
 EARTH_RADIUS_KM = 6371.0
 
 EXCERPT_MIN, EXCERPT_MAX = 160, 320

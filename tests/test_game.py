@@ -90,10 +90,11 @@ def test_haversine():
 def test_score_distance():
     assert game.score_distance(0) == game.MAX_POINTS
     assert game.score_distance(game.FULL_KM) == game.MAX_POINTS
-    assert game.score_distance(500) == pytest.approx(500, abs=15)
+    assert game.score_distance(game.HALF_KM) == pytest.approx(500, abs=15)
     assert game.score_distance(game.ZERO_KM) == 0
     assert game.score_distance(15000) == 0
-    scores = [game.score_distance(km) for km in range(0, 3200, 50)]
+    assert game.score_distance(500) > 650
+    scores = [game.score_distance(km) for km in range(0, 6200, 50)]
     assert scores == sorted(scores, reverse=True)
 
 
