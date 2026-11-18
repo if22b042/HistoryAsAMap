@@ -192,11 +192,11 @@ function updateConfirm() {
   $("guess-btn").disabled = !ready;
   $("guess-btn-map").hidden = !ready || showingResult;
   let hint;
-  if (!HARD) hint = pin ? "Click again to move your pin." : "Click the map to place your pin, then confirm.";
-  else if (!pin && yearGuess === null) hint = "Click the map to place your pin and pick a year.";
+  if (!HARD) hint = pin ? "Tap again to move your pin." : "Tap the map to place your pin, then confirm.";
+  else if (!pin && yearGuess === null) hint = "Tap the map to place your pin and pick a year.";
   else if (!pin) hint = "Now click the map to place your pin.";
   else if (yearGuess === null) hint = "Now pick a year: type it or use the slider.";
-  else hint = "Click again to move your pin, or change the year.";
+  else hint = "Tap again to move your pin, or change the year.";
   $("round-hint").textContent = hint;
 }
 
