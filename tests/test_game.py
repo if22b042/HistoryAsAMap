@@ -790,44 +790,80 @@ def _today_event(index, hard=False):
     return db.session.get(Event, game.daily_event_ids(game.today_utc(), hard=hard)[index])
 
 
-def test_hint_costs_a_fifth_of_the_points(client, events):
+def test_hints_cost_a_fifth_then_half_of_the_points(client, events):
     answer = _today_event(0)
     body = {"date": _today(), "index": 0, "lat": answer.lat, "lon": answer.lon}
     plain = client.post("/api/game/check", json=body).json
-    hinted = client.post("/api/game/check", json={**body, "hint": True}).json
-    assert plain["points"] == 5000 and plain["hint"] is False and plain["hint_penalty"] == 0
-    assert hinted["points"] == 4000 and hinted["hint"] is True and hinted["hint_penalty"] == 1000
+    first = client.post("/api/game/check", json={**body, "hint": 1}).json
+    second = client.post("/api/game/check", json={**body, "hint": 2}).json
+    assert plain["points"] == 5000 and plain["hint"] == 0 and plain["hint_penalty"] == 0
+    assert first["points"] == 4000 and first["hint"] == 1 and first["hint_penalty"] == 1000
+    assert second["points"] == 2500 and second["hint"] == 2 and second["hint_penalty"] == 2500
+    # An older page still sends true for its single hint.
+    assert client.post("/api/game/check", json={**body, "hint": True}).json["points"] == 4000
 
 
 def test_hint_in_hard_mode_scales_place_and_year(client, events):
     answer = _today_event(0, hard=True)
     body = {"date": _today(), "hard": True, "index": 0, "lat": answer.lat, "lon": answer.lon, "year": answer.year}
     plain = client.post("/api/game/check", json=body).json
-    hinted = client.post("/api/game/check", json={**body, "hint": True}).json
+    hinted = client.post("/api/game/check", json={**body, "hint": 1}).json
+    both = client.post("/api/game/check", json={**body, "hint": 2}).json
     assert plain["points"] == 5000
     assert (hinted["location_points"], hinted["year_points"], hinted["points"]) == (2000, 2000, 4000)
     assert hinted["hint_penalty"] == 1000
+    assert (both["location_points"], both["year_points"], both["points"]) == (1250, 1250, 2500)
 
 
 def test_check_rejects_a_bad_hint_flag(client, events):
     body = {"date": _today(), "index": 0, "lat": 0, "lon": 0, "hint": "yes"}
     assert client.post("/api/game/check", json=body).status_code == 400
+    assert client.post("/api/game/check", json={**body, "hint": 3}).status_code == 400
+    assert client.post("/api/game/check", json={**body, "hint": -1}).status_code == 400
 
 
-def test_hint_endpoint_names_the_country_or_the_region(client, events):
+def test_second_hint_names_the_country_or_the_region(client, events):
     day = game.today_utc()
     for index in range(game.EVENTS_PER_DAY):
         event = _today_event(index)
-        data = client.post("/api/game/hint", json={"date": day.isoformat(), "index": index}).json
-        assert data == ({"kind": "country", "text": event.country} if event.country
-                        else {"kind": "region", "text": game.region_at(event.lat, event.lon)})
-        assert set(data) == {"kind", "text"}  # no coordinates, id or title
+        data = client.post("/api/game/hint", json={"date": day.isoformat(), "index": index, "level": 2}).json
+        assert data == ({"level": 2, "kind": "country", "text": event.country} if event.country
+                        else {"level": 2, "kind": "region", "text": game.region_at(event.lat, event.lon)})
+
+
+def test_first_hint_is_the_rest_of_the_description(app, client, make_event):
+    summary = ("The Battle of Somewhere was fought by the Spanish army near a river. It began at dawn and "
+               "lasted a long day in the hills. Afterwards the Spanish retreated to the coast in good order. "
+               "Historians still argue about how many Spanish soldiers fought. Later the town grew around the field.")
+    event = make_event("Battle of Somewhere", country="Spain", summary=summary)
+    shown = game.excerpt(event)
+    hint = game.hint_dict(event, 1)
+    assert hint["kind"] == "description" and hint["level"] == 1
+    assert "Spanish" not in hint["text"] and "[Southern Europe]" in hint["text"]
+    assert "Historians" in hint["text"] and "It began at dawn" not in hint["text"]
+    assert shown.startswith("The Battle of Somewhere") and hint["text"] not in shown
+
+
+def test_first_hint_hides_years_in_hard_mode_and_falls_back_to_the_region(app, make_event):
+    long = ("The Battle of Somewhere was fought. " * 6) + "In 1815 the town fell. It was rebuilt by 1850."
+    hard = game.hint_dict(make_event("Battle of Somewhere", summary=long), 1, hard=True)
+    assert "1815" not in hard["text"] and "1850" not in hard["text"] and "____" in hard["text"]
+    short = make_event("Short Battle", lat=48.85, lon=2.35, summary=("A short summary. " * 2))
+    assert game.hint_dict(short, 1) == {"level": 1, "kind": "region", "text": "Western Europe"}
+
+
+def test_long_hint_is_cut_cleanly(app, make_event):
+    text = "A sentence about the siege goes on and on, with the [Balkans] too. " * 30
+    hint = game.hint_dict(make_event("Siege", summary=text), 1)["text"]
+    assert len(hint) <= game.HINT_MAX_CHARS + 1 and hint.endswith("…") and hint.count("[") == hint.count("]")
 
 
 def test_hint_endpoint_for_practice_and_bad_input(client, events):
     seed = game.new_practice_seed()
     practice = client.post("/api/game/hint", json={"seed": seed, "index": 0})
-    assert practice.status_code == 200 and practice.json["text"]
+    assert practice.status_code == 200 and practice.json["text"] and practice.json["level"] == 1
+    assert client.post("/api/game/hint", json={"seed": seed, "index": 0, "level": 2}).json["level"] == 2
+    assert client.post("/api/game/hint", json={"seed": seed, "index": 0, "level": 3}).status_code == 400
     assert client.post("/api/game/hint", json={"seed": seed, "index": 9}).status_code == 404
     assert client.post("/api/game/hint", json={"seed": "nope", "index": 0}).status_code == 400
     assert client.post("/api/game/hint", json={"index": 0}).status_code == 400

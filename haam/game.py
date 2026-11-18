@@ -46,7 +46,9 @@ MAX_POINTS = 5000
 # A daily game never reuses an event of the last RECENT_DAYS days (if enough others exist).
 RECENT_DAYS = 180
 # Share of a round's points a hint costs.
-HINT_PENALTY = 0.2
+# Optional hints, each level in total: 1 = more of the description, 2 = the country.
+HINT_PENALTIES = (0.0, 0.2, 0.5)
+HINT_MAX_CHARS = 420
 # The first daily game; older dates have no game.
 EPOCH = date(2026, 11, 1)
 
@@ -683,16 +685,55 @@ def round_dict(index: int, event: Event, hard: bool = False) -> dict:
     }
 
 
-def hint_dict(event: Event) -> dict:
-    """What the optional hint reveals: the country, or the region when the country is unknown."""
+def _sentences(event: Event) -> list[str]:
+    """The summary as sentences, paragraph after paragraph."""
+    paragraphs = [p.strip() for p in (event.summary or "").split("\n") if p.strip()]
+    return [s for p in paragraphs for s in re.split(r"(?<=[.!?])\s+(?=[A-Z])", p)]
+
+
+def _excerpt_length(sentences: list[str]) -> int:
+    """How many sentences the excerpt takes: until it is long enough (first paragraph only)."""
+    text = ""
+    for count, sentence in enumerate(sentences, 1):
+        text = f"{text} {sentence}".strip()
+        if len(text) >= EXCERPT_MIN:
+            return count
+    return len(sentences)
+
+
+def more_description(event: Event, hard: bool = False) -> str:
+    """The sentences of the summary that follow the excerpt (countries hidden, years too in hard mode)."""
+    sentences = _sentences(event)
+    rest = " ".join(sentences[_excerpt_length(sentences):]).strip()
+    if not rest:
+        return ""
+    text = _hide_place(rest, event)
+    if hard:
+        text = hide_years(text)
+    if len(text) > HINT_MAX_CHARS:
+        text = text[:HINT_MAX_CHARS].rsplit(" ", 1)[0]
+        if text.count("[") > text.count("]"):
+            text = text[:text.rindex("[")].rstrip()
+        text = text.rstrip(",;:") + "…"
+    return text
+
+
+def hint_dict(event: Event, level: int = 1, hard: bool = False) -> dict:
+    """What a hint reveals. Level 1: more of the description (the region when there is none).
+    Level 2: the country (the region when it is unknown)."""
+    if level == 1:
+        text = more_description(event, hard)
+        if text:
+            return {"level": 1, "kind": "description", "text": text}
+        return {"level": 1, "kind": "region", "text": region_at(event.lat, event.lon)}
     if event.country:
-        return {"kind": "country", "text": event.country}
-    return {"kind": "region", "text": region_at(event.lat, event.lon)}
+        return {"level": 2, "kind": "country", "text": event.country}
+    return {"level": 2, "kind": "region", "text": region_at(event.lat, event.lon)}
 
 
-def apply_hint(points: int) -> int:
-    """A round's points after the hint penalty."""
-    return round(points * (1 - HINT_PENALTY))
+def apply_hint(points: int, level: int = 1) -> int:
+    """A round's points after the penalty of the hints used (level 0 = none)."""
+    return round(points * (1 - HINT_PENALTIES[level]))
 
 
 def answer_dict(event: Event) -> dict:

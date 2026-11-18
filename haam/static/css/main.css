@@ -1339,8 +1339,11 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
 .game-hint-box { margin: 0 0 0.75rem; }
 .game-hint-box[hidden] { display: none; }
 .game-hint-cost { color: var(--text-muted); font-weight: 400; }
-.game-hint-text { margin: 0; padding: 0.5rem 0.7rem; font-size: 0.9rem; font-weight: 600; color: var(--text-strong); border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: var(--radius-sm); }
+.game-hint-text { margin: 0; padding: 0.5rem 0.7rem; font-size: 0.9rem; font-weight: 500; line-height: 1.5; color: var(--text-strong); border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: var(--radius-sm); }
 .game-hint-text[hidden] { display: none; }
+.game-hint-line { display: block; }
+.game-hint-line + .game-hint-line { margin-top: 0.4rem; font-weight: 600; }
+.game-hint-box .btn { white-space: normal; text-align: left; }
 .game-result { padding-top: 0.75rem; border-top: 1px solid var(--border); }
 .game-points { margin: 0; font-size: 1rem; color: var(--text-muted); }
 .game-points strong { font-size: 1.8rem; color: var(--text-strong); }

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from haam.tagging import MAX_DEPTH, P_PART_OF, TAG_PARENTS, ChainResolver, TagMatcher, normalise
+from haam.tagging import MAX_DEPTH, P_PART_OF, TAG_PARENTS, ChainResolver, normalise
 
 GRAPH_PATH = Path(__file__).parent / "data" / "part_of.json"
 
