@@ -191,6 +191,13 @@ def preview(url: str) -> Article:
     existing = find_existing(article.url, article.page_id)
     if existing is not None:
         raise EventError("This article has already been added.", existing=existing)
+    if article.year is None:
+        # Neither Wikidata nor the intro gives a date: a town, person or concept, not an event.
+        # (An intro date that was parsed wrongly still gets through, with a warning, so it can be fixed.)
+        raise EventError(
+            "We could not find a date for this article, so it does not look like an event. "
+            "Choose an article about something that happened on a particular date or period, "
+            "such as a battle, a treaty or an eruption.")
     return article
 
 

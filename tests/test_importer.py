@@ -109,6 +109,22 @@ def test_import_csv_status_and_coordinate_override(wiki, tmp_path):
     assert armada.status == Status.REJECTED
 
 
+def test_import_csv_rejects_out_of_range_coordinates(wiki, tmp_path):
+    wiki.add("Treaty of Versailles", year=1919, lat=None, lon=None)
+    wiki.add("Spanish Armada", year=1588, lat=95.0, lon=10.0)
+    path = tmp_path / "events.csv"
+    path.write_text(
+        "url,category,status,year,lat,lon\n"
+        "https://en.wikipedia.org/wiki/Treaty_of_Versailles,diplomatic,approved,,48.8,200\n"
+        "https://en.wikipedia.org/wiki/Spanish_Armada,naval,approved,,,\n"
+        "https://en.wikipedia.org/wiki/Foo%7CBar,naval,approved,1900,1,1\n",
+        encoding="utf-8",
+    )
+    stats = importer.import_csv(str(path), report=quiet)
+    assert (stats.added, stats.rejected) == (0, 3)
+    assert db.session.scalar(db.select(db.func.count(Event.id))) == 0
+
+
 SYNC_COLUMNS = ["wikidata_id", "wiki_page_id", "url", "title", "year", "date", "lat", "lon", "country",
                 "category", "status", "tags", "summary", "event_type", "date_source", "coord_source"]
 

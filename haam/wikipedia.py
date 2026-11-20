@@ -56,6 +56,8 @@ def title_from_url(url: str) -> str | None:
     if not m:
         return None
     title = unquote(m.group("title")).replace("_", " ").strip()
+    if "|" in title:
+        return None  # "|" would turn the API lookup into a multi-title query
     return title or None
 
 
@@ -101,7 +103,11 @@ class WikipediaClient:
         extract = page.get("extract", "") or ""
         summary = next((p.strip() for p in extract.split("\n") if p.strip()), "")
         coords = (page.get("coordinates") or [{}])[0]
-        lat, lon = coords.get("lat"), coords.get("lon")
+        # The API's "globe" is "earth", "moon", "mars"...; only Earth belongs on this map.
+        on_earth = coords.get("globe", "earth") == "earth"
+        found = _earth_coordinates({"latitude": coords.get("lat"), "longitude": coords.get("lon")}) \
+            if on_earth else None
+        lat, lon = found if found else (None, None)
 
         parsed = None
         wikidata_id = page.get("pageprops", {}).get("wikibase_item")
@@ -177,10 +183,30 @@ def _wikidata_date(claims: dict):
 
 
 def _wikidata_coordinates(claims: dict) -> tuple[float | None, float | None]:
-    value = _claim_value(claims, P_COORDINATES)
-    if value:
-        return value.get("latitude"), value.get("longitude")
+    for claim in _best_claims(claims, P_COORDINATES):
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        coords = _earth_coordinates(value) if isinstance(value, dict) else None
+        if coords:
+            return coords
     return None, None
+
+
+EARTH = "http://www.wikidata.org/entity/Q2"
+
+
+def _earth_coordinates(value: dict) -> tuple[float, float] | None:
+    """(lat, lon) of a Wikidata coordinate value, or None off Earth or out of range.
+
+    Same rule as ``haam.wikidata._earth_coordinates`` (repeated: wikidata imports this module).
+    """
+    if value.get("globe", EARTH) != EARTH:
+        return None  # e.g. the Moon landing site
+    lat, lon = value.get("latitude"), value.get("longitude")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return float(lat), float(lon)
 
 
 # Web requests (preview, confirm, the link check) wait at most this long for one request.

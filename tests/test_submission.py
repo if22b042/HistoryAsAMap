@@ -53,10 +53,20 @@ def test_preview_shows_extracted_data_and_suggested_tags(client, wiki):
     assert "Norman Conquest of England" in html
 
 
-def test_preview_warns_about_missing_year(client, wiki):
-    wiki.add("Battle of Hastings", year=None)
-    html = client.post("/submit", data={"url": URL}).get_data(as_text=True)
-    assert "could not find a year" in html
+def test_preview_refuses_an_undated_article(client, wiki):
+    wiki.add("Battle of Hastings", year=None, dated_by_wikidata=False)
+    response = client.post("/submit", data={"url": URL})
+    assert response.status_code == 400
+    html = response.get_data(as_text=True)
+    assert "could not find a date" in html
+    assert 'name="title"' not in html  # no edit form: nothing to submit
+
+
+def test_preview_lets_a_text_dated_article_be_fixed_by_hand(client, wiki):
+    wiki.add("Battle of Hastings", year=1066, dated_by_wikidata=False)
+    response = client.post("/submit", data={"url": URL})
+    assert response.status_code == 200
+    assert "may not be an event" in response.get_data(as_text=True)
 
 
 def test_submission_is_pending_until_approved(client, wiki, app):
