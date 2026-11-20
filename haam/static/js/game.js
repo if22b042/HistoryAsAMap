@@ -428,26 +428,123 @@ function shareText() {
 
 let countdownTimer = null;
 
+/** "tomorrow at 01:00 CET": the next game's start in the player's own time zone. */
+function localUnlock(target) {
+  const when = new Date(target);
+  const options = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
+  try {
+    const time = new Intl.DateTimeFormat(undefined, options).format(when);
+    const sameDay = when.toDateString() === new Date().toDateString();
+    const day = sameDay ? "today" : "tomorrow";
+    return `${day} at ${time}`;
+  } catch (e) {
+    return "at midnight UTC";
+  }
+}
+
 function renderCountdown() {
+  if (PRACTICE || PAIRS || !puzzle) return;
   const target = new Date(puzzle.next_game_at).getTime();
+  const spots = [$("summary-countdown"), $("game-next")];
   const tick = () => {
     const left = Math.max(0, target - Date.now());
     if (left === 0) {
       clearInterval(countdownTimer);
-      const link = el("a", null, "A new game is ready – play it");
-      link.href = pageUrl({ practice: false });
-      $("summary-countdown").replaceChildren(link);
+      for (const spot of spots) {
+        const link = el("a", null, "A new game is ready – play it");
+        link.href = pageUrl({ practice: false });
+        spot.replaceChildren(link);
+      }
       return;
     }
     const s = Math.floor(left / 1000);
     const hms = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60]
       .map((n) => String(n).padStart(2, "0")).join(":");
-    $("summary-countdown").textContent = `Next game in ${hms} (midnight UTC).`;
+    // Days still change at midnight UTC; this only shows when that is on the player's clock.
+    const text = `Next game in ${hms} · unlocks ${localUnlock(target)} (your time; new days start at midnight UTC)`;
+    for (const spot of spots) spot.textContent = text;
   };
+  $("game-next").hidden = false;
   clearInterval(countdownTimer);
   tick();
   countdownTimer = setInterval(tick, 1000);
 }
+
+// ---------------------------------------------------------------- archive
+
+let archiveMonth = null; // "YYYY-MM" shown in the archive calendar
+
+function dayFinished(day, hard) {
+  const saved = store.days[hard ? `${day}:hard` : day];
+  return Boolean(saved && Array.isArray(saved.rounds) && Array.isArray(saved.guesses)
+    && saved.rounds.length > 0 && saved.guesses.length >= saved.rounds.length);
+}
+
+function shiftMonth(month, by) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
+}
+
+function renderArchive() {
+  if (PRACTICE || PAIRS || !puzzle || !puzzle.first) return;
+  $("game-archive").hidden = false;
+  const firstMonth = puzzle.first.slice(0, 7);
+  const lastMonth = puzzle.today.slice(0, 7);
+  if (!archiveMonth) archiveMonth = puzzle.date.slice(0, 7);
+  archiveMonth = archiveMonth < firstMonth ? firstMonth : archiveMonth > lastMonth ? lastMonth : archiveMonth;
+  const [y, m] = archiveMonth.split("-").map(Number);
+  $("archive-month").textContent = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", {
+    month: "long", year: "numeric", timeZone: "UTC",
+  });
+  $("archive-prev").disabled = archiveMonth <= firstMonth;
+  $("archive-next").disabled = archiveMonth >= lastMonth;
+  $("archive-legend").textContent = `Showing ${HARD ? "hard" : "easy"} games. ✓ = finished on this device`
+    + " (the last 60 days are remembered). Days follow UTC.";
+
+  const grid = $("archive-grid");
+  grid.replaceChildren();
+  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7; // Monday first
+  for (let i = 0; i < lead; i++) grid.append(el("li", "archive-pad"));
+  const count = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  for (let d = 1; d <= count; d++) {
+    const iso = `${archiveMonth}-${String(d).padStart(2, "0")}`;
+    const item = el("li", "archive-day");
+    const playable = iso >= puzzle.first && iso <= puzzle.today;
+    const easy = dayFinished(iso, false);
+    const hard = dayFinished(iso, true);
+    const done = HARD ? hard : easy;
+    if (!playable) {
+      item.classList.add("disabled");
+      item.append(el("span", null, String(d)));
+      item.setAttribute("aria-hidden", "true");
+    } else {
+      const number = Math.round((Date.parse(iso) - Date.parse(puzzle.first)) / 86400000) + 1;
+      const link = el("a", null);
+      link.href = iso === puzzle.today ? pageUrl({ practice: false }) : dayUrl(iso);
+      link.append(el("span", null, String(d)));
+      if (done) link.append(el("span", "archive-check", "✓"));
+      link.setAttribute("aria-label", `${formatDay(iso)}, game ${number}: `
+        + `easy ${easy ? "finished" : "not finished"}, hard ${hard ? "finished" : "not finished"}`
+        + (iso === puzzle.date ? ", currently open" : ""));
+      if (iso === puzzle.date) {
+        link.setAttribute("aria-current", "date");
+        item.classList.add("current");
+      }
+      if (done) item.classList.add("done");
+      item.append(link);
+    }
+    grid.append(item);
+  }
+}
+
+$("archive-prev").addEventListener("click", () => {
+  archiveMonth = shiftMonth(archiveMonth, -1);
+  renderArchive();
+});
+$("archive-next").addEventListener("click", () => {
+  archiveMonth = shiftMonth(archiveMonth, 1);
+  renderArchive();
+});
 
 let scoreSending = false;
 
@@ -600,6 +697,7 @@ async function submitGuess() {
     record.guesses.push(guess);
     if (record.guesses.length >= record.rounds.length) finishDay();
     if (!PRACTICE) saveStore(store);
+    if (record.guesses.length >= record.rounds.length) renderArchive();
     if (guessMarker) {
       layer.removeLayer(guessMarker);
       guessMarker = null;
@@ -934,6 +1032,8 @@ async function init() {
   }
 
   renderHeader();
+  renderCountdown();
+  renderArchive();
   if (!puzzle.rounds.length) {
     $("game-message").textContent = "There are no events to play yet.";
     return;
