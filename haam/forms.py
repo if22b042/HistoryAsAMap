@@ -1,7 +1,6 @@
 """HTML forms (Flask-WTF handles CSRF protection for all of them)."""
 
 from datetime import date
-import re
 from urllib.parse import urlparse
 
 from flask_wtf import FlaskForm
