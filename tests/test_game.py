@@ -899,3 +899,17 @@ def test_a_client_can_report_only_a_few_scores_a_day(app, client, events):
                         headers={"X-Forwarded-For": "203.0.113.9"})
     assert other.status_code == 200
     assert game.score_stats(game.today_utc(), False)["count"] == 6
+
+
+def test_puzzle_exposes_archive_bounds(client, events):
+    data = client.get("/api/game/today").get_json()
+    assert data["first"] == game.EPOCH.isoformat()
+    assert data["first"] <= data["today"]
+    assert data["next_game_at"].endswith("+00:00")
+
+
+def test_game_page_has_archive_and_next_game_slots(client):
+    html = client.get("/game").get_data(as_text=True)
+    assert 'id="game-archive"' in html and 'id="archive-grid"' in html
+    assert 'id="game-next"' in html
+    assert "<script>" not in html.split('id="game"')[1]
