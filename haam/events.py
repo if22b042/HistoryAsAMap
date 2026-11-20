@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, delete, func, insert, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from haam.dates import format_year
 from haam.extensions import db
 from haam.geocoding import country_for
-from haam.models import Category, Event, EventReport, ReportStatus, Status, Tag
+from haam.models import Category, Event, EventReport, ReportStatus, Status, Tag, event_tags
 from haam.wikipedia import Article, WikipediaError, get_client, title_from_url
 
 
@@ -272,6 +272,23 @@ def set_status(event: Event, status: Status) -> Event:
     return event
 
 
+def bulk_set_status(event_ids, status: Status) -> int:
+    """Set ``status`` on the events with these row ids (unknown ids are skipped); returns how many changed.
+
+    Goes through the ORM like :func:`set_status`, so ``updated_at`` moves and the feed version changes.
+    """
+    ids = {i for i in event_ids if isinstance(i, int)}
+    if not ids:
+        return 0
+    changed = 0
+    for event in db.session.scalars(select(Event).where(Event.id.in_(ids))):
+        if event.status != status:
+            event.status = status
+            changed += 1
+    db.session.commit()
+    return changed
+
+
 def delete_event(event: Event) -> None:
     db.session.delete(event)
     db.session.commit()
@@ -342,3 +359,85 @@ def apply_report(report: EventReport) -> Event:
 def dismiss_report(report: EventReport) -> None:
     report.status = ReportStatus.DISMISSED
     db.session.commit()
+
+
+# ----------------------------------------------------------------- tags
+
+class TagError(Exception):
+    """A user-facing problem with a tag change (empty or duplicate name, tag not empty...)."""
+
+
+@dataclass
+class TagRow:
+    tag: Tag
+    total: int  # events with the tag, any status
+    approved: int  # of which approved (what visitors see)
+
+
+def tag_rows() -> list[TagRow]:
+    """Every tag with its event counts, the most used first (then by name)."""
+    counts = {tag_id: (total, approved) for tag_id, total, approved in db.session.execute(
+        select(event_tags.c.tag_id, func.count(Event.id),
+               func.sum(case((Event.status == Status.APPROVED, 1), else_=0)))
+        .join(Event, Event.id == event_tags.c.event_id).group_by(event_tags.c.tag_id))}
+    rows = []
+    for tag in db.session.scalars(select(Tag)):
+        total, approved = counts.get(tag.id, (0, 0))
+        rows.append(TagRow(tag, total, int(approved or 0)))
+    rows.sort(key=lambda r: (-r.total, r.tag.name.lower()))
+    return rows
+
+
+def curated_tag_names() -> set[str]:
+    """Names the tag tree, TAG_PARENTS and ``seed-tags`` know the tags by."""
+    from haam.data.tags import TAGS
+    return {name for name, _, _ in TAGS}
+
+
+def _clean_name(name: str | None, exclude: Tag | None = None) -> str:
+    name = " ".join((name or "").split())
+    if not name:
+        raise TagError("A tag needs a name.")
+    if len(name) > 200:
+        raise TagError("Tag names can have at most 200 characters.")
+    other = db.session.scalar(select(Tag).where(func.lower(Tag.name) == name.lower()))
+    if other is not None and other is not exclude:
+        raise TagError(f"There is already a tag called “{other.name}”.")
+    return name
+
+
+def create_tag(name: str | None, start_year: int | None = None, end_year: int | None = None) -> Tag:
+    tag = Tag(name=_clean_name(name), start_year=start_year, end_year=end_year)
+    db.session.add(tag)
+    db.session.commit()
+    return tag
+
+
+def rename_tag(tag: Tag, name: str | None) -> Tag:
+    tag.name = _clean_name(name, exclude=tag)
+    db.session.commit()
+    return tag
+
+
+def delete_empty_tag(tag: Tag) -> None:
+    used = db.session.scalar(select(func.count()).select_from(event_tags).where(event_tags.c.tag_id == tag.id))
+    if used:
+        raise TagError(f"“{tag.name}” is still used by {used} event(s); merge it into another tag instead.")
+    db.session.delete(tag)
+    db.session.commit()
+
+
+def merge_tags(source: Tag, target: Tag) -> int:
+    """Move every event of ``source`` to ``target`` and delete ``source``; returns the events moved."""
+    if source.id == target.id:
+        raise TagError("Choose a different tag to merge into.")
+    already = select(event_tags.c.event_id).where(event_tags.c.tag_id == target.id)
+    moving = [e for e in db.session.scalars(select(event_tags.c.event_id).where(
+        event_tags.c.tag_id == source.id, event_tags.c.event_id.not_in(already)))]
+    if moving:
+        db.session.execute(insert(event_tags), [{"event_id": e, "tag_id": target.id} for e in moving])
+    db.session.execute(delete(event_tags).where(event_tags.c.tag_id == source.id))
+    db.session.expire_all()
+    db.session.delete(db.session.get(Tag, source.id))
+    db.session.commit()
+    return len(moving)

@@ -9,7 +9,7 @@ from haam.dates import format_year
 from haam.events import EventData
 from haam.forms import ActionForm, EventForm, LoginForm
 from haam.extensions import db
-from haam.models import Collection, EventReport, ReportStatus, Status
+from haam.models import Collection, EventReport, ReportStatus, Status, Tag
 from haam.ratelimit import limit
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -106,6 +106,29 @@ def moderate(event_id: int, action: str):
     return redirect(_safe_next(request.form.get("next")))
 
 
+def _int_or_none(value: str | None) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+@bp.post("/events/bulk/<any(approve, reject):action>")
+@auth.admin_required
+def bulk_moderate(action: str):
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    ids = [i for i in (_int_or_none(v) for v in request.form.getlist("event_ids")) if i is not None]
+    if not ids:
+        flash("Select at least one event first.", "error")
+    else:
+        status = Status.APPROVED if action == "approve" else Status.REJECTED
+        changed = events.bulk_set_status(ids, status)
+        flash(f"{'Approved' if action == 'approve' else 'Rejected'} {changed} event{'s' if changed != 1 else ''}.",
+              "success")
+    return redirect(_safe_next(request.form.get("next")))
+
+
 @bp.route("/events/<int:event_id>/edit", methods=["GET", "POST"])
 @auth.admin_required
 def edit(event_id: int):
@@ -198,3 +221,61 @@ def moderate_report(report_id: int, action: str):
         events.dismiss_report(report)
         flash("Dismissed the report.", "success")
     return redirect(url_for("admin.reports"))
+
+
+# ------------------------------------------------------------------- tags
+
+@bp.get("/tags")
+@auth.admin_required
+def tags():
+    rows = events.tag_rows()
+    return render_template("admin/tags.html", rows=rows, curated=events.curated_tag_names(),
+                           empty=sum(1 for r in rows if r.total == 0), action_form=ActionForm())
+
+
+@bp.post("/tags/new")
+@auth.admin_required
+def create_tag():
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    try:
+        tag = events.create_tag(request.form.get("name"), _int_or_none(request.form.get("start_year")),
+                                _int_or_none(request.form.get("end_year")))
+        flash(f"Created the tag “{tag.name}”.", "success")
+    except events.TagError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin.tags"))
+
+
+@bp.post("/tags/<int:tag_id>/<any(rename, delete, merge):action>")
+@auth.admin_required
+def moderate_tag(tag_id: int, action: str):
+    if not ActionForm().validate_on_submit():
+        abort(400)
+    tag = db.session.get(Tag, tag_id)
+    if tag is None:
+        abort(404)
+    name = tag.name
+    curated = name in events.curated_tag_names()
+    try:
+        if action == "rename":
+            events.rename_tag(tag, request.form.get("name"))
+            flash(f"Renamed “{name}” to “{tag.name}”." + (
+                " It is a curated tag: its tree and seed-tags still know it by the old name." if curated else ""),
+                "success")
+        elif action == "delete":
+            events.delete_empty_tag(tag)
+            flash(f"Deleted the tag “{name}”." + (
+                " seed-tags will add it again when it is next run." if curated else ""), "success")
+        else:
+            target_id = _int_or_none(request.form.get("target"))
+            target = db.session.get(Tag, target_id) if target_id is not None else None
+            if target is None:
+                raise events.TagError("Choose the tag to merge into.")
+            target_name = target.name
+            moved = events.merge_tags(tag, target)
+            flash(f"Merged “{name}” into “{target_name}” ({moved} event{'s' if moved != 1 else ''} moved).",
+                  "success")
+    except events.TagError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin.tags"))
