@@ -239,18 +239,22 @@ def _count_and_sort(node: Node) -> int:
 # ------------------------------------------------------------ from the database
 
 def tag_tree(tag) -> dict:
-    """The JSON tree of a Tag, for the approved events that carry it."""
+    """The JSON tree of a Tag, for the approved events that carry it.
+
+    Events are identified by their public id (the Wikipedia page id), which is what the map uses.
+    """
     from sqlalchemy import select
 
     from haam.extensions import db
+    from haam.events import PUBLIC_ID
     from haam.models import Event, Status, Tag, event_tags
 
     rows = db.session.execute(
-        select(Event.id, Event.wikidata_id, Event.title, Event.year)
+        select(PUBLIC_ID.label("pid"), Event.wikidata_id, Event.title, Event.year)
         .join(event_tags, event_tags.c.event_id == Event.id)
         .where(event_tags.c.tag_id == tag.id, Event.status == Status.APPROVED)
     ).all()
     tag_ids = dict(db.session.execute(select(Tag.name, Tag.id)).all())
-    events = [TreeEvent(id=r.id, qid=r.wikidata_id, title=r.title, year=r.year) for r in rows]
+    events = [TreeEvent(id=r.pid, qid=r.wikidata_id, title=r.title, year=r.year) for r in rows]
     tree = build_tree(tag.name, events, load_graph(), tag_id=tag.id, tag_ids=tag_ids)
     return tree.to_dict()
