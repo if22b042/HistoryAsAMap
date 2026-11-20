@@ -67,6 +67,7 @@ def puzzle(value: str):
         number=game.game_number(day),
         is_today=day == today,
         today=today.isoformat(),
+        first=game.EPOCH.isoformat(),
         previous=previous.isoformat() if game.is_playable(previous) else None,
         next=following.isoformat() if game.is_playable(following) else None,
         next_game_at=game.next_game_at(today).isoformat(),

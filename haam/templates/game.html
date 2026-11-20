@@ -97,6 +97,8 @@
       <i class="fas fa-history" aria-hidden="true"></i> A past game: it does not count toward your streak.
     </p>
 
+    <p class="game-next" id="game-next" hidden></p>
+
     <ol class="game-progress" id="game-progress" aria-label="Progress"></ol>
 
     <div class="game-message" id="game-message" role="status" aria-live="polite"></div>
@@ -200,6 +202,19 @@
       <button class="btn btn-primary btn-block" type="button" id="practice-again" hidden>
         <i class="fas fa-redo" aria-hidden="true"></i> Play another set</button>
     </article>
+
+    <details class="game-archive" id="game-archive" hidden>
+      <summary><i class="far fa-calendar-alt" aria-hidden="true"></i> Archive: play a past game</summary>
+      <div class="archive-nav">
+        <button class="icon-btn" type="button" id="archive-prev" aria-label="Previous month">
+          <i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+        <h2 class="archive-month" id="archive-month" aria-live="polite"></h2>
+        <button class="icon-btn" type="button" id="archive-next" aria-label="Next month">
+          <i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ol class="archive-grid" id="archive-grid" aria-labelledby="archive-month"></ol>
+      <p class="archive-legend" id="archive-legend"></p>
+    </details>
   </aside>
 
   <div class="game-map-wrap">
