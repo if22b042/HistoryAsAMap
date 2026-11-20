@@ -451,6 +451,8 @@ function renderCountdown() {
 
 let scoreSending = false;
 
+let percentile = null;
+
 function renderStats() {
   const stats = puzzle.stats;
   const line = $("summary-stats");
@@ -458,28 +460,34 @@ function renderStats() {
   if (line.hidden) return;
   line.textContent = `Your score ${formatPoints(total())} vs ${puzzle.is_today ? "today's" : "that day's"}`
     + ` average ${formatPoints(stats.average)} (${plural(stats.count, "player")})`;
+  // Only with enough scores today (the server sends null otherwise).
+  if (typeof percentile === "number") line.textContent += ` · you beat ${percentile}% of players`;
 }
 
 /** Report the finished daily game's total once (anonymous); the answer carries the new average. */
 async function sendScore() {
   if (PRACTICE || !puzzle.is_today || record.scoreSent || scoreSending) return;
+  const tokens = record.guesses.map((g) => g.token);
+  if (tokens.some((t) => !t)) return; // a game begun before tokens existed: nothing to report
   scoreSending = true;
   try {
     const response = await fetch(ROOT.dataset.scoreUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: puzzle.date, hard: HARD, points: total() }),
+      body: JSON.stringify({ date: puzzle.date, hard: HARD, tokens }),
     });
     if (response.status === 429) {
       record.scoreSent = true; // this device already reported its scores today: do not retry
       saveStore(store);
       return;
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // 409: these tokens were already counted; the answer still has the stats.
+    if (!response.ok && response.status !== 409) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     record.scoreSent = true;
     saveStore(store);
     puzzle.stats = data.stats;
+    percentile = data.percentile;
     renderStats();
   } catch (e) { /* the summary works without the average */ } finally {
     scoreSending = false;
@@ -579,6 +587,7 @@ async function submitGuess() {
     const guess = {
       lat: pin[0], lon: pin[1], km: result.km, points: result.points, answer: result.answer,
       hint: Number(result.hint) || 0, hintPenalty: result.hint_penalty || 0,
+      token: result.token || null, // signed receipt of a daily round; the score is totalled from these
     };
     if (HARD) {
       Object.assign(guess, {

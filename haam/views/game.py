@@ -105,7 +105,12 @@ def _hint_level(value) -> int:
     return value
 
 
-def _score(data: dict, events: list):
+def _token(day: date | None, hard: bool, index: int, points: int) -> dict:
+    """The signed receipt of a daily round (practice games have none)."""
+    return {} if day is None else {"token": game.round_token(day, hard, index, points)}
+
+
+def _score(data: dict, events: list, day: date | None = None):
     """Score the guess in ``data`` against ``events[data["index"]]`` and reveal it."""
     index = data.get("index")
     if isinstance(index, bool) or not isinstance(index, int):
@@ -135,7 +140,8 @@ def _score(data: dict, events: list):
     if not hard:
         full = game.score_distance(km)
         points = keep(full)
-        return jsonify(km=round(km, 1), points=points, hint=level, hint_penalty=full - points, answer=answer)
+        return jsonify(km=round(km, 1), points=points, hint=level, hint_penalty=full - points, answer=answer,
+                       **_token(day, hard, index, points))
     full_location = game.score_hard_location(km)
     full_year = game.score_year(year, event.year)
     location_points, year_points = keep(full_location), keep(full_year)
@@ -148,17 +154,19 @@ def _score(data: dict, events: list):
         hint=level,
         hint_penalty=full_location + full_year - location_points - year_points,
         answer=answer,
+        **_token(day, hard, index, location_points + year_points),
     )
 
 
 @bp.post("/api/game/check")
 @limit("game-check", 120, 60)
-@csrf.exempt  # stateless and changes nothing on the server
+@csrf.exempt  # changes nothing on the server; the signed token it returns is checked by /score
 def check():
     data = _json_body()
     if not isinstance(data.get("date"), str):
         abort(400)
-    return _score(data, game.daily_events(_day(data["date"]), hard=data.get("hard") is True))
+    day = _day(data["date"])
+    return _score(data, game.daily_events(day, hard=data.get("hard") is True), day)
 
 
 # ---------------------------------------------------------------- practice
@@ -279,24 +287,28 @@ def hint():
 
 @bp.post("/api/game/score")
 @limit("game-score", 30, 60)
-@csrf.exempt  # anonymous total of a finished game; the client sends it once
+@csrf.exempt  # anonymous; the total comes from the signed round tokens, not from the client
 def score():
     data = _json_body()
     if not isinstance(data.get("date"), str):
         abort(400)
     day = _day(data["date"])
     hard = data.get("hard", False)
-    points = data.get("points")
-    if not isinstance(hard, bool) or isinstance(points, bool) or not isinstance(points, int):
+    if not isinstance(hard, bool):
         abort(400)
-    if not 0 <= points <= game.MAX_DAILY_TOTAL:
+    # The server adds the tokens /api/game/check handed out: exactly one valid token per round.
+    proven = game.total_from_tokens(day, hard, data.get("tokens"))
+    if proven is None:
         abort(400)
+    points, proof = proven
     # A game is finished once: a few reports per client, game and day (a household or school
-    # may share one address), so a script cannot skew the average.
+    # may share one address).
     if not allow(f"game-score:{day.isoformat()}:{int(hard)}", MAX_SCORES_PER_CLIENT, 86400):
         abort(429)
-    game.record_score(day, hard, points)
-    return jsonify(stats=game.score_stats(day, hard))
+    recorded = game.record_score(day, hard, points, proof)  # the same tokens count once
+    response = jsonify(stats=game.score_stats(day, hard), percentile=game.percentile(day, hard, points),
+                       points=points, recorded=recorded)
+    return response if recorded else (response, 409)
 
 
 # ------------------------------------------------------------ which came first
