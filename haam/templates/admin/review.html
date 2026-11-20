@@ -28,6 +28,7 @@
     <p>
       <a href="{{ url_for('admin.recent') }}"><i class="fas fa-clock" aria-hidden="true"></i> Recent activity</a> ·
       <a href="{{ url_for('admin.collections') }}"><i class="fas fa-layer-group" aria-hidden="true"></i> Review collections</a> ·
+      <a href="{{ url_for('admin.tags') }}"><i class="fas fa-tags" aria-hidden="true"></i> Tags</a> ·
       <a href="{{ url_for('admin.reports') }}"><i class="fas fa-flag" aria-hidden="true"></i> Reports <span class="tab-count">{{ open_reports }}</span></a>
     </p>
   </header>
@@ -46,10 +47,29 @@
   {% endif %}
   {{ pager() }}
 
+  {% if events %}
+  <form id="bulk-form" method="post" class="bulk-bar" aria-label="Bulk actions">
+    {{ action_form.csrf_token }}
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <label><input type="checkbox" id="select-all"> Select all on this page</label>
+    <span class="bulk-count" aria-live="polite"></span>
+    {% if status.value != 'approved' %}
+      <button class="btn btn-small btn-success" type="submit" formaction="{{ url_for('admin.bulk_moderate', action='approve') }}"
+              data-bulk-confirm="Approve {n} selected event(s)?"><i class="fas fa-check" aria-hidden="true"></i> Approve selected</button>
+    {% endif %}
+    {% if status.value != 'rejected' %}
+      <button class="btn btn-small btn-secondary" type="submit" formaction="{{ url_for('admin.bulk_moderate', action='reject') }}"
+              data-bulk-confirm="Reject {n} selected event(s)?"><i class="fas fa-ban" aria-hidden="true"></i> Reject selected</button>
+    {% endif %}
+  </form>
+  {% endif %}
+
   <div class="review-list">
     {% for event in events %}
       <article class="card review-card">
         <header>
+          <input type="checkbox" form="bulk-form" name="event_ids" value="{{ event.id }}" class="bulk-check"
+                 aria-label="Select “{{ event.title }}”">
           <span class="year-pill">{{ event.year|year }}</span>
           {{ category_badge(event.category) }}
           <span class="badge {{ 'badge-diplomatic' if event.from_website else 'badge-other' }}">{{ 'submitted' if event.from_website else 'imported' }}</span>
@@ -84,4 +104,5 @@
 
 {% block scripts %}
   <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/bulk-select.js') }}" defer></script>
 {% endblock %}

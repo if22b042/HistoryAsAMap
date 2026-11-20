@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Tags{% endblock %}
+
+{% block content %}
+<div class="page">
+  <header class="page-header">
+    <h1>Tags</h1>
+    <p>
+      <a href="{{ url_for('admin.review') }}"><i class="fas fa-inbox" aria-hidden="true"></i> Review events</a> ·
+      {{ rows|length }} tags, {{ empty }} empty
+    </p>
+  </header>
+
+  <form method="post" action="{{ url_for('admin.create_tag') }}" class="card" aria-label="New tag">
+    {{ action_form.csrf_token }}
+    <h2>New tag</h2>
+    <label>Name <input type="text" name="name" maxlength="200" required></label>
+    <label>From year <input type="number" name="start_year" placeholder="e.g. -500"></label>
+    <label>To year <input type="number" name="end_year" placeholder="blank = ongoing"></label>
+    <button class="btn btn-small btn-success" type="submit"><i class="fas fa-plus" aria-hidden="true"></i> Create</button>
+  </form>
+
+  <div class="review-list">
+    {% for row in rows %}
+      {% set tag = row.tag %}
+      <article class="card review-card" id="tag-{{ tag.id }}">
+        <header>
+          <h2>{{ tag.name }}</h2>
+          <span class="badge badge-other">{{ row.total }} event{{ '' if row.total == 1 else 's' }}{% if row.total != row.approved %} ({{ row.approved }} approved){% endif %}</span>
+          {% if row.total == 0 %}<span class="badge badge-warning">empty</span>{% endif %}
+          {% if tag.name in curated %}<span class="badge badge-diplomatic" title="Known by name to the tag tree and seed-tags">curated</span>{% endif %}
+        </header>
+        <p class="review-meta">{{ tag.display_range }}</p>
+        <div class="button-row">
+          <form method="post" action="{{ url_for('admin.moderate_tag', tag_id=tag.id, action='rename') }}">
+            {{ action_form.csrf_token }}
+            <input type="text" name="name" value="{{ tag.name }}" maxlength="200" required aria-label="New name">
+            <button class="btn btn-small btn-secondary" type="submit"><i class="fas fa-pen" aria-hidden="true"></i> Rename</button>
+          </form>
+          {% if rows|length > 1 %}
+          <form method="post" action="{{ url_for('admin.moderate_tag', tag_id=tag.id, action='merge') }}"
+                data-confirm="Merge “{{ tag.name }}” into the chosen tag? “{{ tag.name }}” is deleted.">
+            {{ action_form.csrf_token }}
+            <select name="target" required aria-label="Merge into">
+              <option value="">Merge into…</option>
+              {% for other in rows if other.tag.id != tag.id %}<option value="{{ other.tag.id }}">{{ other.tag.name }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-small btn-secondary" type="submit"><i class="fas fa-code-merge" aria-hidden="true"></i> Merge</button>
+          </form>
+          {% endif %}
+          {% if row.total == 0 %}
+          <form method="post" action="{{ url_for('admin.moderate_tag', tag_id=tag.id, action='delete') }}"
+                data-confirm="Delete the empty tag “{{ tag.name }}”?">
+            {{ action_form.csrf_token }}
+            <button class="btn btn-small btn-danger" type="submit"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
+          </form>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
+{% endblock %}
