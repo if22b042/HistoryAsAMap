@@ -56,6 +56,53 @@ def test_fetch_article_prefers_wikidata_date(monkeypatch):
     assert article.url == "https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest"
 
 
+def _fetch(monkeypatch, page_extra, claims=None):
+    client = WikipediaClient("test-agent")
+    page = {"pageid": 1, "title": "X", "extract": "Happened in 1969.", **page_extra}
+    responses = {
+        "https://en.wikipedia.org/w/api.php": {"query": {"pages": [page]}},
+        "https://www.wikidata.org/w/api.php": {"entities": {"Q1": {"claims": claims or {}}}},
+    }
+    monkeypatch.setattr(client, "_get", lambda url, params: responses[url])
+    return client.fetch_article("X")
+
+
+@pytest.mark.parametrize("globe", ["moon", "mars"])
+def test_article_coordinates_off_earth_are_ignored(monkeypatch, globe):
+    article = _fetch(monkeypatch, {"coordinates": [{"lat": 0.67, "lon": 23.47, "globe": globe}]})
+    assert article.lat is None and article.lon is None
+
+
+def test_article_coordinates_on_earth_are_kept(monkeypatch):
+    article = _fetch(monkeypatch, {"coordinates": [{"lat": 10, "lon": 20, "globe": "earth"}]})
+    assert (article.lat, article.lon) == (10, 20)
+
+
+def test_article_coordinates_out_of_range_are_ignored(monkeypatch):
+    article = _fetch(monkeypatch, {"coordinates": [{"lat": 123, "lon": 20}]})
+    assert article.lat is None and article.lon is None
+
+
+def _coord_claim(lat, lon, globe="http://www.wikidata.org/entity/Q2"):
+    return {"P625": [{"mainsnak": {"snaktype": "value", "datavalue": {"value": {
+        "latitude": lat, "longitude": lon, "globe": globe}}}}]}
+
+
+def test_wikidata_coordinates_skip_other_globes_and_bad_ranges(monkeypatch):
+    props = {"pageprops": {"wikibase_item": "Q1"}}
+    moon = _fetch(monkeypatch, props, _coord_claim(0.67, 23.47, "http://www.wikidata.org/entity/Q405"))
+    assert moon.lat is None and moon.lon is None
+    bad = _fetch(monkeypatch, props, _coord_claim(95, 10))
+    assert bad.lat is None and bad.lon is None
+    good = _fetch(monkeypatch, props, _coord_claim(48.8, 2.3))
+    assert (good.lat, good.lon) == (48.8, 2.3)
+
+
+def test_title_with_pipe_is_rejected():
+    assert title_from_url("https://en.wikipedia.org/wiki/Foo%7CBar") is None
+    assert title_from_url("https://en.wikipedia.org/wiki/Foo|Bar") is None
+
+
 def test_fetch_article_missing(monkeypatch):
     client = WikipediaClient("test-agent")
     monkeypatch.setattr(client, "_get", lambda url, params: {"query": {"pages": [{"missing": True}]}})
