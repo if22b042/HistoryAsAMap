@@ -529,34 +529,138 @@ def test_hard_game_is_stored_separately(app, events):
 
 # ---------------------------------------------------------------- daily scores
 
+def _play(client, hard=False, day=None, lat_shift=0.0):
+    """Finish a daily game through /api/game/check; returns its round tokens."""
+    day = day or _today()
+    events = game.daily_events(game.today_utc(), hard=hard)
+    tokens = []
+    for i, event in enumerate(events):
+        body = {"date": day, "index": i, "lat": event.lat + lat_shift, "lon": event.lon}
+        if hard:
+            body.update(hard=True, year=event.year or 1)
+        response = client.post("/api/game/check", json=body)
+        assert response.status_code == 200
+        tokens.append(response.json["token"])
+    return tokens
+
+
+def _send(client, tokens, **extra):
+    headers = extra.pop("headers", None)
+    return client.post("/api/game/score", json={"date": _today(), "tokens": tokens, **extra}, headers=headers)
+
+
 def test_score_is_recorded_and_averaged(client, events):
-    day = _today()
     assert client.get("/api/game/today").json["stats"] == {"count": 0, "average": None}
-    first = client.post("/api/game/score", json={"date": day, "hard": False, "points": 3000})
-    assert first.status_code == 200 and first.json["stats"] == {"count": 1, "average": 3000}
-    second = client.post("/api/game/score", json={"date": day, "points": 4000})
-    assert second.json["stats"] == {"count": 2, "average": 3500}
+    first = _send(client, _play(client))
+    assert first.status_code == 200
+    assert first.json["stats"] == {"count": 1, "average": game.MAX_DAILY_TOTAL}
+    assert first.json["points"] == game.MAX_DAILY_TOTAL
+    assert first.json["percentile"] is None  # too few scores to compare with
+    worse = _send(client, _play(client, lat_shift=10))
+    assert worse.json["points"] < game.MAX_DAILY_TOTAL and worse.json["stats"]["count"] == 2
     assert client.get("/api/game/today").json["stats"]["count"] == 2
     # The hard game has its own scores.
     assert client.get("/api/game/today?hard=1").json["stats"]["count"] == 0
+    assert _send(client, _play(client, hard=True), hard=True).json["stats"]["count"] == 1
 
 
-@pytest.mark.parametrize("body", [
-    {"date": "today", "points": 25001},
-    {"date": "today", "points": -1},
-    {"date": "today", "points": 10.5},
-    {"date": "today", "points": True},
-    {"date": "today", "points": "100"},
-    {"date": "today", "points": 100, "hard": "yes"},
-    {"points": 100},
-])
-def test_score_rejects_bad_input(client, events, body):
-    assert client.post("/api/game/score", json=body).status_code == 400
+def test_check_returns_a_token_only_for_daily_rounds(client, events):
+    daily = client.post("/api/game/check", json={"date": _today(), "index": 0, "lat": 0, "lon": 0})
+    assert "token" in daily.json
+    seed = client.get("/api/game/practice").json["seed"]
+    practice = client.post("/api/game/practice/check", json={"seed": seed, "index": 0, "lat": 0, "lon": 0})
+    assert "token" not in practice.json
+
+
+def test_score_rejects_forged_tokens(client, events):
+    tokens = _play(client, lat_shift=10)
+    forged = [f"{game.MAX_POINTS}." + t.split(".")[1] for t in tokens]  # points edited, signature kept
+    unsigned = [t.partition(".")[0] + "." + "0" * 32 for t in tokens]
+    for bad in (forged, unsigned, ["5000.x"] * 5, [5000] * 5, [None] * 5):
+        assert _send(client, bad).status_code == 400
+    assert game.score_stats(game.today_utc(), False)["count"] == 0
+
+
+def test_score_rejects_partial_or_mismatched_tokens(client, events):
+    tokens = _play(client, lat_shift=5)
+    assert _send(client, tokens[:4]).status_code == 400
+    assert _send(client, []).status_code == 400
+    assert _send(client, tokens + [tokens[0]]).status_code == 400
+    assert _send(client, [tokens[0]] * 5).status_code == 400  # one round's token reused for all
+    assert _send(client, tokens[1:] + tokens[:1]).status_code == 400  # tokens are bound to their round
+    assert _send(client, tokens, hard=True).status_code == 400  # signed for the normal game
+    assert _send(client, "nope").status_code == 400
+    assert client.post("/api/game/score", json={"date": _today()}).status_code == 400
+    assert _send(client, tokens, hard="yes").status_code == 400
+    assert game.score_stats(game.today_utc(), False)["count"] == 0
+
+
+@pytest.mark.parametrize("extra", [{"points": 25000}, {"score": 25000}, {"total": 25000}])
+def test_a_client_total_is_never_accepted_or_stored(client, events, extra):
+    assert client.post("/api/game/score", json={"date": _today(), **extra}).status_code == 400
+    assert client.post("/api/game/score", json={"date": _today(), "tokens": [], **extra}).status_code == 400
+    assert game.score_stats(game.today_utc(), False)["count"] == 0
+    # Beside valid tokens the number is ignored: the stored total is the tokens' sum.
+    tokens = _play(client, lat_shift=10)
+    data = _send(client, tokens, **extra).json
+    assert data["points"] < 25000 and data["stats"]["average"] == data["points"]
+
+
+def test_legacy_rows_without_proof_are_not_in_the_percentile(app, events):
+    with app.app_context():
+        day = game.today_utc()
+        for points in (1, 2, 3, 4, 5, 6):
+            assert game.record_score(day, False, points)  # no proof: an old, unverified row
+        assert game.percentile(day, False, 10) is None
+        _record(day, [100, 200, 300, 400, 500])
+        assert game.percentile(day, False, 10) == 0
+
+
+def test_a_replayed_game_counts_once(client, events):
+    tokens = _play(client)
+    assert _send(client, tokens).status_code == 200
+    again = _send(client, tokens)
+    assert again.status_code == 409 and again.json["recorded"] is False
+    assert game.score_stats(game.today_utc(), False)["count"] == 1
+
+
+def test_a_token_is_bound_to_its_day(app, events):
+    with app.app_context():
+        day, other = date(2026, 11, 10), date(2026, 11, 11)
+        tokens = [game.round_token(day, False, i, 100) for i in range(game.EVENTS_PER_DAY)]
+        assert game.total_from_tokens(day, False, tokens)[0] == 500
+        assert game.total_from_tokens(other, False, tokens) is None
 
 
 def test_score_for_a_future_day(client, events):
     tomorrow = (game.today_utc() + timedelta(days=1)).isoformat()
-    assert client.post("/api/game/score", json={"date": tomorrow, "points": 10}).status_code == 404
+    assert client.post("/api/game/score", json={"date": tomorrow, "tokens": []}).status_code == 404
+
+
+def _record(day, points_list):
+    for n, points in enumerate(points_list):
+        assert game.record_score(day, False, points, proof=f"p{points}-{n}")
+
+
+def test_percentile_maths(app, events):
+    with app.app_context():
+        day = game.today_utc()
+        assert game.percentile(day, False, 100) is None
+        _record(day, [1000, 2000, 3000, 4000])
+        assert game.percentile(day, False, 2500) is None  # four scores: still too few
+        _record(day, [5000])
+        assert game.percentile(day, False, 5000) == 90  # beats 4, ties 1 (counts half)
+        assert game.percentile(day, False, 5001) == 100
+        assert game.percentile(day, False, 999) == 0
+        assert game.percentile(day, False, 2500) == 40
+        assert game.percentile(day, True, 2500) is None  # the hard game has its own scores
+
+
+def test_score_answer_has_the_percentile(app, client, events):
+    with app.app_context():
+        _record(game.today_utc(), [100, 200, 300, 400])
+    data = _send(client, _play(client)).json
+    assert data["percentile"] == 90  # five scores: beats the four lower ones, ties itself
 
 
 # ---------------------------------------------------------------- challenge a friend
@@ -890,12 +994,13 @@ def test_hint_is_rate_limited(app, client, events):
 
 def test_a_client_can_report_only_a_few_scores_a_day(app, client, events):
     app.config["RATELIMIT_ENABLED"] = True
-    for _ in range(5):
-        assert client.post("/api/game/score", json={"date": _today(), "points": 100}).status_code == 200
-    assert client.post("/api/game/score", json={"date": _today(), "points": 5000}).status_code == 429
+    # Different finished games (each with its own tokens), so only the rate limit stops them.
+    games = [_play(client, lat_shift=shift) for shift in (1, 2, 3, 4, 5, 6)]
+    for tokens in games[:5]:
+        assert _send(client, tokens).status_code == 200
+    assert _send(client, games[5]).status_code == 429
     # The hard game and other clients have their own allowance.
-    assert client.post("/api/game/score", json={"date": _today(), "hard": True, "points": 100}).status_code == 200
-    other = client.post("/api/game/score", json={"date": _today(), "points": 100},
-                        headers={"X-Forwarded-For": "203.0.113.9"})
+    assert _send(client, _play(client, hard=True), hard=True).status_code == 200
+    other = _send(client, games[5], headers={"X-Forwarded-For": "203.0.113.9"})
     assert other.status_code == 200
     assert game.score_stats(game.today_utc(), False)["count"] == 6

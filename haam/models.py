@@ -477,4 +477,6 @@ class GameScore(db.Model):
     date: Mapped[_dt.date] = mapped_column(Date)
     hard: Mapped[bool] = mapped_column(default=False)
     points: Mapped[int]
+    # Hash of the signed round tokens behind this total: the same finished game counts once.
+    proof: Mapped[str | None] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
