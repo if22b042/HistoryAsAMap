@@ -189,6 +189,10 @@ def import_csv(path: str, *, approve: bool = False, report: Reporter = print) ->
                 report(f"line {line_no}: {article.title} has no coordinates, add lat/lon columns")
                 stats.rejected += 1
                 continue
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                report(f"line {line_no}: {article.title} has coordinates out of range ({lat}, {lon})")
+                stats.rejected += 1
+                continue
             if find_existing(article.url, article.page_id):
                 stats.skipped += 1
                 continue

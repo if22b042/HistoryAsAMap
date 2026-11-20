@@ -80,7 +80,7 @@ def test_challenge_link_and_report_link_are_in_the_scripts():
 
 
 def test_confirm_keeps_the_may_not_be_an_event_warning(client, wiki):
-    wiki.add("Battle of Hastings", year=None, dated_by_wikidata=False)
+    wiki.add("Battle of Hastings", dated_by_wikidata=False)
     preview = client.post("/submit", data={"url": URL, "category": ""}).get_data(as_text=True)
     assert "may not be an event" in preview
     assert 'name="dated_by_wikidata"' in preview and 'value="0"' in preview
