@@ -111,11 +111,13 @@ def _edit_url(collection) -> str | None:
 
 
 def _email_links(email: str, collection, edit_token: str) -> None:
-    """Send the share and edit links once; a failure only produces a warning."""
+    """Send the share and edit links once; any failure (or a used-up limit) is the same warning."""
     try:
-        mail.send_links(email, collection.title, _share_url(collection), _claim_url(collection, edit_token))
-    except mail.MailError:
-        current_app.logger.warning("Could not email the links of collection %s", collection.id)
+        if not mail.may_send(email):
+            raise mail.MailError("email limit reached")
+        mail.send_links(email, _share_url(collection), _claim_url(collection, edit_token))
+    except Exception as error:  # the collection exists; nothing here may turn into a 500
+        current_app.logger.warning("Could not email the links of collection %s: %s", collection.id, error)
         flash("We could not send the email. Copy your edit link from this page now: it is shown only once.",
               "warning")
     else:

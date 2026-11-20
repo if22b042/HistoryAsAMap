@@ -57,6 +57,14 @@ class Config:
     SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
     MAIL_FROM = os.environ.get("MAIL_FROM")
+    # Abuse limits for the email: per recipient and per client per hour, all recipients per day.
+    MAIL_PER_RECIPIENT_HOURLY = int(os.environ.get("MAIL_PER_RECIPIENT_HOURLY") or "2")
+    MAIL_PER_CLIENT_HOURLY = int(os.environ.get("MAIL_PER_CLIENT_HOURLY") or "3")
+    MAIL_DAILY_LIMIT = int(os.environ.get("MAIL_DAILY_LIMIT") or "200")
+
+    # How many reverse proxies in front of the app append to X-Forwarded-For (see haam/ratelimit.py).
+    # 0 ignores the header, so a visitor cannot pick their own address; Vercel is one proxy.
+    TRUSTED_PROXIES = int(os.environ.get("TRUSTED_PROXIES") or ("1" if os.environ.get("VERCEL") else "0"))
 
     # Public address used in canonical links, share previews and the sitemap.
     # Empty means "the address of the current request".
@@ -81,6 +89,7 @@ class TestingConfig(Config):
     GEOCODING_ENABLED = False
     AUTO_SETUP_DATABASE = False  # tests build their own schema
     SITE_URL = "https://haam.test"
+    TRUSTED_PROXIES = 1  # tests pass a client address in X-Forwarded-For
     FEED_STATE_TTL = 0  # tests change data and read the map's version straight away
 
 
