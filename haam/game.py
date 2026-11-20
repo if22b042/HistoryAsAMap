@@ -1,7 +1,7 @@
 """The daily game: guess where five historical events happened.
 
 Every player gets the same five events on a given (UTC) day. The year is shown;
-the player places a pin on the map and scores up to 1,000 points per event
+the player places a pin on the map and scores up to 5,000 points per event
 depending on how far the pin is from the real place. The hard game of the day
 has five other events, and the year is guessed too.
 
@@ -117,7 +117,7 @@ _FLOOR = math.exp(-ZERO_KM / _DECAY_KM)
 
 
 def score_distance(km: float) -> int:
-    """Points for a pin ``km`` away: 1,000 when close, ~500 at 500 km, 0 from 3,000 km."""
+    """Points for a pin ``km`` away: 5,000 within 50 km, 2,500 at 1,000 km, 0 from 6,000 km."""
     if km <= FULL_KM:
         return MAX_POINTS
     if km >= ZERO_KM:
@@ -145,7 +145,7 @@ def year_share(error: int) -> float:
 
 
 def score_year(guess: int, actual: int) -> int:
-    """Hard-mode year points: 500 when exact, 250 at 50 years off, 0 from 500 years off."""
+    """Hard-mode year points: 2,500 when exact, 1,250 at 50 years off, 0 from 500 years off."""
     return round(HARD_YEAR_POINTS * year_share(year_error(guess, actual)))
 
 

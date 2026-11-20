@@ -41,18 +41,32 @@ entry has an article, and the certificate badge when every entry is a confirmed 
 haam/
   __init__.py       create_app(): config, extensions, blueprints, security headers
   config.py         settings from environment variables
-  models.py         Event, Tag, Collection, CollectionEntry (tables prefixed haam_)
-  events.py         business logic: preview, submit, update, moderate
+  models.py         Event, Tag, Collection, CollectionEntry, CollectionSuggestion, EventReport,
+                    DailyGame, GameScore, CollectionReport, RateLimitHit (tables prefixed haam_)
+  events.py         business logic: preview, submit, update, moderate; public event ids
   wikipedia.py      Wikipedia + Wikidata client, URL canonicalisation
+  wikidata.py       Wikidata export and validation of event candidates (`export-wikidata`)
+  tagging.py        assigns tags to events from their Wikidata "part of" chains
+  tag_tree.py       tag trees from `data/part_of.json` (no Wikidata request at page load)
   dates.py          year/date parsing and formatting (negative years = BC)
   geocoding.py      optional country lookup (OpenStreetMap Nominatim)
   importer.py       bulk imports used by the CLI
+  recategorize.py   re-derives imported events' categories (`recategorize`)
+  feed.py           the map's data in versioned, cacheable chunks
+  game.py           the daily and practice game: picks, scoring, hints, scores
+  welcome.py        the map's welcome card: on this day, today's game, featured collections
+  seo.py            canonical links, share previews, map-tile images, sitemap and robots.txt
+  activity.py       recent activity summary for editors
+  ratelimit.py      per-client rate limits kept in the database (`@limit`)
+  mail.py           optional SMTP email of a new collection's links
   auth.py           single editor account (session login)
-  forms.py          WTForms forms (CSRF-protected)
+  forms.py          WTForms forms (CSRF-protected), including the year limits
+  extensions.py     shared Flask extensions (database, CSRF)
   cli.py            `flask haam ...` commands
-  data/tags.py      curated list of ~340 historical periods/conflicts
-  collections_service.py  map collections: secret links, entries, reports
-  views/            public pages, collections, admin pages, JSON API
+  data/             tags.py (curated list of ~340 historical periods/conflicts), event_types.py,
+                    place_words.py, regions.py, part_of.json
+  collections_service.py  map collections: secret links, entries, suggestions, reports
+  views/            public pages, collections, admin pages, game, SEO (sitemap, robots), JSON API
   templates/        Jinja templates
   static/           CSS and JavaScript (no build step)
 migrations/         Alembic database migrations
@@ -243,6 +257,8 @@ start time, which filters out towns, buildings and other places.
 | `GEOCODING_ENABLED` | `true` | Look up each event's country |
 | `SESSION_COOKIE_SECURE` | `true` | Set `false` only for plain-HTTP setups |
 | `AUTO_SETUP_DATABASE` | `true` | Apply migrations and load tags on startup |
+| `HTTP_TIMEOUT` | `10` | Seconds before a Wikipedia call times out in commands (the website uses a shorter timeout) |
+| `SITE_URL` | `https://history-as-a-map.vercel.app` in production, empty in development | Public address for canonical links, share previews and the sitemap |
 | `SMTP_HOST` | *(email disabled)* | Mail server for emailing the collection links once; without it the email field on "New collection" is hidden |
 | `SMTP_PORT` | `587` | `465` uses SSL, any other port STARTTLS |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | *(no login)* | Credentials for the mail server |
@@ -273,10 +289,25 @@ The old tables (`entries`, `locations`, `tags`, `entry_tags`) are only read by
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/events/manifest` | Map data: the version and the URLs of the event chunks |
+| GET | `/api/events/<version>/core/<n>.json` | One chunk of the map's core data (position, year, title, category); cached for a year |
+| GET | `/api/events/<version>/text/<n>.json` | The same chunk's short descriptions |
+| GET | `/api/events/<version>/tags.json` | Tags and the tags of each event |
 | GET | `/api/events/<id>` | One approved event, with its full summary |
 | GET | `/api/tags` | All tags |
+| GET | `/api/tags/<id>/tree` | A tag as a tree of its parts |
 | GET | `/api/categories` | Category values and labels |
+| GET | `/api/welcome` | The welcome card: on this day, today's game, featured collections (`?month=&day=`) |
 | GET | `/api/health` | `{"status": "ok"}` |
+| GET | `/api/game/<date>` | The daily game for a date (`today` or `YYYY-MM-DD`) |
+| POST | `/api/game/check` | Scores a guess in the daily game |
+| GET, POST | `/api/game/practice`, `/api/game/practice/check` | A practice round and its scoring |
+| POST | `/api/game/hint`, `/api/game/score` | A hint for a round; a finished daily score |
+| GET, POST | `/api/game/pairs`, `/api/game/pairs/check` | The "which came first?" mode |
+
+Other routes: `/event/<id>-<slug>` (event pages), `/embed` (map without the page frame),
+`/game`, `/submit`, `/collections/...`, `/admin/...`, `/sitemap.xml`, `/robots.txt`.
+Public event ids are Wikipedia page ids. Game, submit and report endpoints are rate limited
+(HTTP 429).
 
 ## Credits
 
