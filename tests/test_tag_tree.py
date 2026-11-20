@@ -138,3 +138,25 @@ def test_tree_api(client, make_event):
 
     assert path(data)[-2:] == ["Operation Barbarossa", "Battle in Barbarossa"]
     assert client.get("/api/tags/999999/tree").status_code == 404
+
+
+def test_tree_identifies_events_by_public_id_not_row_id(app, make_event):
+    """The map keys events by Wikipedia page id; a tree built on row ids opened the wrong event."""
+    from haam.extensions import db
+
+    tag = Tag.query.filter_by(name="World War II").one()
+    event = make_event("Battle of Midway", year=1942, wiki_page_id=987654)
+    event.tags.append(tag)
+    db.session.commit()
+    assert event.id != 987654
+
+    ids = []
+
+    def walk(node):
+        if "event" in node:
+            ids.append(node["event"])
+        for child in node.get("children", []):
+            walk(child)
+
+    walk(app.test_client().get(f"/api/tags/{tag.id}/tree").json)
+    assert ids == [987654]

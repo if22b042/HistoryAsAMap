@@ -305,6 +305,7 @@ def claim(view_token: str, edit_token: str):
 
 
 @bp.post("/<view_token>/copy")
+@limit("collection-copy", 10, 3600)
 def copy(view_token: str):
     """Use as a base for my own collection: an unlisted copy that this browser can edit."""
     source, _ = _viewable_or_410(view_token)
@@ -318,6 +319,7 @@ def copy(view_token: str):
 
 
 @bp.post("/<view_token>/suggest")
+@limit("collection-suggest", 10, 3600)
 def suggest(view_token: str):
     """A visitor suggests an entry; the owner decides on the manage page."""
     collection, _ = _viewable_or_410(view_token)

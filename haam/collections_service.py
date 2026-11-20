@@ -35,6 +35,7 @@ from haam.wikipedia import WikipediaError, get_client, title_from_url
 MAX_ENTRIES = 500
 MAX_PENDING_SUGGESTIONS = 50
 SESSION_KEY = "collections"  # {collection id: proof} for collections this browser may edit
+MAX_REMEMBERED = 40  # collections this browser can edit; the oldest is forgotten beyond this
 FRESH_KEY = "fresh_edit_tokens"  # {collection id: edit token}, shown on the next manage page only
 PROOF_PREFIX = "~"  # urlsafe tokens never contain it, so older cookies (a raw token) are recognised
 
@@ -101,7 +102,10 @@ def remember(collection: Collection, edit_token: str | None = None) -> None:
     manage page has shown the edit link once.
     """
     owned = dict(session.get(SESSION_KEY, {}))
+    owned.pop(str(collection.id), None)  # re-adding moves it to the newest position
     owned[str(collection.id)] = _proof(collection)
+    while len(owned) > MAX_REMEMBERED:  # keep the cookie far below the ~4 KB browser limit
+        owned.pop(next(iter(owned)))
     session[SESSION_KEY] = owned
     session.permanent = True
     if edit_token:

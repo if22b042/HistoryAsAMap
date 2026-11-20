@@ -388,3 +388,34 @@ def test_smtp_send_uses_starttls_and_login(app, monkeypatch):
     mail.send_links("me@example.org", "Mine", "https://h/collections/v", "https://h/collections/v/edit/t")
     assert [e[0] for e in events] == ["connect", "starttls", "login", "send"]
     assert "https://h/collections/v/edit/t" in events[-1][3] and events[-1][1] == "me@example.org"
+
+
+# ------------------------------------------------------------------ abuse limits
+
+def test_copy_and_suggest_are_rate_limited(client, app):
+    app.config["RATELIMIT_ENABLED"] = True
+    collection = create(client)
+    visitor = app.test_client()
+    for _ in range(10):
+        assert visitor.post(f"/collections/{collection.view_token}/copy").status_code == 302
+    assert visitor.post(f"/collections/{collection.view_token}/copy").status_code == 429
+    for _ in range(10):
+        visitor.post(f"/collections/{collection.view_token}/suggest", data={"title": "A thing"})
+    assert visitor.post(f"/collections/{collection.view_token}/suggest",
+                        data={"title": "A thing"}).status_code == 429
+
+
+def test_session_remembers_a_bounded_number_of_collections(client, app):
+    from haam import collections_service as service
+
+    first = create(client, title="First")
+    with client.session_transaction() as session:
+        assert str(first.id) in session[service.SESSION_KEY]
+    for number in range(service.MAX_REMEMBERED):
+        create(client, title=f"Extra {number}")
+    with client.session_transaction() as session:
+        owned = session[service.SESSION_KEY]
+    assert len(owned) == service.MAX_REMEMBERED
+    assert str(first.id) not in owned
+    cookie = next(c for c in client._cookies.values() if c.key == "session")  # werkzeug test cookie jar
+    assert len(cookie.value) < 3500  # well under the ~4 KB browser limit
