@@ -247,6 +247,8 @@ start time, which filters out towns, buildings and other places.
 | `SMTP_PORT` | `587` | `465` uses SSL, any other port STARTTLS |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | *(no login)* | Credentials for the mail server |
 | `MAIL_FROM` | `SMTP_USERNAME` | Sender address of that email |
+| `MAIL_PER_RECIPIENT_HOURLY`, `MAIL_PER_CLIENT_HOURLY`, `MAIL_DAILY_LIMIT` | `2`, `3`, `200` | Abuse limits for that email: per address and per visitor per hour, all together per day |
+| `TRUSTED_PROXIES` | `0` (`1` on Vercel) | How many proxies in front of the app append to `X-Forwarded-For`; used to find the visitor's address for rate limits. `0` ignores the header |
 
 ## Deploying to Vercel
 
