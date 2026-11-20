@@ -321,8 +321,8 @@ def test_links_are_emailed_once_and_not_stored(client, smtp):
     response = client.post("/collections/new", data={"title": "Mailed", "email": "me@example.org"})
     assert response.status_code == 302
     collection = db.session.scalar(db.select(Collection))
-    [(to, title, share, edit)] = smtp
-    assert to == "me@example.org" and title == "Mailed"
+    [(to, share, edit)] = smtp
+    assert to == "me@example.org"
     assert share.endswith(f"/collections/{collection.view_token}")
     assert f"/collections/{collection.view_token}/edit/" in edit
     assert service.check_edit_token(collection, edit.rsplit("/", 1)[1])
@@ -385,7 +385,7 @@ def test_smtp_send_uses_starttls_and_login(app, monkeypatch):
             events.append(("send", message["To"], message["From"], message.get_content()))
 
     monkeypatch.setattr(mail.smtplib, "SMTP", FakeSMTP)
-    mail.send_links("me@example.org", "Mine", "https://h/collections/v", "https://h/collections/v/edit/t")
+    mail.send_links("me@example.org", "https://h/collections/v", "https://h/collections/v/edit/t")
     assert [e[0] for e in events] == ["connect", "starttls", "login", "send"]
     assert "https://h/collections/v/edit/t" in events[-1][3] and events[-1][1] == "me@example.org"
 

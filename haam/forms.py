@@ -18,6 +18,7 @@ from wtforms import (
 )
 from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, ValidationError
 
+from haam import mail
 from haam.dates import parse_year_input
 from haam.models import Category
 from haam.wikipedia import title_from_url
@@ -104,7 +105,7 @@ class TagEntriesForm(FlaskForm):
 
 def _email(form, field):
     value = (field.data or "").strip()
-    if value and not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+", value):
+    if value and not mail.valid_address(value):
         raise ValidationError("Enter a valid email address or leave it empty.")
 
 
