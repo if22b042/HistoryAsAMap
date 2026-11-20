@@ -521,9 +521,61 @@ def pair_answer(first: Event, second: Event, choice: int) -> dict:
 MAX_DAILY_TOTAL = MAX_POINTS * EVENTS_PER_DAY
 
 
-def record_score(day: date, hard: bool, points: int) -> None:
-    db.session.add(GameScore(date=day, hard=hard, points=points))
-    db.session.commit()
+def round_token(day: date, hard: bool, index: int, points: int) -> str:
+    """A signed receipt for one scored daily round: ``<points>.<signature>``.
+
+    Bound to the day, the mode, the round and the points, so /game/score can total a finished
+    game without trusting the client. (Answers can still be found by probing /api/game/check.)"""
+    key = current_app.config["SECRET_KEY"].encode()
+    message = f"haam-score:{day.isoformat()}:{int(hard)}:{index}:{points}".encode()
+    return f"{points}.{hmac.new(key, message, hashlib.sha256).hexdigest()[:32]}"
+
+
+def total_from_tokens(day: date, hard: bool, tokens) -> tuple[int, str] | None:
+    """The total and proof hash of exactly one valid token per round, in order; None if not."""
+    if not isinstance(tokens, list) or len(tokens) != EVENTS_PER_DAY:
+        return None
+    total = 0
+    for index, token in enumerate(tokens):
+        if not isinstance(token, str):
+            return None
+        head = token.partition(".")[0]
+        if not head.isascii() or not head.isdigit() or len(head) > 6:
+            return None
+        points = int(head)
+        if not hmac.compare_digest(token, round_token(day, hard, index, points)):
+            return None
+        total += points
+    proof = hashlib.sha256(f"{day.isoformat()}:{int(hard)}:{'|'.join(tokens)}".encode()).hexdigest()
+    return total, proof
+
+
+def record_score(day: date, hard: bool, points: int, proof: str | None = None) -> bool:
+    """Store a total; False (nothing stored) when this proof was already recorded."""
+    db.session.add(GameScore(date=day, hard=hard, points=points, proof=proof))
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return False
+    return True
+
+
+MIN_PERCENTILE_SCORES = 5
+
+
+def percentile(day: date, hard: bool, points: int) -> int | None:
+    """Percent of the day's proven scores that ``points`` beats (ties count half).
+
+    None while fewer than MIN_PERCENTILE_SCORES scores exist: too few to mean anything."""
+    # Rows without a proof predate signed tokens and may be self-reported: not compared with.
+    where = (GameScore.date == day, GameScore.hard == hard, GameScore.proof.is_not(None))
+    count = db.session.scalar(select(func.count(GameScore.id)).where(*where))
+    if count < MIN_PERCENTILE_SCORES:
+        return None
+    below = db.session.scalar(select(func.count(GameScore.id)).where(*where, GameScore.points < points))
+    equal = db.session.scalar(select(func.count(GameScore.id)).where(*where, GameScore.points == points))
+    return round(100 * (below + equal / 2) / count)
 
 
 def score_stats(day: date, hard: bool) -> dict:
