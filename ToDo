@@ -1,27 +1,29 @@
+(Status checked 20 Nov 2026: [DONE] items are implemented, the rest is open.)
+
 Name: History As A Map (HAAM)
 
-FIX 1: why can it not read the year from https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest
+[DONE] FIX 1: why can it not read the year from https://en.wikipedia.org/wiki/Battle_of_the_Teutoburg_Forest
 
 Mayor Expansions:
-Fill up db
-Mobile version
+[DONE] Fill up db (sync-wikidata, ~19,000 events)
+[DONE] Mobile version (phone layout)
 
-Map Colelction:
+[DONE] Map Colelction:
 Create your own map colection with notes both on each event and on the collection 
 You can then see just those on the map
 This could be published to other people 
 To avoid login: When being created two links are generated one for editing and one for viewing ask the user to store it (is this a safe and good approach?)
 
 QOL:
-Implement a way to delete entries 
-Fix thing that multiple map icons will look terrible
-Implement links for events so they can be shared
+[DONE] Implement a way to delete entries (editors in /admin, owners inside their collections)
+[DONE] Fix thing that multiple map icons will look terrible (marker clusters)
+[DONE] Implement links for events so they can be shared (/event/<id>-<slug>)
 
 
-Tags:
+Tags (still open):
 Add ability to also create new tags
 Think about a way to make tag selection more refined
 - Tags should have more complex filtering algorithms for example when I enter greece all the things that ever concerned greece appear, so in essence it should have keywords to filter by
 
 Testing:
-Check if order is correct of dates before date 0
+(open) Check if order is correct of dates before date 0
