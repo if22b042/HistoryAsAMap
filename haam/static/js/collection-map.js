@@ -36,6 +36,13 @@ if (dataTag && mapElement) {
       box.append(el("strong", "popup-title", entry.title));
       box.append(el("span", "popup-year", entry.date || entry.display_year));
       if (entry.note) box.append(el("p", "popup-summary", entry.note));
+      if (entry.wiki_lat != null && entry.wiki_lon != null) {
+        const link = el("a", "popup-coords", "Wikipedia lists " + entry.wiki_lat.toFixed(4) + ", " + entry.wiki_lon.toFixed(4));
+        link.href = "https://www.google.com/maps?q=" + entry.wiki_lat + "," + entry.wiki_lon;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        box.append(link);
+      }
       const jump = el("button", "popup-btn", "Show in list ↓");
       jump.type = "button";
       jump.addEventListener("click", () => highlight(entry.id, true));

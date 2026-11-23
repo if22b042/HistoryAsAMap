@@ -267,6 +267,10 @@ class CollectionEntry(db.Model):
     link: Mapped[str | None] = mapped_column(String(500))
     # True when ``link`` points to an existing English Wikipedia article (checked on save).
     wiki_verified: Mapped[bool] = mapped_column(default=False)
+    # Set only when an editor put this entry elsewhere than the Wikipedia article's own coordinates:
+    # the Wikipedia coordinates, shown under the entry as "manually reconfirmed".
+    wiki_lat: Mapped[float | None]
+    wiki_lon: Mapped[float | None]
 
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
@@ -323,6 +327,14 @@ class CollectionEntry(db.Model):
         return self.event.category if self.event else (self.custom_category or Category.OTHER)
 
     @property
+    def reconfirmed(self) -> bool:
+        return self.wiki_lat is not None and self.wiki_lon is not None
+
+    @property
+    def wiki_maps_url(self) -> str | None:
+        return f"https://www.google.com/maps?q={self.wiki_lat},{self.wiki_lon}" if self.reconfirmed else None
+
+    @property
     def url(self) -> str | None:
         return self.event.wiki_url if self.event else self.link
 
@@ -343,6 +355,8 @@ class CollectionEntry(db.Model):
             "is_confirmed": self.is_confirmed,
             "has_wikipedia": self.has_wikipedia,
             "moved": self.moved,
+            "wiki_lat": self.wiki_lat,
+            "wiki_lon": self.wiki_lon,
         }
 
     def to_map_dict(self) -> dict:
@@ -365,6 +379,8 @@ class CollectionEntry(db.Model):
             "category": self.category.value,
             "tags": [tag.id for tag in self.event.tags] if self.event else [],
             "moved": self.moved,
+            "wiki_lat": self.wiki_lat,
+            "wiki_lon": self.wiki_lon,
         }
 
 
