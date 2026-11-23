@@ -12,7 +12,9 @@ What it loads (safe to run again – existing events and collections are skipped
                                   by an editor and/or reported (reasons separated by ``;``).
 * ``seed/collection_entries.csv`` their entries: ``event`` rows point to an event from
                                   events.csv by its Wikipedia url, ``custom`` rows are the
-                                  author's own entries (optional link, verified for the ★).
+                                  author's own entries (optional link, verified for the ★;
+                                  optional wiki_lat/wiki_lon = Wikipedia's coordinates where ours
+                                  deliberately differ, shown as "manually reconfirmed").
 
 Edit links are shown once and also written to ``instance/demo-links.txt``.
 """
@@ -114,11 +116,14 @@ def _add_entry(collection: Collection, row: dict) -> None:
             if year is None:
                 print(f"    ! skipped {row['title']}: bad year {row['year']!r}")
                 return
-            collections_service.add_custom(collection, CustomEntryData(
+            entry = collections_service.add_custom(collection, CustomEntryData(
                 title=row["title"], year=year, date_label=row["date"],
                 category=Category(row["category"] or "other"),
                 lat=float(row["lat"]), lon=float(row["lon"]),
                 summary=row["description"], link=row["url"], note=row["note"]))
+            if row.get("wiki_lat") and row.get("wiki_lon"):  # place manually reconfirmed against Wikipedia's
+                entry.wiki_lat, entry.wiki_lon = float(row["wiki_lat"]), float(row["wiki_lon"])
+                db.session.commit()
     except (CollectionError, ValueError) as error:
         print(f"    ! skipped {row.get('title') or row.get('url')}: {getattr(error, 'message', error)}")
 

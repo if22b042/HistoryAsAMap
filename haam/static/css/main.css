@@ -789,6 +789,11 @@ h1 .trust { width: 2rem; height: 2rem; font-size: 1rem; }
   font-size: 0.9rem;
   white-space: pre-line;
 }
+.coord-note { margin: 0.5rem 0 0; font-size: 0.85rem; }
+.popup-coords { display: block; margin-top: 0.35rem; font-size: 0.8rem; }
+.coord-value { font-variant-numeric: tabular-nums; color: var(--text-strong); font-weight: 600; }
+.coord-note small { display: block; margin-top: 0.1rem; font-size: 0.8rem; color: var(--text-muted); }
+.coord-note small a, .popup-coords { text-decoration: underline; text-underline-offset: 2px; }
 .entry-link { display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; font-weight: 600; }
 .marker span { display: grid; place-items: center; height: 100%; color: #fff; font-size: 0.7rem; font-weight: 700; }
 .marker-custom { background: var(--surface) !important; border-color: var(--cat-other); border-style: dashed; }

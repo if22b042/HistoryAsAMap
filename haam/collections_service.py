@@ -349,6 +349,8 @@ def _apply_custom(entry: CollectionEntry, data: CustomEntryData) -> None:
     entry.custom_year = data.year
     entry.custom_date_label = data.date_label
     entry.custom_category = data.category
+    if (entry.custom_lat, entry.custom_lon) != (data.lat, data.lon):
+        entry.wiki_lat = entry.wiki_lon = None  # the reconfirmed note no longer describes this place
     entry.custom_lat, entry.custom_lon = data.lat, data.lon
     entry.custom_summary = data.summary
     entry.note = data.note

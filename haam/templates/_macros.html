@@ -99,6 +99,18 @@
   {% elif not entry.is_event %}<span class="badge badge-custom" title="Added by the collection's author, not reviewed">custom</span>{% endif %}
 {% endmacro %}
 
+{# Shown only when an editor placed the entry elsewhere than Wikipedia's coordinates. #}
+{% macro coord_note(entry) %}
+  {% if entry.reconfirmed %}
+    <p class="coord-note">
+      <span class="coord-value">{{ '%.4f'|format(entry.lat) }}, {{ '%.4f'|format(entry.lon) }}</span>
+      <small>Manually reconfirmed here. Wikipedia lists
+        <a href="{{ entry.wiki_maps_url }}" target="_blank" rel="noopener noreferrer">{{ '%.4f'|format(entry.wiki_lat) }}, {{ '%.4f'|format(entry.wiki_lon) }}
+        (open in Maps)</a>.</small>
+    </p>
+  {% endif %}
+{% endmacro %}
+
 {% macro collection_badges(collection) %}
   {% if collection.all_wikipedia %}<span class="trust trust-wiki" title="Every entry has a Wikipedia article"><i class="fab fa-wikipedia-w" aria-hidden="true"></i><span class="sr-only">All entries from Wikipedia</span></span>{% endif %}
   {% if collection.all_confirmed %}<span class="trust trust-confirmed" title="Every entry is a confirmed event from the main map"><i class="fas fa-certificate" aria-hidden="true"></i><span class="sr-only">All entries confirmed</span></span>{% endif %}

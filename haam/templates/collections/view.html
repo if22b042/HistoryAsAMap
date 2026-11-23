@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import entry_badges, collection_badges, category_badge, copy_field %}
+{% from "_macros.html" import entry_badges, collection_badges, category_badge, copy_field, coord_note %}
 {% block title %}{{ collection.title }}{% endblock %}
 {% block description %}{{ (collection.description or 'A personal map of history: ' ~ collection.entries|length ~ ' entries' ~ (', ' ~ collection.year_span if collection.year_span else '') ~ '.')|describe }}{% endblock %}
 
@@ -61,6 +61,7 @@
               <span class="entry-card-title">{{ entry.title }}</span>
             </button>
             {% if entry.summary %}<p class="entry-card-summary">{{ entry.summary }}</p>{% endif %}
+            {{ coord_note(entry) }}
             {% if entry.note %}<blockquote class="entry-note"><i class="fas fa-sticky-note" aria-hidden="true"></i> {{ entry.note }}</blockquote>{% endif %}
             {% if entry.url %}
               <a class="entry-link" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer nofollow ugc">
