@@ -37,3 +37,17 @@ def test_moving_the_pin_drops_the_note(client):
         title="Gjøa winters", year=1903, date_label="", category=Category.NAVAL, lat=68.7, lon=-95.9,
         summary="", link="", note=""))
     assert entry.wiki_lat is None and not entry.reconfirmed
+
+
+def test_copy_keeps_the_note(client):
+    collection, entry = _entry(client)
+    entry.wiki_lat, entry.wiki_lon = 59.9037, 10.699
+    db.session.commit()
+    copy, _ = service.copy_collection(collection)
+    assert (copy.entries[0].wiki_lat, copy.entries[0].wiki_lon) == (59.9037, 10.699)
+
+
+def test_map_data_carries_wikipedia_coordinates(client):
+    collection, entry = _entry(client)
+    entry.wiki_lat, entry.wiki_lon = 59.9037, 10.699
+    assert entry.to_dict()["wiki_lat"] == 59.9037 and entry.to_map_dict()["wiki_lon"] == 10.699

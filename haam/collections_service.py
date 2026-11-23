@@ -429,7 +429,8 @@ def copy_collection(source: Collection) -> tuple[Collection, str]:
             custom_title=entry.custom_title, custom_year=entry.custom_year,
             custom_date_label=entry.custom_date_label, custom_summary=entry.custom_summary,
             custom_lat=entry.custom_lat, custom_lon=entry.custom_lon, custom_category=entry.custom_category,
-            link=entry.link, wiki_verified=entry.wiki_verified))
+            link=entry.link, wiki_verified=entry.wiki_verified,
+            wiki_lat=entry.wiki_lat, wiki_lon=entry.wiki_lon))
     db.session.commit()
     return copy, edit_token
 
