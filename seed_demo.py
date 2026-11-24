@@ -72,8 +72,10 @@ def seed_collections(base_url: str) -> list[str]:
     links = []
     for row in read_csv("collections.csv"):
         title = row["title"]
-        if db.session.scalar(select(Collection).where(Collection.title == title)):
-            print(f"  = {title} (already there)")
+        existing = db.session.scalar(select(Collection).where(Collection.title == title))
+        if existing:
+            added = _add_missing_entries(existing, entries_by_key.get(row["key"], []))
+            print(f"  = {title} (already there{f', +{added} new entries' if added else ''})")
             continue
 
         collection, edit_token = collections_service.create_collection(
@@ -97,6 +99,16 @@ def seed_collections(base_url: str) -> list[str]:
         print(f"  + {title}: {len(collection.entries)} entries ({state}){badges}")
         links.append(f"{title}\n  share: {share}\n  edit:  {edit}\n")
     return links
+
+
+def _add_missing_entries(collection: Collection, rows: list[dict]) -> int:
+    """Add the CSV's own (custom) entries a collection does not have yet, matched by title. Never removes anything."""
+    have = {entry.title for entry in collection.entries}
+    before = len(collection.entries)
+    for row in rows:
+        if row["type"] == "custom" and row["title"] not in have:
+            _add_entry(collection, row)
+    return len(collection.entries) - before
 
 
 def _add_entry(collection: Collection, row: dict) -> None:
