@@ -140,9 +140,11 @@
           <div class="entries-bulk">
             <span class="entries-select" data-select-buttons hidden>
               Select
-              <button type="button" class="link-button" data-select="all">all shown</button> ·
-              <button type="button" class="link-button" data-select="none">none</button> ·
-              <button type="button" class="link-button" data-select="invert">invert</button>
+              <span class="seg" role="group" aria-label="Select entries">
+                <button type="button" data-select="all">All shown</button>
+                <button type="button" data-select="none">None</button>
+                <button type="button" data-select="invert">Invert</button>
+              </span>
             </span>
             <button class="btn btn-small btn-danger" type="submit" form="entry-actions" data-remove-selected>
               <i class="fas fa-trash" aria-hidden="true"></i> Remove selected<span data-selected-count></span>
