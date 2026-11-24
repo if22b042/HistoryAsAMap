@@ -10,10 +10,11 @@
 .legend { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s5); font-size: var(--t-sm); color: var(--text-muted); }
 .collection-section { margin-top: var(--s6); }
 .page > .figures { margin-bottom: var(--s4); }
+.page > .figures .figure { border-left: 0; box-shadow: 0 0 0 .5px var(--line); }
 .search-card { margin: var(--s4) 0; }
-.search-row { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto; }
-.search-row .form-group { margin: 0; }
-.search-row .search-q { grid-column: 1 / -1; }
+.search-card .search-row { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto; gap: var(--s3); align-items: end; }
+.search-card .search-row .form-group { margin: 0; }
+.search-card .search-row .search-q { grid-column: 1 / -1; }
 .search-actions { display: flex; gap: var(--s2); }
 /* the big search field */
 .search-pill {
@@ -31,7 +32,7 @@
 .hit-entries .year-pill { flex: none; white-space: nowrap; }
 .hit-more { color: var(--text-muted); font-size: 0.85rem; justify-content: flex-start; }
 @media (max-width: 760px) {
-  .search-row { grid-template-columns: 1fr 1fr; }
+  .search-card .search-row { grid-template-columns: 1fr 1fr; }
   .search-q, .search-actions { grid-column: 1 / -1; }
 }
 .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4); margin-top: var(--s3); }
