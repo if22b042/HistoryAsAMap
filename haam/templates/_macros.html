@@ -1,5 +1,5 @@
 {% macro field_errors(field) %}
-  {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+  {% for error in field.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
 {% endmacro %}
 
 {% macro text_field(field, hint=None, icon=None) %}
