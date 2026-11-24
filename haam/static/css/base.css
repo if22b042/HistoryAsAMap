@@ -6,22 +6,41 @@
 /* ------------------------------------------------------------- base */
 
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--scroll) transparent; }
 body {
   margin: 0;
   font-family: var(--font);
   line-height: 1.55;
+  letter-spacing: -.011em;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3 { color: var(--text-strong); line-height: 1.25; margin: 0 0 0.5rem; }
-h1 { font-size: 1.9rem; }
-h2 { font-size: 1.25rem; }
-h3 { font-size: 0.95rem; }
+input, select, textarea, button { letter-spacing: inherit; }
+h1, h2, h3 { color: var(--text); line-height: 1.25; margin: 0 0 0.5rem; text-wrap: balance; }
+h1 { font-size: var(--t-title); font-weight: 650; letter-spacing: -.03em; }
+h2 { font-size: var(--t-2xl); font-weight: 650; letter-spacing: -.02em; }
+h3 { font-size: var(--t-lg); font-weight: 600; letter-spacing: -.017em; }
 p { margin: 0 0 0.75rem; }
-a { color: var(--link); }
+a { color: var(--accent); }
 a:hover { text-decoration: underline; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
-:focus-visible { outline: 3px solid var(--blue-300); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+::selection { background: var(--accent-soft); color: var(--text); }
+input, textarea { caret-color: var(--accent); }
+.stat, .figure, time, table, .year-pill { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Materials turn solid when the user asks for less transparency or the browser cannot blur. */
+@media (prefers-reduced-transparency: reduce) {
+  :root:root:root { --material: var(--material-fallback); --material-strong: var(--material-fallback); }
+  *, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root:root:root { --material: var(--material-fallback); --material-strong: var(--material-fallback); }
+}
