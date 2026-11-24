@@ -1,0 +1,82 @@
+/* ------------------------------------------------------------ navbar */
+
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  background: var(--nav-bg);
+  box-shadow: var(--shadow);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+.brand:hover { text-decoration: none; opacity: 0.9; }
+.brand-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.15);
+}
+.nav-menu { display: flex; align-items: center; gap: 0.25rem; }
+.nav-form { margin: 0; }
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.8rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.nav-link:hover { background: rgba(255, 255, 255, 0.12); color: #fff; text-decoration: none; }
+.nav-link.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.nav-toggle {
+  display: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .nav-toggle { display: block; }
+  .nav-menu {
+    position: fixed;
+    top: var(--nav-height);
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.75rem;
+    background: var(--nav-bg);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-120%);
+    transition: transform 0.25s ease;
+  }
+  .nav-menu.open { transform: none; }
+  .nav-link { justify-content: center; padding: 0.75rem; width: 100%; }
+  .nav-form .nav-link { width: 100%; }
+}

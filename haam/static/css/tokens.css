@@ -1,0 +1,136 @@
+/* History As A Map – one stylesheet for the whole site.
+   Colours are tokens on :root; dark mode only redefines the tokens. */
+
+:root {
+  --blue-50: #ebf8ff;
+  --blue-100: #bee3f8;
+  --blue-300: #63b3ed;
+  --blue-400: #4299e1;
+  --blue-500: #3182ce;
+  --blue-600: #2b6cb0;
+  --blue-700: #2c5282;
+
+  --cat-military: #e53e3e;
+  --cat-diplomatic: #805ad5;
+  --cat-naval: #1a4e8a;
+  --cat-scientific: #38a169;
+  --cat-natural: #dd6b20;
+  --cat-disaster: #8b4513;
+  --cat-other: #718096;
+
+  --bg: #eef2f7;
+  --surface: #ffffff;
+  --surface-alt: #f7fafc;
+  --border: #e2e8f0;
+  --text: #2d3748;
+  --text-strong: #1a202c;
+  --text-muted: #718096;
+  --link: var(--blue-600);
+  --accent: var(--blue-500);
+  --accent-soft: var(--blue-50);
+
+  --success: #2f855a;
+  --success-bg: #c6f6d5;
+  --error: #c53030;
+  --error-bg: #fed7d7;
+  --warning: #b7791f;
+  --warning-bg: #feebc8;
+
+  --nav-bg: linear-gradient(135deg, var(--blue-600), var(--blue-700));
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.14);
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --nav-height: 60px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #171923;
+  --surface: #232937;
+  --surface-alt: #2d3748;
+  --border: #3c4657;
+  --text: #e2e8f0;
+  --text-strong: #f7fafc;
+  --text-muted: #a0aec0;
+  --link: var(--blue-300);
+  --accent: var(--blue-400);
+  --accent-soft: rgba(66, 153, 225, 0.15);
+  --success-bg: rgba(72, 187, 120, 0.18);
+  --success: #9ae6b4;
+  --error-bg: rgba(245, 101, 101, 0.18);
+  --error: #feb2b2;
+  --warning-bg: rgba(237, 137, 54, 0.18);
+  --warning: #fbd38d;
+  --nav-bg: linear-gradient(135deg, #1e3a5f, #1a2b45);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* ---- Apple token set (copied from the CV stylesheet). Names that the old tokens above already use
+   (--bg, --text, --accent, --accent-soft, --shadow, --shadow-sm, --radius, --radius-sm, --font) are left out so
+   nothing changes visually; later slices rename the old ones and switch to the new values. ---- */
+:root {
+  --pane: #e8e8ed; --card: #ffffff; --hover: #f0f0f3; --fill: rgba(0, 0, 0, 0.06); --fill-strong: rgba(0, 0, 0, 0.1);
+  --muted: #636366; --line: rgba(0, 0, 0, 0.1); --line-strong: rgba(0, 0, 0, 0.24); --field-line: #8a8a8e;
+  --elev-card: 0 0 0 .5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 28px -16px rgba(0, 0, 0, 0.14);
+  --elev-btn: inset 0 .5px 0 rgba(255, 255, 255, 0.9), 0 1px 1px rgba(0, 0, 0, 0.05);
+  --elev-primary: inset 0 .5px 0 rgba(255, 255, 255, 0.28), 0 1px 2px rgba(0, 60, 140, 0.35);
+  --accent-dark: #004a99; --on-accent: #ffffff;
+  --primary: #0071e3; --primary-hover: #0062c4; --on-primary: #ffffff;
+  --green: #186a31; --green-soft: rgba(52, 199, 89, 0.16);
+  --red: #c4001a; --red-soft: rgba(255, 59, 48, 0.1);
+  --amber: #8a5300; --amber-soft: rgba(255, 159, 10, 0.16);
+  --input-bg: #ffffff; --btn-bg: #ffffff; --btn-hover: #f0f0f3; --disabled-bg: #ececf0;
+  --danger-line: rgba(215, 0, 21, 0.35);
+  --backdrop: rgba(0, 0, 0, 0.3); --paper: #ffffff; --scroll: rgba(0, 0, 0, 0.25); --ring: rgba(0, 113, 227, 0.35);
+  --material: rgba(245, 245, 247, 0.72); --material-strong: rgba(255, 255, 255, 0.8);
+  --toast-bg: rgba(40, 40, 44, 0.88); --toast-fg: #f5f5f7; --toast-link: #9bd0ff; --toast-error-link: #ffffff; --toast-error-bg: rgba(190, 30, 30, 0.92);
+  /* 4px scale, radii, type */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --radius-lg: 20px; --radius-pill: 999px;
+  --bar: 52px; --ctl: 36px; --ctl-sm: 28px;
+  --t-xs: 12px; --t-sm: 13px; --t-md: 14px; --t-lg: 16px; --t-xl: 18px; --t-2xl: 22px; --t-title: 28px;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --z-map: 1; --z-sheet: 600; --z-bar: 1100; --z-modal: 1300;
+  --dur-micro: 100ms; --dur-short: 180ms; --dur-sheet: 380ms; --ease: cubic-bezier(.2, .7, .2, 1); --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pane: #2c2c2e; --card: #1c1c1e; --hover: #2c2c2e; --fill: rgba(255, 255, 255, 0.1); --fill-strong: rgba(255, 255, 255, 0.16);
+    --muted: #a1a1a6; --line: rgba(255, 255, 255, 0.14); --line-strong: rgba(255, 255, 255, 0.28); --field-line: #8e8e93;
+  --elev-card: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
+  --elev-btn: inset 0 .5px 0 rgba(255, 255, 255, 0.1);
+  --elev-primary: inset 0 .5px 0 rgba(255, 255, 255, 0.25);
+    --accent-dark: #7cc2ff; --on-accent: #000000;
+    --primary: #0071e3; --primary-hover: #0066cc; --on-primary: #ffffff;
+    --green: #30d158; --green-soft: rgba(48, 209, 88, 0.18);
+    --red: #ff6961; --red-soft: rgba(255, 69, 58, 0.18);
+    --amber: #ffb340; --amber-soft: rgba(255, 159, 10, 0.2);
+    --input-bg: #2c2c2e; --btn-bg: #2c2c2e; --btn-hover: #3a3a3c; --disabled-bg: #232325;
+    --danger-line: rgba(255, 105, 97, 0.45);
+    --backdrop: rgba(0, 0, 0, 0.55); --paper: #ffffff; --scroll: rgba(255, 255, 255, 0.28); --ring: rgba(41, 151, 255, 0.45);
+    --material: rgba(22, 22, 24, 0.72); --material-strong: rgba(30, 30, 32, 0.8);
+    --toast-bg: rgba(58, 58, 60, 0.92); --toast-fg: #f5f5f7; --toast-link: #9bd0ff; --toast-error-link: #ffffff; --toast-error-bg: rgba(150, 40, 40, 0.94);
+  }
+}
+:root[data-theme="dark"] {
+  --pane: #2c2c2e; --card: #1c1c1e; --hover: #2c2c2e; --fill: rgba(255, 255, 255, 0.1); --fill-strong: rgba(255, 255, 255, 0.16);
+  --muted: #a1a1a6; --line: rgba(255, 255, 255, 0.14); --line-strong: rgba(255, 255, 255, 0.28); --field-line: #8e8e93;
+  --elev-card: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
+  --elev-btn: inset 0 .5px 0 rgba(255, 255, 255, 0.1);
+  --elev-primary: inset 0 .5px 0 rgba(255, 255, 255, 0.25);
+  --accent-dark: #7cc2ff; --on-accent: #000000;
+  --primary: #0071e3; --primary-hover: #0066cc; --on-primary: #ffffff;
+  --green: #30d158; --green-soft: rgba(48, 209, 88, 0.18);
+  --red: #ff6961; --red-soft: rgba(255, 69, 58, 0.18);
+  --amber: #ffb340; --amber-soft: rgba(255, 159, 10, 0.2);
+  --input-bg: #2c2c2e; --btn-bg: #2c2c2e; --btn-hover: #3a3a3c; --disabled-bg: #232325;
+  --danger-line: rgba(255, 105, 97, 0.45);
+  --backdrop: rgba(0, 0, 0, 0.55); --paper: #ffffff; --scroll: rgba(255, 255, 255, 0.28); --ring: rgba(41, 151, 255, 0.45);
+  --material: rgba(22, 22, 24, 0.72); --material-strong: rgba(30, 30, 32, 0.8);
+  --toast-bg: rgba(58, 58, 60, 0.92); --toast-fg: #f5f5f7; --toast-link: #9bd0ff; --toast-error-link: #ffffff; --toast-error-bg: rgba(150, 40, 40, 0.94);
+}
