@@ -103,3 +103,6 @@ a.tag-pill { text-decoration: none; }
 .card.centered h1 { margin-bottom: var(--s2); }
 .card.centered p { max-width: 52ch; margin-inline: auto; color: var(--muted); font-size: var(--t-lg); }
 .card.centered p strong { color: var(--text); }
+
+/* long links (e.g. an email address) must wrap on phones */
+.info-card { overflow-wrap: anywhere; }
