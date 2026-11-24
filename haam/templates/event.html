@@ -72,7 +72,7 @@
     </div>
   </article>
 
-  <details class="card report-card" id="report"{% if report_form.errors %} open{% endif %}>
+  <details class="card sheet report-card" id="report"{% if report_form.errors %} open{% endif %}>
     <summary><i class="fas fa-flag" aria-hidden="true"></i> Report a problem with this event</summary>
     <form method="post" action="{{ url_for('public.report_event', event_id=public_id(event)) }}" novalidate>
       {{ report_form.csrf_token }}
