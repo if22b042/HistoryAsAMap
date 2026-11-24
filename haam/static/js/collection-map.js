@@ -59,7 +59,15 @@ if (dataTag && mapElement) {
 
   const points = entries.map((e) => [e.lat, e.lon]);
   if (points.length === 1) map.setView(points[0], 6);
-  else map.fitBounds(points, { padding: [40, 40], maxZoom: 8 });
+  else {
+    // on a phone the entry sheet covers the bottom 46% of the map: fit into what is left
+    const phone = window.matchMedia("(max-width: 860px)").matches;
+    map.fitBounds(points, {
+      paddingTopLeft: [40, 40],
+      paddingBottomRight: [40, phone ? Math.round(mapElement.clientHeight * 0.46) + 24 : 40],
+      maxZoom: 8,
+    });
+  }
 
   // The same black-and-white ring as on the main map marks the selected entry; it is
   // drawn on the entry's own marker, so the two always move together.

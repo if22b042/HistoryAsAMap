@@ -966,8 +966,10 @@ function setFiltersOpen(open) {
 map.on("click", () => { if (isPhone()) setFiltersOpen(false); });
 
 // Popups pan clear of the floating buttons (read when a popup opens, from the defaults).
+// On a phone that is three rows: Filters, Near here / Today, the base map button.
+const POPUP_TOP_PHONE = 144;
 function updatePopupPadding() {
-  L.Popup.prototype.options.autoPanPaddingTopLeft = isPhone() ? L.point(5, FAB_SPACE + 5) : null;
+  L.Popup.prototype.options.autoPanPaddingTopLeft = isPhone() ? L.point(5, POPUP_TOP_PHONE) : null;
 }
 updatePopupPadding();
 
