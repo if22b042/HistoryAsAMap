@@ -317,7 +317,7 @@ h1 .trust { width: 32px; height: 32px; font-size: var(--t-md); }
 }
 .collection-banner strong { font-size: 1rem; color: var(--text-strong); }
 .collection-banner span { color: var(--text-muted); }
-.detail-note { margin: 0.75rem 0; padding: 0.6rem 0.75rem; border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: 0.4rem; white-space: pre-line; }
+.detail-note { margin: 0.75rem 0; padding: 0.6rem 0.75rem; border: 1px solid var(--line); background: var(--accent-soft); border-radius: var(--radius-sm); white-space: pre-line; }
 
 /* "Embed this map" (filter panel) */
 .embed-box { display: grid; gap: 0.4rem; justify-items: start; padding: 0.75rem 0; border-top: 1px solid var(--border); }
