@@ -128,13 +128,13 @@ export function createTimeline({ map, onSelect, limit = 150, colorFor = () => nu
   let view = { from: 0, to: 1 };
   let rangeLabel = "";
 
-  const toggle = el("button", "timeline-toggle btn btn-secondary");
+  const toggle = el("button", "timeline-toggle pill");
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", "false");
   toggle.append(el("i", "fas fa-stream"), el("span", null, " Timeline"));
   toggle.firstChild.setAttribute("aria-hidden", "true");
 
-  const panel = el("section", "timeline-panel");
+  const panel = el("section", "timeline-panel sheet");
   panel.hidden = true;
   panel.setAttribute("aria-label", "Timeline of the events shown");
   const header = el("div", "timeline-header");
