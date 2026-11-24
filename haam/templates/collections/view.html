@@ -49,6 +49,7 @@
   {% if collection.entries %}
     <div class="collection-layout">
       <div id="collection-map" class="collection-map" role="region" aria-label="Map of this collection"></div>
+      <div class="entry-sheet sheet" role="region" aria-label="Entries in this collection">
       <ol class="entry-list" id="entry-list">
         {% for entry in collection.entries %}
           <li class="card entry-card" id="entry-{{ entry.id }}">
@@ -71,6 +72,7 @@
           </li>
         {% endfor %}
       </ol>
+      </div>
     </div>
   {% else %}
     <p class="empty-state">This collection has no entries yet.

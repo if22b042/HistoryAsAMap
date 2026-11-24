@@ -12,11 +12,24 @@
     <a class="btn btn-primary" href="{{ url_for('collections.new') }}"><i class="fas fa-plus" aria-hidden="true"></i> New collection</a>
   </header>
 
+  {% if searching %}
+  <div class="figures" role="group" aria-label="Search results at a glance">
+    <div class="figure"><b>{{ total }}</b><span>{{ 'collection matches' if total == 1 else 'collections match' }}</span></div>
+    <div class="figure"><b>{{ page }} / {{ pages }}</b><span>page</span></div>
+  </div>
+  {% else %}
+  <div class="figures" role="group" aria-label="Collections on this page">
+    <div class="figure"><b>{{ mine|length }}</b><span>yours to edit</span></div>
+    <div class="figure"><b>{{ public|length }}</b><span>public on this page</span></div>
+    <div class="figure"><b>{{ (mine + public)|map(attribute='entries')|map('length')|sum }}</b><span>entries in them</span></div>
+  </div>
+  {% endif %}
+
   <form class="card search-card" method="get" action="{{ url_for('collections.index') }}" role="search">
     <div class="search-row">
       <div class="form-group search-q">
         <label class="form-label" for="search-q">Search collections and everything inside them</label>
-        <input id="search-q" class="form-input" type="search" name="q" value="{{ search.q }}" maxlength="200"
+        <input id="search-q" class="form-input search-pill" type="search" name="q" value="{{ search.q }}" maxlength="200"
                placeholder="e.g. transistor, Bell Labs, Berlin, 1969" autocomplete="off">
       </div>
       <div class="form-group">
