@@ -63,8 +63,8 @@ def test_import_csv(wiki, tmp_path):
 
 def test_import_legacy(app):
     db.session.execute(text(
-        "CREATE TABLE entries (id INTEGER PRIMARY KEY, year INTEGER, dateString TEXT, firstParagraph TEXT,"
-        " title TEXT, wikiLink TEXT, category TEXT, modified BOOLEAN, used BOOLEAN, tags JSON)"))
+        "CREATE TABLE entries (id INTEGER PRIMARY KEY, year INTEGER, \"dateString\" TEXT, \"firstParagraph\" TEXT,"
+        " title TEXT, \"wikiLink\" TEXT, category TEXT, modified BOOLEAN, used BOOLEAN, tags JSON)"))
     db.session.execute(text(
         "CREATE TABLE locations (id INTEGER PRIMARY KEY, coordinates TEXT, country TEXT, on_water BOOLEAN,"
         " entry_id INTEGER, lat REAL, lon REAL)"))
