@@ -1,0 +1,237 @@
+/* -------------------------------------------------------------- game */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  height: calc(100vh - var(--nav-height));
+  min-height: 480px;
+}
+.game-panel {
+  overflow-y: auto;
+  padding: 1.25rem;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.game-map-wrap { position: relative; min-height: 300px; }
+.game-map { position: absolute; inset: 0; z-index: 1; background: var(--surface-alt); cursor: crosshair; }
+.game-map-confirm { display: none; }
+.game-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.game-header h1 { margin: 0; font-size: 1.2rem; color: var(--text-strong); }
+.game-meta { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--text-muted); }
+.game-days { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+.game-days a[hidden] { display: none; }
+.game-next { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--text-muted); }
+.game-next[hidden], .game-archive[hidden] { display: none; }
+.game-archive { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.game-archive summary { cursor: pointer; font-weight: 600; color: var(--text-strong); padding: 0.4rem 0; }
+.archive-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0.5rem 0; }
+.archive-month { margin: 0; font-size: 1rem; text-align: center; }
+.archive-nav .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.archive-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.25rem; margin: 0; padding: 0; list-style: none; }
+.archive-day { min-width: 0; }
+.archive-day a, .archive-day.disabled span {
+  display: flex; align-items: center; justify-content: center; gap: 0.15rem;
+  min-height: 2.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-alt); font-size: 0.85rem; text-decoration: none; color: var(--link);
+}
+.archive-day.disabled span { opacity: 0.35; color: var(--text-muted); }
+.archive-day a:hover { border-color: var(--accent); }
+.archive-day a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.archive-day.current a { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.archive-day.done a { font-weight: 700; }
+.archive-check { color: var(--success, var(--link)); font-size: 0.75rem; }
+.archive-legend { margin: 0.6rem 0 0; font-size: 0.8rem; color: var(--text-muted); }
+.game-note {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+.game-progress { display: flex; gap: 0.4rem; margin: 1rem 0; padding: 0; list-style: none; }
+.game-step {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  height: 2.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.game-step.current { border-color: var(--accent); color: var(--link); background: var(--accent-soft); }
+.game-step.done { font-size: 1.1rem; }
+.game-message:empty { display: none; }
+.game-message { margin-bottom: 0.75rem; color: var(--error); font-size: 0.9rem; }
+.game-round-num { margin: 0; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.game-round h2 { margin: 0.25rem 0 0.4rem; font-size: 1.25rem; color: var(--text-strong); overflow-wrap: anywhere; }
+.game-round-date { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.75rem; margin: 0 0 0.75rem; font-weight: 600; color: var(--text); }
+.game-category { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 400; font-size: 0.85rem; color: var(--text-muted); }
+.game-round-excerpt { margin: 0 0 1rem; font-size: 0.92rem; line-height: 1.5; color: var(--text); }
+.game-hint { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-muted); }
+.game-hint-box { margin: 0 0 0.75rem; }
+.game-hint-box[hidden] { display: none; }
+.game-hint-cost { color: var(--text-muted); font-weight: 400; }
+.game-hint-text { margin: 0; padding: 0.5rem 0.7rem; font-size: 0.9rem; font-weight: 500; line-height: 1.5; color: var(--text-strong); border-left: 3px solid var(--accent); background: var(--surface-alt); border-radius: var(--radius-sm); }
+.game-hint-text[hidden] { display: none; }
+.game-hint-line { display: block; }
+.game-hint-line + .game-hint-line { margin-top: 0.4rem; font-weight: 600; }
+.game-hint-box .btn { white-space: normal; text-align: left; }
+.game-result { padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.game-points { margin: 0; font-size: 1rem; color: var(--text-muted); }
+.game-points strong { font-size: 1.8rem; color: var(--text-strong); }
+.game-distance, .game-answer { margin: 0.3rem 0; }
+.game-links { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0.5rem 0 1rem; font-size: 0.9rem; }
+.game-links a[hidden] { display: none; }
+.game-summary h2 { margin: 0; font-size: 1.1rem; color: var(--text-strong); }
+.game-total { margin: 0.25rem 0 0.75rem; color: var(--text-muted); }
+.game-total strong { font-size: 2.2rem; color: var(--text-strong); }
+.game-summary-list { margin: 0 0 1rem; padding: 0; list-style: none; }
+.game-summary-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.game-summary-emoji { grid-row: span 2; }
+.game-summary-title { color: var(--text-strong); overflow-wrap: anywhere; }
+.game-summary-points { font-size: 0.8rem; color: var(--text-muted); }
+.game-share { width: 100%; margin-bottom: 0.5rem; resize: none; font-family: inherit; font-size: 0.9rem; }
+.game-streak { margin: 1rem 0 0.25rem; font-weight: 600; }
+.game-countdown { margin: 0; font-size: 0.9rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 768px) {
+  .game-layout { display: flex; flex-direction: column; height: auto; min-height: 0; }
+  .game-panel { border-right: 0; border-bottom: 1px solid var(--border); padding: 1rem; overflow: visible; }
+  .game-map-wrap { height: 65vh; flex: none; }
+  .game-map-confirm:not([hidden]) {
+    display: inline-flex;
+    position: absolute;
+    left: 50%;
+    bottom: 1.5rem;
+    z-index: 1000;
+    transform: translateX(-50%);
+    box-shadow: var(--shadow-lg);
+  }
+}
+/* The game's tiles come in a dark version already: no darkening filter. */
+:root[data-theme="dark"] .page-game .leaflet-tile-pane { filter: none; }
+
+.game-modes {
+  display: flex;
+  gap: 0.25rem;
+  margin: 1rem 0 0;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+.game-mode {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.game-mode:hover { color: var(--link); text-decoration: none; }
+.game-mode.active { background: var(--surface); color: var(--text-strong); box-shadow: var(--shadow-sm); }
+.game-hard[hidden] { display: none; }
+.game-stats { margin: 0.75rem 0 0; font-size: 0.9rem; color: var(--text-muted); }
+.game-stats[hidden], .game-pairs[hidden], .game-pairs [hidden] { display: none; }
+.game-layout-pairs { grid-template-columns: 1fr; }
+.game-layout-pairs .game-map-wrap { display: none; }
+.game-layout-pairs .game-panel { border-right: 0; }
+.game-layout-pairs .game-panel > * { max-width: 640px; margin-left: auto; margin-right: auto; }
+.game-pairs { margin-top: 0.5rem; }
+.game-pairs h2 { margin: 0.25rem 0 0.75rem; font-size: 1.25rem; color: var(--text-strong); }
+.pairs-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.pairs-card {
+  display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; text-align: left;
+  padding: 0.85rem; font: inherit; color: var(--text);
+  background: var(--surface-alt); border: 2px solid var(--border); border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pairs-card:hover:not(:disabled) { border-color: var(--accent); }
+.pairs-card:disabled { cursor: default; opacity: 1; }
+.pairs-card.chosen { border-color: var(--accent); }
+.pairs-card.earlier { background: var(--accent-soft); }
+.pairs-letter { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+.pairs-title { color: var(--text-strong); overflow-wrap: anywhere; }
+.pairs-excerpt { font-size: 0.85rem; color: var(--text-muted); }
+.pairs-date { font-weight: 700; color: var(--link); }
+.game-pairs .game-result { margin-top: 0.75rem; }
+@media (max-width: 560px) { .pairs-cards { grid-template-columns: 1fr; } }
+.game-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; margin: 0.75rem 0 0; }
+.game-filters[hidden] { display: none; }
+.game-filter { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 8rem; font-size: 0.75rem; color: var(--text-muted); }
+.game-filter .form-input { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
+
+/* the selection ring is part of the selected marker, so it moves with the dot */
+.leaflet-marker-icon.marker-selected { overflow: visible; }
+.leaflet-marker-icon.marker-selected::after {
+  content: "";
+  position: absolute;
+  inset: -10px; /* around a dot or a whole cluster, whatever its size */
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 3px #111, 0 0 0 6px rgba(255, 255, 255, 0.9);
+  animation: selected-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+/* main map: the ring takes the event's colour (set as --ring-color by map.js) */
+.leaflet-marker-icon.marker-selected.ring-colored::after {
+  border: 4px solid var(--ring-color);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.3);
+  animation: ring-colored-pulse 1.6s ease-out infinite;
+}
+@keyframes ring-colored-pulse {
+  0% { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.3), 0 0 0 3px color-mix(in srgb, var(--ring-color) 55%, transparent); }
+  100% { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.3), 0 0 0 18px color-mix(in srgb, var(--ring-color) 0%, transparent); }
+}
+/* main map, event still bundled: a ring around its cluster pulses. The ring is a
+   pseudo-element: scaling the cluster itself (`scale` or `transform`) would also
+   scale Leaflet's translate3d position, flinging the cluster across the map. */
+.leaflet-marker-icon.cluster-selected { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 3px #111; }
+.leaflet-marker-icon.cluster-selected::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 3px solid rgba(17, 17, 17, 0.6);
+  pointer-events: none;
+  animation: cluster-selected-pulse 1.4s ease-out infinite;
+}
+@keyframes cluster-selected-pulse {
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-marker-icon.marker-selected::after { animation: none; }
+  .leaflet-marker-icon.cluster-selected::after { animation: none; }
+}
+
+/* Game hard mode: the switch and the year picker */
+.game-hard { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0; font-size: 0.88rem; color: var(--text); cursor: pointer; }
+.game-hard input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
+.game-year { margin: 0 0 0.75rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-alt); }
+.game-year[hidden] { display: none; }
+.game-year > label { display: block; margin-bottom: 0.35rem; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.game-year-row { display: flex; align-items: center; gap: 0.6rem; }
+.game-year-input { width: 9rem; padding: 0.4rem 0.6rem; font-weight: 700; color: var(--text-strong); }
+.game-year-shown { font-size: 1.15rem; font-weight: 700; color: var(--link); font-variant-numeric: tabular-nums; }
+.game-year-slider { width: 100%; margin: 0.7rem 0 0.1rem; accent-color: var(--accent); }
+.game-year-scale { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.7rem; color: var(--text-muted); }
+.game-breakdown { margin: 0.1rem 0 0.3rem; font-size: 0.85rem; color: var(--text-muted); }
+.game-breakdown[hidden], .game-distance[hidden] { display: none; }

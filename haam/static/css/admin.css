@@ -1,0 +1,17 @@
+/* ------------------------------------------------------------- admin */
+
+.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+.tab {
+  padding: 0.6rem 1rem;
+  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.tab:hover { color: var(--link); text-decoration: none; }
+.tab.active { color: var(--link); border-bottom-color: var(--accent); }
+.tab-count { margin-left: 0.3rem; padding: 0 0.45rem; border-radius: 999px; background: var(--surface-alt); font-size: 0.8rem; }
+.review-card header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+.review-card header h2 { flex-basis: 100%; margin: 0.4rem 0 0; }
+.review-meta { font-size: 0.85rem; color: var(--text-muted); }
+.review-links { display: flex; gap: 1rem; font-size: 0.9rem; }
