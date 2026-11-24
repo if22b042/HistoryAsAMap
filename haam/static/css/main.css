@@ -717,6 +717,22 @@ textarea.form-input { resize: vertical; min-height: 8rem; }
 .eyebrow { margin-bottom: 0.4rem; font-size: 0.9rem; }
 .legend { display: flex; flex-wrap: wrap; gap: 1.25rem; font-size: 0.85rem; color: var(--text-muted); }
 .collection-section { margin-top: 2rem; }
+.search-card { margin: 1rem 0; }
+.search-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.8fr) auto; gap: 0.75rem; align-items: end; }
+.search-row .form-group { margin: 0; }
+.search-actions { display: flex; gap: 0.5rem; }
+.hit-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; margin-top: 0.75rem; align-items: start; }
+.search-hit .collection-card { height: auto; }
+.hit-entries { list-style: none; margin: 0.4rem 0 0; padding: 0 0.25rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.hit-entries li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.9rem; }
+.hit-entries a { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.hit-title { overflow-wrap: anywhere; }
+.hit-entries .year-pill { flex: none; white-space: nowrap; }
+.hit-more { color: var(--text-muted); font-size: 0.85rem; justify-content: flex-start; }
+@media (max-width: 760px) {
+  .search-row { grid-template-columns: 1fr 1fr; }
+  .search-q, .search-actions { grid-column: 1 / -1; }
+}
 .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 0.75rem; }
 .collection-card {
   display: flex;

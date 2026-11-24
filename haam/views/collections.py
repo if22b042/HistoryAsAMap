@@ -8,13 +8,13 @@ from haam import collections_service as service
 from haam import mail
 from haam.auth import is_admin
 from haam.collections_service import CollectionError, CustomEntryData, DuplicateEntry
-from haam.dates import format_year
+from haam.dates import format_year, parse_year_input
 from haam.events import find_approved, public_id, public_ids_to_events
 from haam.extensions import csrf, db
 from haam.forms import (ActionForm, CollectionForm, CustomEntryForm, EntryEventEditForm, EventEntryForm,
                         NewCollectionForm, ReportForm, SearchCollectionForm, SuggestionForm, TagEntriesForm)
 from haam.ratelimit import limit
-from haam.models import Event, Status, Tag, event_tags
+from haam.models import Category, Event, Status, Tag, event_tags
 
 bp = Blueprint("collections", __name__, url_prefix="/collections")
 
@@ -129,9 +129,21 @@ def _email_links(email: str, collection, edit_token: str) -> None:
 @bp.get("/")
 def index():
     page = max(request.args.get("page", 1, type=int), 1)
+    q = request.args.get("q", "").strip()[:200]
+    category = next((c for c in Category if c.value == request.args.get("category")), None)
+    raw_from, raw_to = request.args.get("year_from", "").strip()[:20], request.args.get("year_to", "").strip()[:20]
+    year_from, year_to = parse_year_input(raw_from), parse_year_input(raw_to)
+    search = {"q": q, "category": category.value if category else "", "year_from": raw_from, "year_to": raw_to,
+              "bad_year": bool((raw_from and year_from is None) or (raw_to and year_to is None))}
+    if q or category or year_from is not None or year_to is not None:
+        hits, total = service.search_public(q, category, year_from, year_to, page=page)
+        return render_template("collections/index.html", search=search, searching=True, hits=hits, total=total,
+                               terms=service.parse_query(q), categories=list(Category), page=page,
+                               pages=max((total + 23) // 24, 1), mine=[], public=[])
     public, total = service.public_collections(page=page)
     return render_template(
         "collections/index.html",
+        search=search, searching=False, categories=list(Category),
         mine=service.my_collections(),
         public=public,
         page=page,

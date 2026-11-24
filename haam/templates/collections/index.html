@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import collection_card %}
+{% from "_macros.html" import collection_card, category_badge %}
 {% block title %}Collections{% endblock %}
 
 {% block content %}
@@ -12,6 +12,74 @@
     <a class="btn btn-primary" href="{{ url_for('collections.new') }}"><i class="fas fa-plus" aria-hidden="true"></i> New collection</a>
   </header>
 
+  <form class="card search-card" method="get" action="{{ url_for('collections.index') }}" role="search">
+    <div class="search-row">
+      <div class="form-group search-q">
+        <label class="form-label" for="search-q">Search collections and everything inside them</label>
+        <input id="search-q" class="form-input" type="search" name="q" value="{{ search.q }}" maxlength="200"
+               placeholder="e.g. transistor, Bell Labs, Berlin, 1969" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="search-category">Category</label>
+        <select id="search-category" class="form-input" name="category">
+          <option value="">Any</option>
+          {% for c in categories %}<option value="{{ c.value }}"{% if c.value == search.category %} selected{% endif %}>{{ c.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group search-year">
+        <label class="form-label" for="search-from">From year</label>
+        <input id="search-from" class="form-input" type="text" name="year_from" value="{{ search.year_from }}" maxlength="20" placeholder="1066 or 44 BC">
+      </div>
+      <div class="form-group search-year">
+        <label class="form-label" for="search-to">To year</label>
+        <input id="search-to" class="form-input" type="text" name="year_to" value="{{ search.year_to }}" maxlength="20" placeholder="1969">
+      </div>
+      <div class="search-actions">
+        <button class="btn btn-primary" type="submit"><i class="fas fa-search" aria-hidden="true"></i> Search</button>
+        {% if searching or search.bad_year %}<a class="btn btn-secondary" href="{{ url_for('collections.index') }}">Clear</a>{% endif %}
+      </div>
+    </div>
+    <p class="form-hint">Every word must appear somewhere in a collection: its title or description, or an entry's title, text, note, date or category. Accents are ignored. Put "quotes" around a phrase. Category and years filter the entries.</p>
+    {% if search.bad_year %}<p class="form-hint" role="status">A year could not be read and was ignored. Try 1066, -44 or 44 BC.</p>{% endif %}
+  </form>
+
+  {% if searching %}
+    <section class="collection-section" aria-live="polite">
+      <h2>{{ total }} {{ 'collection matches' if total == 1 else 'collections match' }}</h2>
+      {% if hits %}
+        <div class="hit-list">
+          {% for hit in hits %}
+            <article class="search-hit">
+              {{ collection_card(hit.collection, url_for('collections.view', view_token=hit.collection.view_token)) }}
+              {% if hit.entries %}
+                <ul class="hit-entries" aria-label="Matching entries in {{ hit.collection.title }}">
+                  {% for entry in hit.entries %}
+                    <li>
+                      <a href="{{ url_for('collections.view', view_token=hit.collection.view_token) }}#entry-{{ entry.id }}">
+                        <span class="year-pill">{{ entry.display_year }}</span>
+                        <span class="hit-title">{{ entry.title }}</span>
+                      </a>
+                      {{ category_badge(entry.category) }}
+                    </li>
+                  {% endfor %}
+                  {% if hit.more %}<li class="hit-more">and {{ hit.more }} more in this collection</li>{% endif %}
+                </ul>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+        {% if pages > 1 %}
+          <nav class="pagination" aria-label="Pages">
+            {% if page > 1 %}<a class="btn btn-secondary btn-small" href="{{ url_for('collections.index', page=page - 1, q=search.q, category=search.category, year_from=search.year_from, year_to=search.year_to) }}">← Better matches</a>{% endif %}
+            <span>Page {{ page }} of {{ pages }}</span>
+            {% if page < pages %}<a class="btn btn-secondary btn-small" href="{{ url_for('collections.index', page=page + 1, q=search.q, category=search.category, year_from=search.year_from, year_to=search.year_to) }}">More →</a>{% endif %}
+          </nav>
+        {% endif %}
+      {% else %}
+        <p class="empty-state">Nothing matches. Try fewer words, a wider year range or another category.</p>
+      {% endif %}
+    </section>
+  {% else %}
   <p class="legend">
     <span><span class="trust trust-wiki"><i class="fab fa-wikipedia-w" aria-hidden="true"></i></span> every entry has a Wikipedia article</span>
     <span><span class="trust trust-confirmed"><i class="fas fa-certificate" aria-hidden="true"></i></span> every entry is a confirmed event from the main map</span>
@@ -48,5 +116,6 @@
       <p class="empty-state">No public collections yet. Be the first to <a href="{{ url_for('collections.new') }}">create one</a>.</p>
     {% endif %}
   </section>
+  {% endif %}
 </div>
 {% endblock %}
