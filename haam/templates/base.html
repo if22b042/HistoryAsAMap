@@ -30,7 +30,8 @@
   <link rel="icon" href="{{ url_for('seo.favicon') }}" sizes="48x48">
   <link rel="apple-touch-icon" href="{{ url_for('seo.apple_touch_icon') }}">
   <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
-  <meta name="theme-color" content="#2b6cb0">
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   {%- if false %}{% block description %}{% endblock %}{% block share_title %}{% endblock %}{% block share_url %}{% endblock %}{% block share_image %}{% endblock %}{% block canonical %}{% endblock %}{% endif %}
   {# Applies the saved theme before first paint, so there is no light flash. #}
   <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
