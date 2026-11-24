@@ -44,3 +44,6 @@ input, textarea { caret-color: var(--accent); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root:root:root { --material: var(--material-fallback); --material-strong: var(--material-fallback); }
 }
+
+/* placeholders must reach 4.5:1: browsers default to a pale grey */
+::placeholder { color: var(--muted); opacity: 1; }
