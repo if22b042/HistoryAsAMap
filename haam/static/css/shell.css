@@ -25,6 +25,8 @@
   font-size: var(--t-lg);
   letter-spacing: -.017em;
 }
+.brand { position: relative; }
+.brand::after { content: ""; position: absolute; inset: calc((var(--ctl) - var(--hit)) / 2) -4px; }
 .brand:hover { text-decoration: none; }
 .brand-icon {
   display: grid;
@@ -97,9 +99,8 @@
     align-items: stretch;
     gap: var(--s1);
     padding: var(--s3);
-    background: var(--material-strong);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    backdrop-filter: saturate(180%) blur(20px);
+    /* opaque: a backdrop blur inside the (blurred) navbar cannot see the page behind it */
+    background: var(--card);
     border-radius: 0 0 var(--radius) var(--radius);
     box-shadow: var(--elev-pop);
     opacity: 0;

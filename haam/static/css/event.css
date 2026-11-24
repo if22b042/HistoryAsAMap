@@ -17,7 +17,8 @@
 .event-summary p { margin: 0 0 var(--s3); font-size: var(--t-lg); line-height: 1.6; }
 .event-attribution { margin: 0; font-size: var(--t-xs); color: var(--muted); }
 .event-tags { display: flex; flex-wrap: wrap; gap: var(--s2); }
-a.tag-pill { text-decoration: none; }
+a.tag-pill { position: relative; text-decoration: none; }
+a.tag-pill::after { content: ""; position: absolute; inset: -5px -2px; }
 
 /* A static map from OpenStreetMap tiles, centred on the event; works without JavaScript. Tiles stay unrestyled. */
 .tile-map {

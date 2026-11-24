@@ -1,6 +1,8 @@
 /* Tag selection on the map page: chips, any/all, clickable tags (loaded by map.html). */
 
 .tag-btn { border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 0.75rem; }
+.tag-btn { position: relative; }
+.tag-btn::after { content: ""; position: absolute; inset: -5px -2px; }
 .tag-btn:hover, .tag-btn:focus-visible { border-color: var(--accent); color: var(--link); }
 .tag-btn.tag-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
 

@@ -115,6 +115,9 @@
 .game-countdown { margin: 0; font-size: var(--t-md); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 768px) {
+  /* three mode labels on one line, each as wide as its text */
+  .game-mode { flex: 1 1 auto; padding: 2px var(--s2); gap: var(--s1); white-space: nowrap; }
+  .game-links a:not([hidden]) { display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--hit); }
   .game-layout { display: flex; flex-direction: column; height: auto; min-height: 0; padding: var(--s3); gap: var(--s3); }
   .game-panel { overflow: visible; padding: var(--s4); }
   .game-map-wrap { height: 65vh; flex: none; }
