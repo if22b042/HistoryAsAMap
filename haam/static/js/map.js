@@ -164,9 +164,8 @@ const map = L.map("map", {
   maxBoundsViscosity: 0.8,
   zoomControl: false, // re-added bottom-right so the filter panel doesn't cover it
 });
-// The base map switcher first: it then sits left of the zoom buttons instead of
-// above them, so the corner stays low enough beside the open timeline.
-addBasemapSwitcher(map, { initial: linkedBase });
+// The base map switcher is a segmented pill top right; zoom is a stacked pill bottom right.
+addBasemapSwitcher(map, { initial: linkedBase }).setPosition("topright");
 L.control.zoom({ position: "bottomright" }).addTo(map);
 
 // Bumped whenever the markers in the clusters change or the colours are re-based, so
@@ -226,6 +225,30 @@ const clusters = L.markerClusterGroup({
 }).addTo(map);
 
 let heatLayer = null;
+
+/**
+ * The heatmap's colour ramp from the category tint tokens, resolved for the current theme
+ * (canvas cannot read CSS variables). The heat canvas keeps only the colour of each stop,
+ * not its alpha, so a tint draws in its category's colour.
+ */
+function heatGradient() {
+  const probe = document.createElement("span");
+  probe.hidden = true;
+  document.body.append(probe);
+  const colour = (name) => {
+    probe.style.color = `var(--cat-${name}-tint)`;
+    const value = getComputedStyle(probe).color;
+    if (value.startsWith("rgb")) return value;
+    // color-mix() computes to color(srgb r g b / a) in current browsers: keep its rgb part
+    const srgb = value.match(/^color\(srgb ([\d.e-]+) ([\d.e-]+) ([\d.e-]+)/);
+    if (srgb) return `rgb(${srgb.slice(1).map((v) => Math.round(Number(v) * 255)).join(", ")})`;
+    probe.style.color = `var(--cat-${name})`; // anything else: the solid category colour
+    return getComputedStyle(probe).color;
+  };
+  const gradient = { 0.35: colour("naval"), 0.6: colour("scientific"), 0.8: colour("natural"), 1: colour("military") };
+  probe.remove();
+  return gradient;
+}
 
 // The heatmap has no markers, so a click looks for events right under the pointer:
 // one opens it, several close together zoom in, none does nothing.
@@ -505,6 +528,11 @@ function showEvent(id, { fly = true, zoom = 6, record = true } = {}) {
   showSelection(event);
   sidebarContent.replaceChildren(...parts);
   const wasHidden = sidebar.hidden;
+  if (wasHidden) {
+    // Remembered to give the focus back on close (a dot's popup button is gone by then: the dot gets it).
+    const active = document.activeElement;
+    sheetOpener = active && active !== document.body && !active.closest(".leaflet-popup") ? active : null;
+  }
   sidebar.hidden = false;
   document.body.classList.add("sidebar-open");
   if (isPhone()) {
@@ -512,6 +540,7 @@ function showEvent(id, { fly = true, zoom = 6, record = true } = {}) {
     if (newEvent) sidebarContent.scrollTop = 0;
     openSheet(wasHidden);
   }
+  if (wasHidden) sidebar.focus({ preventScroll: true }); // the focus moves into the details
 
   if (record) {
     const url = new URL(window.location);
@@ -620,6 +649,11 @@ function addToClusters(markers) {
   clusters.addLayers(markers);
 }
 
+// The heatmap colours come from theme tokens: redraw it when the theme changes (nav.js
+// dispatches "themechange") or when the OS scheme flips while no explicit theme is set.
+document.addEventListener("themechange", () => { if (state.heatmap) rebuildMarkers(); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.heatmap) rebuildMarkers(); });
+
 /** Replace everything on the map by the markers (or the heatmap) of the current filters. */
 function rebuildMarkers() {
   rebuildQueued = false;
@@ -631,7 +665,8 @@ function rebuildMarkers() {
     heatLayer = null;
   }
   if (state.heatmap) {
-    heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10 });
+    heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]),
+      { radius: 25, blur: 18, maxZoom: 10, gradient: heatGradient() });
     heatLayer.addTo(map);
   } else {
     // Markers off the map only store their new icon, so this is cheap.
@@ -653,37 +688,68 @@ function releaseSelection() {
   placeRing();
 }
 
+// The element that gets the focus back when the details close: the one that had it when
+// they opened (a card in the list, a search result), else the event's dot or cluster.
+let sheetOpener = null;
+
+function focusAfterClose(id) {
+  const usable = (node) => node && node.isConnected && !node.closest("[hidden]") && node.getClientRects().length > 0;
+  let target = usable(sheetOpener) ? sheetOpener : null;
+  sheetOpener = null;
+  if (!target) {
+    const marker = id === null ? null : state.markersById.get(id);
+    const layer = marker && (map.hasLayer(marker) ? marker : clusters.getVisibleParent(marker));
+    const icon = layer?.getElement?.();
+    if (usable(icon)) target = icon;
+  }
+  if (target) target.focus({ preventScroll: MAP_ELEMENT.contains(target) });
+  if (!target || document.activeElement !== target) MAP_ELEMENT.focus({ preventScroll: true });
+}
+
 function closeSidebar({ record = true } = {}) {
+  const closing = state.openId;
+  const hadFocus = sidebar.contains(document.activeElement);
   releaseSelection();
   timeline.setActive(null);
   state.openId = null;
   sidebar.hidden = true;
   document.body.classList.remove("sidebar-open");
   resetSheet();
+  if (hadFocus) focusAfterClose(closing);
+  else sheetOpener = null;
   if (!record) return; // Back/Forward: the address is already right
   const url = new URL(window.location);
   url.searchParams.delete("event");
   history.replaceState(null, "", url);
 }
 
-document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
+/** Close the details: on a phone the sheet slides away first. */
+function dismissSidebar() {
+  if (isPhone() && sheet.state !== "closed") changeSheet("closed");
+  else closeSidebar();
+}
+
+document.getElementById("sidebar-close").addEventListener("click", () => dismissSidebar());
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.defaultPrevented) return;
   if (isNearOpen()) closeNear();
   else if (isPhone() && document.body.classList.contains("filters-open")) setFiltersOpen(false);
-  else if (!sidebar.hidden) closeSidebar();
+  else if (!sidebar.hidden) dismissSidebar();
 });
 
 // ------------------------------------------------------------ phone layout
 // Up to 860px wide the filters are a drawer over the map and the details a bottom
-// sheet: "peek" shows the date and title, "full" the whole text. The sheet has a
-// fixed height and slides with a transform; the map flies so the event lands in
-// the part of the map the sheet leaves free.
+// sheet with three detents: "peek" shows the date and title, "half" half the screen,
+// "full" the whole text. The sheet has a fixed height and moves with a transform only;
+// the map flies so the event lands in the part of the map the sheet leaves free.
 
 const phoneQuery = window.matchMedia("(max-width: 860px)");
 const isPhone = () => phoneQuery.matches;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const FAB_SPACE = 56; // px at the top of the map taken by the floating buttons
-const sheet = { state: "closed" }; // "closed" | "peek" | "full"
+const SHEET_MS = 380; // --dur-sheet
+const sheet = { state: "closed" }; // "closed" | "peek" | "half" | "full"
+let sheetCloseTimer = 0;
 
 const sheetHeight = () => sidebar.offsetHeight;
 
@@ -695,43 +761,58 @@ function peekHeight() {
   return Math.min(sheetHeight(), Math.round(below + 12));
 }
 
+/** The sheet's translateY at a detent: 0 is full, its own height is off the screen. */
 function sheetOffset(stateName) {
+  const height = sheetHeight();
   if (stateName === "full") return 0;
-  if (stateName === "peek") return sheetHeight() - peekHeight();
-  return sheetHeight();
+  if (stateName === "closed") return height;
+  const peek = height - peekHeight();
+  if (stateName === "peek") return peek;
+  return Math.min(peek, Math.max(0, height - Math.round(window.innerHeight / 2))); // half
 }
 
+/** Move the sheet; animated with the sheet curve unless the visitor asked for less motion. */
 function placeSheet(y, animate) {
-  sidebar.classList.toggle("sheet-animating", animate);
-  sidebar.style.transform = typeof y === "number" ? `translateY(${Math.round(y)}px)` : `translateY(${y})`;
+  sidebar.classList.toggle("sheet-animating", animate && !reducedMotion.matches);
+  sidebar.style.transform = `translateY(${Math.round(y)}px)`;
 }
 
-// Relative to the sheet's own height, which grows when the full text arrives.
-const SHEET_POSITION = { full: "0px", peek: () => `calc(100% - ${peekHeight()}px)`, closed: "100%" };
+/** Where the sheet is drawn right now, also halfway through an animation. */
+function drawnSheetOffset() {
+  const { transform } = getComputedStyle(sidebar);
+  return transform && transform !== "none" ? new DOMMatrixReadOnly(transform).m42 : sheetOffset(sheet.state);
+}
 
 function setSheet(stateName, { animate = true } = {}) {
   sheet.state = stateName;
   sidebar.classList.toggle("sheet-peek", stateName === "peek");
-  const position = SHEET_POSITION[stateName];
-  placeSheet(typeof position === "function" ? position() : position, animate);
+  sidebar.classList.toggle("sheet-half", stateName === "half");
+  placeSheet(sheetOffset(stateName), animate);
   // The zoom buttons and the timeline move up above the peek.
   MAP_ELEMENT.style.setProperty("--sheet-covered", `${peekHeight()}px`);
 }
 
-/** Show the sheet for a newly shown event: slide in to the peek, or keep its state. */
+function cancelSheetClose() {
+  clearTimeout(sheetCloseTimer);
+  sheetCloseTimer = 0;
+}
+
+/** Show the sheet for a newly shown event: slide in to the peek, or keep its detent. */
 function openSheet(fromClosed) {
+  cancelSheetClose();
   if (fromClosed || sheet.state === "closed") {
-    placeSheet("100%", false);
+    placeSheet(sheetHeight(), false);
     void sidebar.offsetHeight; // start the slide from below the screen
     setSheet("peek");
   } else {
-    setSheet(sheet.state, { animate: false });
+    setSheet(sheet.state);
   }
 }
 
 function resetSheet() {
+  cancelSheetClose();
   sheet.state = "closed";
-  sidebar.classList.remove("sheet-peek", "sheet-animating");
+  sidebar.classList.remove("sheet-peek", "sheet-half", "sheet-animating", "sheet-dragging");
   sidebar.style.transform = "";
   MAP_ELEMENT.style.removeProperty("--sheet-covered");
 }
@@ -740,7 +821,7 @@ function resetSheet() {
 function coveredBottom() {
   if (!isPhone()) return 0;
   let visible = 0;
-  if (!sidebar.hidden && sheet.state !== "closed") visible = sheet.state === "full" ? sheetHeight() : peekHeight();
+  if (!sidebar.hidden && sheet.state !== "closed") visible = sheetHeight() - sheetOffset(sheet.state);
   if (document.body.classList.contains("filters-open")) {
     visible = Math.max(visible, document.getElementById("filters").offsetHeight);
   }
@@ -771,30 +852,45 @@ function keepOpenEventVisible() {
 }
 
 function changeSheet(stateName) {
+  cancelSheetClose();
   if (stateName === "closed") {
     const closing = state.openId;
-    placeSheet("100%", true);
-    setTimeout(() => { if (state.openId === closing) closeSidebar(); }, 280);
+    placeSheet(sheetHeight(), true);
+    sheetCloseTimer = setTimeout(() => {
+      sheetCloseTimer = 0;
+      if (state.openId === closing) closeSidebar();
+    }, reducedMotion.matches ? 0 : SHEET_MS);
     return;
   }
   setSheet(stateName);
   keepOpenEventVisible();
 }
 
-// Drag the sheet by its handle (or anywhere while it only peeks); a flick or the
-// nearest position decides where it settles. A tap on the peek opens it fully.
+// Drag the sheet by its handle (or anywhere while it peeks or is half open). On release the
+// sheet settles on the detent nearest to where the release velocity would carry it. A
+// touch during an animation catches the sheet where it is. A tap on the peek opens it more.
 let drag = null;
 let suppressClick = false;
 const DRAG_START = 6; // px before a touch counts as a drag
-const FLICK = 0.5; // px per ms
+const DECELERATION = 0.998; // the usual scroll deceleration rate per ms
+const project = (velocity) => (velocity * DECELERATION) / (1 - DECELERATION); // px/ms -> px travelled
+const DETENTS = ["full", "half", "peek", "closed"];
+
+/** Past the ends the sheet follows the finger less and less. */
+const rubberBand = (overshoot, size) => (1 - 1 / ((overshoot * 0.55) / size + 1)) * size;
 
 sidebar.addEventListener("pointerdown", (e) => {
   if (!isPhone() || sheet.state === "closed" || (e.pointerType === "mouse" && e.button !== 0)) return;
   const onHeader = Boolean(e.target.closest(".sidebar-header"));
-  if (!onHeader && sheet.state !== "peek") return; // the full sheet scrolls its text instead
-  if (e.target.closest("button, a, input, select")) return;
-  const offset = sheetOffset(sheet.state);
-  drag = { id: e.pointerId, startY: e.clientY, offset, y: offset, lastY: e.clientY, lastT: e.timeStamp, v: 0, moved: false };
+  if (!onHeader && sheet.state === "full") return; // the full sheet scrolls its text instead
+  if (e.target.closest("button, a, input, select, textarea")) return;
+  const frozen = sidebar.classList.contains("sheet-animating") || sheetCloseTimer !== 0;
+  const offset = drawnSheetOffset();
+  if (frozen) {
+    cancelSheetClose();
+    placeSheet(offset, false); // caught mid-way
+  }
+  drag = { id: e.pointerId, startY: e.clientY, offset, y: offset, samples: [{ y: e.clientY, t: e.timeStamp }], moved: false, frozen };
 });
 
 window.addEventListener("pointermove", (e) => {
@@ -803,36 +899,41 @@ window.addEventListener("pointermove", (e) => {
   if (!drag.moved) {
     if (Math.abs(dy) < DRAG_START) return;
     drag.moved = true;
+    cancelSheetClose();
     sidebar.setPointerCapture(e.pointerId);
+    sidebar.classList.add("sheet-dragging");
   }
-  const dt = Math.max(1, e.timeStamp - drag.lastT);
-  drag.v = (e.clientY - drag.lastY) / dt;
-  drag.lastY = e.clientY;
-  drag.lastT = e.timeStamp;
-  drag.y = Math.max(0, drag.offset + dy);
-  placeSheet(drag.y, false);
+  drag.samples.push({ y: e.clientY, t: e.timeStamp });
+  while (drag.samples.length > 2 && e.timeStamp - drag.samples[0].t > 100) drag.samples.shift();
+  const size = sheetHeight();
+  let y = drag.offset + dy;
+  if (y < 0) y = -rubberBand(-y, size);
+  else if (y > size) y = size + rubberBand(y - size, size);
+  drag.y = y;
+  placeSheet(y, false);
 });
 
 function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
-  const { moved, y, v } = drag;
+  const { moved, frozen, y, samples } = drag;
   drag = null;
-  if (!moved) return;
+  sidebar.classList.remove("sheet-dragging");
+  if (!moved && !frozen) return;
   suppressClick = true;
   setTimeout(() => { suppressClick = false; }, 0);
   if (e.type === "pointercancel") {
     setSheet(sheet.state);
     return;
   }
-  const positions = { full: 0, peek: sheetOffset("peek"), closed: sheetHeight() };
-  let target;
-  if (v > FLICK) target = y < positions.peek ? "peek" : "closed";
-  else if (v < -FLICK) target = "full";
-  else {
-    target = Object.keys(positions).reduce((best, name) =>
-      (Math.abs(positions[name] - y) < Math.abs(positions[best] - y) ? name : best), "full");
-  }
-  changeSheet(target);
+  // Release velocity over the last 100 ms, projected to where the sheet would come to rest.
+  samples.push({ y: e.clientY, t: e.timeStamp });
+  while (samples.length > 2 && e.timeStamp - samples[0].t > 100) samples.shift();
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  const velocity = moved && last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0;
+  const rest = y + project(velocity);
+  changeSheet(DETENTS.reduce((best, name) =>
+    (Math.abs(sheetOffset(name) - rest) < Math.abs(sheetOffset(best) - rest) ? name : best)));
 }
 // On the window: a mouse that leaves the sheet before the drag starts is not captured yet.
 window.addEventListener("pointerup", endDrag);
@@ -845,9 +946,16 @@ sidebar.addEventListener("click", (e) => {
     return;
   }
   if (!isPhone() || e.target.closest("button, a, input, select")) return;
-  if (sheet.state === "peek") changeSheet("full");
+  if (sheet.state === "peek") changeSheet(sheetOffset("half") < sheetOffset("peek") ? "half" : "full");
+  else if (sheet.state === "half") changeSheet("full");
   else if (sheet.state === "full" && e.target.closest(".sidebar-header")) changeSheet("peek");
 }, true);
+
+// The keyboard reaches the whole text: tabbing into a peeking or half-open sheet opens it fully.
+sidebar.addEventListener("focusin", (e) => {
+  if (!isPhone() || (sheet.state !== "peek" && sheet.state !== "half")) return;
+  if (sidebarContent.contains(e.target) && e.target.matches(":focus-visible")) changeSheet("full");
+});
 
 function setFiltersOpen(open) {
   document.body.classList.toggle("filters-open", open);
@@ -858,8 +966,10 @@ function setFiltersOpen(open) {
 map.on("click", () => { if (isPhone()) setFiltersOpen(false); });
 
 // Popups pan clear of the floating buttons (read when a popup opens, from the defaults).
+// On a phone that is three rows: Filters, Near here / Today, the base map button.
+const POPUP_TOP_PHONE = 144;
 function updatePopupPadding() {
-  L.Popup.prototype.options.autoPanPaddingTopLeft = isPhone() ? L.point(5, FAB_SPACE + 5) : null;
+  L.Popup.prototype.options.autoPanPaddingTopLeft = isPhone() ? L.point(5, POPUP_TOP_PHONE) : null;
 }
 updatePopupPadding();
 
@@ -1428,6 +1538,11 @@ function finishRender() {
   let count = state.filtered.length === total ? `${total.toLocaleString()} events` : `${shown} of ${total.toLocaleString()} events`;
   if (state.loading) count += " (still loading…)";
   document.getElementById("result-count").textContent = count;
+  // The figures strip shows the same two numbers (the count above stays the live region).
+  const shownFigure = document.querySelector("[data-figure-shown]");
+  if (shownFigure) shownFigure.textContent = shown;
+  const totalFigure = document.querySelector("[data-figure-total]");
+  if (totalFigure) totalFigure.textContent = total.toLocaleString();
   updateFilterSummary();
   updateCollectionFromSearch();
   renderList();

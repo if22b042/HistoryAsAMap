@@ -1,0 +1,105 @@
+/* History As A Map: design tokens (Apple-style, light + dark).
+   Every colour, font, radius, space and duration lives here. Light is the default; dark applies through
+   prefers-color-scheme (unless data-theme="light") and through data-theme="dark". The two dark blocks hold identical values. */
+
+:root {
+  color-scheme: light;
+  --bg: #f5f5f7; --pane: #e8e8ed; --card: #ffffff; --hover: #f0f0f3; --fill: rgba(0, 0, 0, 0.06); --fill-strong: rgba(0, 0, 0, 0.1);
+  --text: #1d1d1f; --muted: #636366; --line: rgba(0, 0, 0, 0.1); --line-strong: rgba(0, 0, 0, 0.24); --field-line: #8a8a8e;
+  --elev-card: 0 0 0 .5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 28px -16px rgba(0, 0, 0, 0.14);
+  --elev-btn: inset 0 .5px 0 rgba(255, 255, 255, 0.9), 0 1px 1px rgba(0, 0, 0, 0.05);
+  --elev-primary: inset 0 .5px 0 rgba(255, 255, 255, 0.28), 0 1px 2px rgba(0, 60, 140, 0.35);
+  --elev-pop: 0 0 0 .5px rgba(0, 0, 0, 0.08), 0 20px 50px -12px rgba(0, 0, 0, 0.28);
+  --accent: #005bb8; --accent-dark: #004a99; --accent-soft: rgba(0, 113, 227, 0.1); --on-accent: #ffffff;
+  --primary: #0071e3; --primary-hover: #0062c4; --on-primary: #ffffff;
+  --green: #186a31; --green-soft: rgba(52, 199, 89, 0.16);
+  --red: #c4001a; --red-soft: rgba(255, 59, 48, 0.1);
+  --amber: #8a5300; --amber-soft: rgba(255, 159, 10, 0.16);
+  --input-bg: #ffffff; --btn-bg: #ffffff; --btn-hover: #f0f0f3; --disabled-bg: #ececf0;
+  --danger-line: rgba(215, 0, 21, 0.35); --shadow-color: rgba(0, 0, 0, 0.2); --shadow-color-sm: rgba(0, 0, 0, 0.06);
+  --backdrop: rgba(0, 0, 0, 0.3); --paper: #ffffff; --scroll: rgba(0, 0, 0, 0.25); --ring: rgba(0, 113, 227, 0.35);
+  --material: rgba(245, 245, 247, 0.72); --material-strong: rgba(255, 255, 255, 0.8);
+  --toast-bg: #28282c; --toast-fg: #f5f5f7; --toast-link: #9bd0ff; --toast-error-bg: #b3261e; --toast-error-link: #ffffff;
+  /* category colours: solid fills for markers, dots and badges (--on-cat text on them is >= 4.5:1) */
+  --cat-military: #d32f2f; --cat-diplomatic: #805ad5; --cat-naval: #1a4e8a; --cat-scientific: #2f855a;
+  --cat-natural: #c05621; --cat-disaster: #8b4513; --cat-other: #5f6b7d; --on-cat: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #000000; --pane: #2c2c2e; --card: #1c1c1e; --hover: #2c2c2e; --fill: rgba(255, 255, 255, 0.1); --fill-strong: rgba(255, 255, 255, 0.16);
+    --text: #f5f5f7; --muted: #a1a1a6; --line: rgba(255, 255, 255, 0.14); --line-strong: rgba(255, 255, 255, 0.28); --field-line: #8e8e93;
+    --elev-card: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
+    --elev-btn: inset 0 .5px 0 rgba(255, 255, 255, 0.1);
+    --elev-primary: inset 0 .5px 0 rgba(255, 255, 255, 0.25);
+    --elev-pop: 0 0 0 .5px rgba(255, 255, 255, 0.12), 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+    --accent: #50acff; --accent-dark: #7cc2ff; --accent-soft: rgba(41, 151, 255, 0.18); --on-accent: #000000;
+    --primary: #0071e3; --primary-hover: #0066cc; --on-primary: #ffffff;
+    --green: #30d158; --green-soft: rgba(48, 209, 88, 0.18);
+    --red: #ff6961; --red-soft: rgba(255, 69, 58, 0.18);
+    --amber: #ffb340; --amber-soft: rgba(255, 159, 10, 0.2);
+    --input-bg: #2c2c2e; --btn-bg: #2c2c2e; --btn-hover: #3a3a3c; --disabled-bg: #232325;
+    --danger-line: rgba(255, 105, 97, 0.45); --shadow-color: rgba(0, 0, 0, 0.6); --shadow-color-sm: rgba(0, 0, 0, 0.5);
+    --backdrop: rgba(0, 0, 0, 0.55); --paper: #ffffff; --scroll: rgba(255, 255, 255, 0.28); --ring: rgba(41, 151, 255, 0.45);
+    --material: rgba(22, 22, 24, 0.72); --material-strong: rgba(30, 30, 32, 0.8);
+    --toast-bg: #3a3a3c; --toast-fg: #f5f5f7; --toast-link: #9bd0ff; --toast-error-bg: #962828; --toast-error-link: #ffffff;
+    --cat-military: #ff6b6b; --cat-diplomatic: #b794f4; --cat-naval: #5b9be0; --cat-scientific: #48bb78;
+    --cat-natural: #f59a4a; --cat-disaster: #c9895a; --cat-other: #a0aec0; --on-cat: #000000;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000; --pane: #2c2c2e; --card: #1c1c1e; --hover: #2c2c2e; --fill: rgba(255, 255, 255, 0.1); --fill-strong: rgba(255, 255, 255, 0.16);
+  --text: #f5f5f7; --muted: #a1a1a6; --line: rgba(255, 255, 255, 0.14); --line-strong: rgba(255, 255, 255, 0.28); --field-line: #8e8e93;
+  --elev-card: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
+  --elev-btn: inset 0 .5px 0 rgba(255, 255, 255, 0.1);
+  --elev-primary: inset 0 .5px 0 rgba(255, 255, 255, 0.25);
+  --elev-pop: 0 0 0 .5px rgba(255, 255, 255, 0.12), 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+  --accent: #50acff; --accent-dark: #7cc2ff; --accent-soft: rgba(41, 151, 255, 0.18); --on-accent: #000000;
+  --primary: #0071e3; --primary-hover: #0066cc; --on-primary: #ffffff;
+  --green: #30d158; --green-soft: rgba(48, 209, 88, 0.18);
+  --red: #ff6961; --red-soft: rgba(255, 69, 58, 0.18);
+  --amber: #ffb340; --amber-soft: rgba(255, 159, 10, 0.2);
+  --input-bg: #2c2c2e; --btn-bg: #2c2c2e; --btn-hover: #3a3a3c; --disabled-bg: #232325;
+  --danger-line: rgba(255, 105, 97, 0.45); --shadow-color: rgba(0, 0, 0, 0.6); --shadow-color-sm: rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(0, 0, 0, 0.55); --paper: #ffffff; --scroll: rgba(255, 255, 255, 0.28); --ring: rgba(41, 151, 255, 0.45);
+  --material: rgba(22, 22, 24, 0.72); --material-strong: rgba(30, 30, 32, 0.8);
+  --toast-bg: #3a3a3c; --toast-fg: #f5f5f7; --toast-link: #9bd0ff; --toast-error-bg: #962828; --toast-error-link: #ffffff;
+  --cat-military: #ff6b6b; --cat-diplomatic: #b794f4; --cat-naval: #5b9be0; --cat-scientific: #48bb78;
+  --cat-natural: #f59a4a; --cat-disaster: #c9895a; --cat-other: #a0aec0; --on-cat: #000000;
+}
+
+/* Theme-independent tokens and aliases. Aliases resolve at :root, so they follow whichever theme is active. */
+:root {
+  /* 4px scale, radii, sizes, type */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --radius: 14px; --radius-sm: 10px; --radius-lg: 20px; --radius-pill: 999px;
+  --bar: 52px; --ctl: 36px; --ctl-sm: 28px; --hit: 44px;
+  --t-xs: 12px; --t-sm: 13px; --t-md: 14px; --t-lg: 16px; --t-xl: 18px; --t-2xl: 22px; --t-title: 28px; --t-figure: 34px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --dur-micro: 100ms; --dur-short: 180ms; --dur-sheet: 380ms; --ease: cubic-bezier(.2, .7, .2, 1); --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --material-fallback: var(--card);
+  --z-map: 1; --z-sheet: 600; --z-bar: 1100; --z-modal: 1300;
+  /* --shadow and --shadow-sm stay full box-shadow values for existing consumers (the CV used these names for colours; those are --shadow-color*) */
+  --shadow-sm: 0 1px 2px var(--shadow-color-sm); --shadow: var(--elev-card); --shadow-lg: var(--elev-pop);
+  /* category tints (clusters) */
+  --cat-military-tint: color-mix(in srgb, var(--cat-military) 18%, transparent);
+  --cat-diplomatic-tint: color-mix(in srgb, var(--cat-diplomatic) 18%, transparent);
+  --cat-naval-tint: color-mix(in srgb, var(--cat-naval) 18%, transparent);
+  --cat-scientific-tint: color-mix(in srgb, var(--cat-scientific) 18%, transparent);
+  --cat-natural-tint: color-mix(in srgb, var(--cat-natural) 18%, transparent);
+  --cat-disaster-tint: color-mix(in srgb, var(--cat-disaster) 18%, transparent);
+  --cat-other-tint: color-mix(in srgb, var(--cat-other) 18%, transparent);
+  /* old names, kept as aliases so unmigrated CSS re-themes without edits */
+  --surface: var(--card); --surface-alt: var(--pane); --border: var(--line);
+  --text-strong: var(--text); --text-muted: var(--muted); --link: var(--accent);
+  --success: var(--green); --success-bg: var(--green-soft);
+  --error: var(--red); --error-bg: var(--red-soft);
+  --warning: var(--amber); --warning-bg: var(--amber-soft);
+  --nav-bg: var(--material); --nav-height: var(--bar);
+  /* blue ramp -> nearest new token: 50/100 soft tint, 300/600 link blue, 400/500 brand blue, 700 deep blue */
+  --blue-50: var(--accent-soft); --blue-100: var(--accent-soft);
+  --blue-300: var(--accent); --blue-400: var(--primary); --blue-500: var(--primary);
+  --blue-600: var(--accent); --blue-700: var(--accent-dark);
+}

@@ -36,6 +36,13 @@ if (dataTag && mapElement) {
       box.append(el("strong", "popup-title", entry.title));
       box.append(el("span", "popup-year", entry.date || entry.display_year));
       if (entry.note) box.append(el("p", "popup-summary", entry.note));
+      if (entry.wiki_lat != null && entry.wiki_lon != null) {
+        const link = el("a", "popup-coords", "Wikipedia lists " + entry.wiki_lat.toFixed(4) + ", " + entry.wiki_lon.toFixed(4));
+        link.href = "https://www.google.com/maps?q=" + entry.wiki_lat + "," + entry.wiki_lon;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        box.append(link);
+      }
       const jump = el("button", "popup-btn", "Show in list ↓");
       jump.type = "button";
       jump.addEventListener("click", () => highlight(entry.id, true));
@@ -52,7 +59,15 @@ if (dataTag && mapElement) {
 
   const points = entries.map((e) => [e.lat, e.lon]);
   if (points.length === 1) map.setView(points[0], 6);
-  else map.fitBounds(points, { padding: [40, 40], maxZoom: 8 });
+  else {
+    // on a phone the entry sheet covers the bottom 46% of the map: fit into what is left
+    const phone = window.matchMedia("(max-width: 860px)").matches;
+    map.fitBounds(points, {
+      paddingTopLeft: [40, 40],
+      paddingBottomRight: [40, phone ? Math.round(mapElement.clientHeight * 0.46) + 24 : 40],
+      maxZoom: 8,
+    });
+  }
 
   // The same black-and-white ring as on the main map marks the selected entry; it is
   // drawn on the entry's own marker, so the two always move together.

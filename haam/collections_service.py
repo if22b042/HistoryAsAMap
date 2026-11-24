@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -193,6 +195,86 @@ def public_collections(page: int = 1, per_page: int = 24) -> tuple[list[Collecti
     return list(items), total
 
 
+# ------------------------------------------------------------------ search
+
+_QUERY_PART = re.compile(r'"([^"]+)"|(\S+)')
+_FOLD_EXTRA = str.maketrans({"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "ð": "d", "þ": "th"})
+SEARCH_POOL = 1000  # newest public collections searched
+SEARCH_TERMS = 8
+HIT_ENTRIES = 6  # matching entries shown per collection
+
+
+def fold(text: str) -> str:
+    """Lower-case without accents, so 'Gödel', 'Godel' and 'goedel'-like spellings of one letter meet."""
+    plain = "".join(c for c in unicodedata.normalize("NFKD", text or "") if not unicodedata.combining(c))
+    return plain.casefold().translate(_FOLD_EXTRA)
+
+
+def parse_query(q: str) -> list[str]:
+    """Words (or "quoted phrases") of a search, folded; every one has to be found."""
+    parts = [(quoted or word) for quoted, word in _QUERY_PART.findall(q or "")]
+    return [t for t in (fold(p).strip() for p in parts) if t][:SEARCH_TERMS]
+
+
+@dataclass
+class SearchHit:
+    collection: Collection
+    entries: list[CollectionEntry]  # the best matching entries (at most HIT_ENTRIES)
+    more: int  # matching entries not shown
+    score: int
+
+
+def _entry_text(entry: CollectionEntry) -> str:
+    return fold(f"{entry.title} {entry.summary} {entry.note} {entry.date_label} {entry.display_year} "
+                f"{entry.year} {entry.category.label}")
+
+
+def search_public(q: str = "", category: Category | None = None, year_from: int | None = None,
+                  year_to: int | None = None, page: int = 1, per_page: int = 24) -> tuple[list[SearchHit], int]:
+    """Search public collections *and what is inside them*.
+
+    Every word has to appear somewhere in the collection: its title or description, or in the
+    title, text, note, date or category of an entry (different words may sit in different entries).
+    Category and year filters apply to entries; a collection needs at least one entry passing them.
+    Results are ranked: title hits first, then collections with more, better matching entries.
+    """
+    terms = parse_query(q)
+    filtered = category is not None or year_from is not None or year_to is not None
+    pool = db.session.scalars(
+        select(Collection).options(*_LIST_LOAD)
+        .where(Collection.is_public.is_(True), Collection.is_hidden.is_(False))
+        .order_by(Collection.updated_at.desc()).limit(SEARCH_POOL)).all()
+    hits = []
+    for collection in pool:
+        entries = [e for e in collection.entries
+                   if (category is None or e.category == category)
+                   and (year_from is None or e.year >= year_from)
+                   and (year_to is None or e.year <= year_to)]
+        if not entries or (not terms and not filtered):
+            continue
+        title, description = fold(collection.title), fold(collection.description)
+        found = {t for t in terms if t in title or t in description}
+        score = sum(5 for t in terms if t in title) + sum(2 for t in terms if t in description)
+        matched = []
+        for entry in entries:
+            text, name = _entry_text(entry), fold(entry.title)
+            seen = {t for t in terms if t in text}
+            if terms and not seen:
+                continue
+            found |= seen
+            weight = sum(3 if t in name else 1 for t in seen)
+            score += weight
+            matched.append((weight, entry))
+        if len(found) < len(terms):
+            continue
+        matched.sort(key=lambda m: (-m[0], m[1].year, m[1].id))
+        shown = [e for _, e in matched[:HIT_ENTRIES]]
+        hits.append(SearchHit(collection, shown, len(matched) - len(shown), score))
+    hits.sort(key=lambda h: (-h.score, -h.collection.updated_at.timestamp()))
+    start = (page - 1) * per_page
+    return hits[start:start + per_page], len(hits)
+
+
 def all_collections(page: int = 1, per_page: int = 20) -> tuple[list[Collection], int]:
     """One page of every collection (admin): reported first, then public, then most recently changed."""
     reported = select(CollectionReport.id).where(CollectionReport.collection_id == Collection.id).exists()
@@ -349,6 +431,8 @@ def _apply_custom(entry: CollectionEntry, data: CustomEntryData) -> None:
     entry.custom_year = data.year
     entry.custom_date_label = data.date_label
     entry.custom_category = data.category
+    if (entry.custom_lat, entry.custom_lon) != (data.lat, data.lon):
+        entry.wiki_lat = entry.wiki_lon = None  # the reconfirmed note no longer describes this place
     entry.custom_lat, entry.custom_lon = data.lat, data.lon
     entry.custom_summary = data.summary
     entry.note = data.note
@@ -427,7 +511,8 @@ def copy_collection(source: Collection) -> tuple[Collection, str]:
             custom_title=entry.custom_title, custom_year=entry.custom_year,
             custom_date_label=entry.custom_date_label, custom_summary=entry.custom_summary,
             custom_lat=entry.custom_lat, custom_lon=entry.custom_lon, custom_category=entry.custom_category,
-            link=entry.link, wiki_verified=entry.wiki_verified))
+            link=entry.link, wiki_verified=entry.wiki_verified,
+            wiki_lat=entry.wiki_lat, wiki_lon=entry.wiki_lon))
     db.session.commit()
     return copy, edit_token
 

@@ -1,0 +1,109 @@
+/* ---------------------------------------------------------------- event pages */
+.event-article { display: grid; gap: var(--s4); }
+.event-article h1 { margin: var(--s2) 0 0; font-size: var(--t-title); color: var(--text); line-height: 1.15; }
+/* Meta row in the style of .figures: hairline-separated facts with tabular numbers. */
+.event-article-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+  margin: 0;
+  padding: var(--s2) 0;
+  border-block: .5px solid var(--line-strong);
+  color: var(--muted);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+.event-summary p { margin: 0 0 var(--s3); font-size: var(--t-lg); line-height: 1.6; }
+.event-attribution { margin: 0; font-size: var(--t-xs); color: var(--muted); }
+.event-tags { display: flex; flex-wrap: wrap; gap: var(--s2); }
+a.tag-pill { position: relative; text-decoration: none; }
+a.tag-pill::after { content: ""; position: absolute; inset: -5px -2px; }
+
+/* A static map from OpenStreetMap tiles, centred on the event; works without JavaScript. Tiles stay unrestyled. */
+.tile-map {
+  position: relative;
+  height: 280px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: var(--elev-card);
+  background: var(--pane);
+}
+.tile-map-inner { position: absolute; }
+.tile-map-inner img { position: absolute; width: 256px; height: 256px; max-width: none; }
+:root[data-theme="dark"] .tile-map-inner { filter: brightness(0.8) contrast(1.1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tile-map-inner { filter: brightness(0.8) contrast(1.1); }
+}
+.tile-map-marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 3px solid var(--card);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--shadow-color), var(--shadow);
+}
+.tile-map-credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 2px var(--s2);
+  background: var(--material-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  color: var(--text);
+  font-size: var(--t-xs);
+  border-top-left-radius: var(--radius-sm);
+}
+.tile-map-credit a { color: var(--accent); }
+
+/* Report form: a sheet-style card. */
+.report-card { margin-bottom: var(--s5); }
+.report-card summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  font-weight: 600;
+  cursor: pointer;
+}
+.report-card[open] summary { margin-bottom: var(--s3); }
+
+/* Related events as pills; the whole pill is the link. */
+.related-events { margin-top: var(--s4); }
+.related-events h2 { margin-top: 0; font-size: var(--t-xl); }
+.related-events ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.related-events li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 4px var(--s3) 4px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--btn-bg);
+  transition: background-color var(--dur-micro), border-color var(--dur-micro);
+}
+.related-events li:hover { background: var(--btn-hover); border-color: var(--accent); }
+.related-events li:has(a:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.related-events a { color: var(--text); text-decoration: none; font-size: var(--t-md); }
+.related-events a:focus-visible { outline: none; }
+.related-events a::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-pill); }
+.related-events .year-pill { flex: none; min-width: 4.5rem; text-align: center; }
+
+/* Reading pages (about, submitted, error): a calm centred column. */
+.page.narrow.reading { max-width: calc(68ch + 2rem); }
+.reading .info-card h2 { margin: 0 0 var(--s1); font-size: var(--t-xl); }
+.reading .info-card p:last-child { margin-bottom: 0; }
+.card.centered h1 { margin-bottom: var(--s2); }
+.card.centered p { max-width: 52ch; margin-inline: auto; color: var(--muted); font-size: var(--t-lg); }
+.card.centered p strong { color: var(--text); }
+
+/* long links (e.g. an email address) must wrap on phones */
+.info-card { overflow-wrap: anywhere; }

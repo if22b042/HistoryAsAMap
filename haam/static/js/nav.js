@@ -4,38 +4,41 @@
   const toggle = document.querySelector(".nav-toggle");
   const menu = document.getElementById("nav-menu");
 
-  function setMenu(open) {
+  function setMenu(open, returnFocus) {
     menu.classList.toggle("open", open);
     toggle.setAttribute("aria-expanded", String(open));
     toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
-    const icon = toggle.querySelector("i");
-    icon.classList.toggle("fa-bars", !open);
-    icon.classList.toggle("fa-times", open);
+    if (open) {
+      const first = menu.querySelector("a, button");
+      if (first) first.focus();
+    } else if (returnFocus) {
+      toggle.focus();
+    }
   }
 
   if (toggle && menu) {
-    toggle.addEventListener("click", () => setMenu(!menu.classList.contains("open")));
+    toggle.addEventListener("click", () => {
+      const open = !menu.classList.contains("open");
+      setMenu(open, !open);
+    });
     document.addEventListener("click", (e) => {
-      if (menu.classList.contains("open") && !e.target.closest(".navbar")) setMenu(false);
+      if (menu.classList.contains("open") && !e.target.closest(".navbar")) setMenu(false, false);
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && menu.classList.contains("open")) setMenu(false);
+      if (e.key === "Escape" && menu.classList.contains("open")) setMenu(false, true);
     });
   }
 
   const themeButton = document.querySelector(".theme-toggle");
-  function showThemeIcon() {
-    const icon = themeButton.querySelector("i");
-    const dark = root.dataset.theme === "dark";
-    icon.classList.toggle("fa-sun", dark);
-    icon.classList.toggle("fa-moon", !dark);
+  function showTheme() {
+    themeButton.setAttribute("aria-pressed", String(root.dataset.theme === "dark"));
   }
   if (themeButton) {
-    showThemeIcon();
+    showTheme();
     themeButton.addEventListener("click", () => {
       root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
       try { localStorage.setItem("theme", root.dataset.theme); } catch (e) { /* ignore */ }
-      showThemeIcon();
+      showTheme();
       document.dispatchEvent(new CustomEvent("themechange"));
     });
   }

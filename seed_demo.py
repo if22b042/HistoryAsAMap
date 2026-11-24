@@ -12,7 +12,9 @@ What it loads (safe to run again – existing events and collections are skipped
                                   by an editor and/or reported (reasons separated by ``;``).
 * ``seed/collection_entries.csv`` their entries: ``event`` rows point to an event from
                                   events.csv by its Wikipedia url, ``custom`` rows are the
-                                  author's own entries (optional link, verified for the ★).
+                                  author's own entries (optional link, verified for the ★;
+                                  optional wiki_lat/wiki_lon = Wikipedia's coordinates where ours
+                                  deliberately differ, shown as "manually reconfirmed").
 
 Edit links are shown once and also written to ``instance/demo-links.txt``.
 """
@@ -70,8 +72,10 @@ def seed_collections(base_url: str) -> list[str]:
     links = []
     for row in read_csv("collections.csv"):
         title = row["title"]
-        if db.session.scalar(select(Collection).where(Collection.title == title)):
-            print(f"  = {title} (already there)")
+        existing = db.session.scalar(select(Collection).where(Collection.title == title))
+        if existing:
+            added = _add_missing_entries(existing, entries_by_key.get(row["key"], []))
+            print(f"  = {title} (already there{f', +{added} new entries' if added else ''})")
             continue
 
         collection, edit_token = collections_service.create_collection(
@@ -97,6 +101,16 @@ def seed_collections(base_url: str) -> list[str]:
     return links
 
 
+def _add_missing_entries(collection: Collection, rows: list[dict]) -> int:
+    """Add the CSV's own (custom) entries a collection does not have yet, matched by title. Never removes anything."""
+    have = {entry.title for entry in collection.entries}
+    before = len(collection.entries)
+    for row in rows:
+        if row["type"] == "custom" and row["title"] not in have:
+            _add_entry(collection, row)
+    return len(collection.entries) - before
+
+
 def _add_entry(collection: Collection, row: dict) -> None:
     try:
         if row["type"] == "event":
@@ -114,11 +128,14 @@ def _add_entry(collection: Collection, row: dict) -> None:
             if year is None:
                 print(f"    ! skipped {row['title']}: bad year {row['year']!r}")
                 return
-            collections_service.add_custom(collection, CustomEntryData(
+            entry = collections_service.add_custom(collection, CustomEntryData(
                 title=row["title"], year=year, date_label=row["date"],
                 category=Category(row["category"] or "other"),
                 lat=float(row["lat"]), lon=float(row["lon"]),
                 summary=row["description"], link=row["url"], note=row["note"]))
+            if row.get("wiki_lat") and row.get("wiki_lon"):  # place manually reconfirmed against Wikipedia's
+                entry.wiki_lat, entry.wiki_lon = float(row["wiki_lat"]), float(row["wiki_lon"])
+                db.session.commit()
     except (CollectionError, ValueError) as error:
         print(f"    ! skipped {row.get('title') or row.get('url')}: {getattr(error, 'message', error)}")
 

@@ -1,5 +1,5 @@
-// Base maps shared by every map on the site, and a small switcher control for
-// the bottom-right corner. The choice is kept in localStorage so each map opens
+// Base maps shared by every map on the site, and a small switcher control: a round
+// button that opens a segmented pill of the styles (the main map shows the pill all the time). The choice is kept in localStorage so each map opens
 // with the style picked last.
 //
 // All sources are free to use without an API key, as long as their attribution
@@ -69,9 +69,6 @@ function createLayer(id) {
   return tileLayer(url, options);
 }
 
-// Swatch colours that hint at each style in the menu.
-const SWATCH = { street: "#f2efe9", terrain: "#c9d8a6", satellite: "#3d5a3a", plain: "#d4d4d4" };
-
 const ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" '
   + 'stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="m2 13 10 5 10-5"/></svg>';
 
@@ -101,6 +98,7 @@ export function addBasemapSwitcher(map, { choices = DEFAULT_CHOICES, storageKey 
     current = id;
     control.getContainer()?.querySelectorAll("[data-basemap]").forEach((button) => {
       button.setAttribute("aria-checked", String(button.dataset.basemap === id));
+      button.classList.toggle("active", button.dataset.basemap === id);
     });
   }
 
@@ -114,49 +112,47 @@ export function addBasemapSwitcher(map, { choices = DEFAULT_CHOICES, storageKey 
     toggle.setAttribute("aria-expanded", "false");
     toggle.innerHTML = ICON; // a constant – safe
 
-    const menu = L.DomUtil.create("div", "basemap-menu", box);
+    // A segmented pill; shown while the box has "open" (or always, where CSS hides the toggle).
+    const menu = L.DomUtil.create("div", "basemap-menu seg", box);
     menu.setAttribute("role", "radiogroup");
     menu.setAttribute("aria-label", "Map style");
-    menu.hidden = true;
+    const isOpen = () => box.classList.contains("open");
+    const toggleShown = () => toggle.offsetParent !== null;
     for (const id of choices) {
       const option = L.DomUtil.create("button", "basemap-option", menu);
       option.type = "button";
       option.dataset.basemap = id;
       option.setAttribute("role", "radio");
       option.setAttribute("aria-checked", String(id === current));
-      const swatch = L.DomUtil.create("span", "basemap-swatch", option);
-      swatch.style.background = SWATCH[id];
+      option.classList.toggle("active", id === current);
       option.append(BASEMAPS[id].label);
       option.addEventListener("click", () => {
         select(id);
         saveChoice(storageKey, id);
+        if (!toggleShown()) return; // the pill stays: keep the focus on the choice
         open(false);
         toggle.focus();
       });
     }
 
     function open(show) {
-      menu.hidden = !show;
+      box.classList.toggle("open", show);
       toggle.setAttribute("aria-expanded", String(show));
       if (!show) return;
-      // Opens upwards, moved down as far as needed to stay inside the map
-      // (the controls sit high above the open timeline on a phone).
-      menu.style.bottom = "";
-      const overflow = container.getBoundingClientRect().top + 4 - menu.getBoundingClientRect().top;
-      if (overflow > 0) menu.style.bottom = `${-overflow}px`;
+      // The pill opens beside the button, on the same row, so it never leaves the map.
       menu.querySelector('[aria-checked="true"]')?.focus();
     }
-    toggle.addEventListener("click", () => open(menu.hidden));
+    toggle.addEventListener("click", () => open(!isOpen()));
     box.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !menu.hidden) {
+      if (event.key === "Escape" && isOpen()) {
         open(false);
         toggle.focus();
       }
     });
     document.addEventListener("click", (event) => {
-      if (!menu.hidden && !box.contains(event.target)) open(false);
+      if (isOpen() && !box.contains(event.target)) open(false);
     });
-    map.on("movestart", () => open(false));
+    map.on("movestart", () => { if (isOpen()) open(false); });
 
     L.DomEvent.disableClickPropagation(box);
     L.DomEvent.disableScrollPropagation(box);

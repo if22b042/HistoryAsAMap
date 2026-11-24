@@ -278,7 +278,7 @@ function renderProgress() {
   list.replaceChildren();
   record.rounds.forEach((round, i) => {
     const guess = record.guesses[i];
-    const item = el("li", "game-step");
+    const item = el("li", "game-step figure");
     if (guess) {
       item.classList.add("done");
       item.textContent = emojiFor(guess.points, puzzle.max_points);
@@ -870,7 +870,7 @@ function renderPairsProgress() {
   list.replaceChildren();
   pairsPuzzle.rounds.forEach((round, i) => {
     const guess = pairsGuesses[i];
-    const item = el("li", "game-step");
+    const item = el("li", "game-step figure");
     if (guess) {
       item.classList.add("done");
       item.textContent = guess.correct ? "🟩" : "🟥";

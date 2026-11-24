@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import entry_badges, collection_badges, category_badge, copy_field %}
+{% from "_macros.html" import entry_badges, collection_badges, category_badge, copy_field, coord_note %}
 {% block title %}{{ collection.title }}{% endblock %}
 {% block description %}{{ (collection.description or 'A personal map of history: ' ~ collection.entries|length ~ ' entries' ~ (', ' ~ collection.year_span if collection.year_span else '') ~ '.')|describe }}{% endblock %}
 
@@ -49,6 +49,7 @@
   {% if collection.entries %}
     <div class="collection-layout">
       <div id="collection-map" class="collection-map" role="region" aria-label="Map of this collection"></div>
+      <div class="entry-sheet sheet" role="region" aria-label="Entries in this collection">
       <ol class="entry-list" id="entry-list">
         {% for entry in collection.entries %}
           <li class="card entry-card" id="entry-{{ entry.id }}">
@@ -61,6 +62,7 @@
               <span class="entry-card-title">{{ entry.title }}</span>
             </button>
             {% if entry.summary %}<p class="entry-card-summary">{{ entry.summary }}</p>{% endif %}
+            {{ coord_note(entry) }}
             {% if entry.note %}<blockquote class="entry-note"><i class="fas fa-sticky-note" aria-hidden="true"></i> {{ entry.note }}</blockquote>{% endif %}
             {% if entry.url %}
               <a class="entry-link" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer nofollow ugc">
@@ -70,6 +72,7 @@
           </li>
         {% endfor %}
       </ol>
+      </div>
     </div>
   {% else %}
     <p class="empty-state">This collection has no entries yet.

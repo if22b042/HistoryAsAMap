@@ -11,7 +11,7 @@
     </p>
   </header>
 
-  <form method="post" action="{{ url_for('admin.create_tag') }}" class="card" aria-label="New tag">
+  <form method="post" action="{{ url_for('admin.create_tag') }}" class="card tag-new" aria-label="New tag">
     {{ action_form.csrf_token }}
     <h2>New tag</h2>
     <label>Name <input type="text" name="name" maxlength="200" required></label>

@@ -1,0 +1,273 @@
+/* -------------------------------------------------------------- game */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(372px, 420px) 1fr;
+  gap: var(--s4);
+  padding: var(--s4);
+  height: calc(100vh - var(--nav-height));
+  min-height: 480px;
+}
+.game-panel {
+  overflow-y: auto;
+  padding: var(--s4);
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-card);
+}
+.game-map-wrap {
+  position: relative;
+  min-height: 300px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-card);
+}
+.game-map { position: absolute; inset: 0; z-index: var(--z-map); background: var(--pane); cursor: crosshair; }
+.game-map-confirm { display: none; }
+.game-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); }
+.game-header h1 { margin: 0; font-size: var(--t-2xl); }
+.game-meta { margin: var(--s1) 0 0; font-size: var(--t-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-days { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
+.game-days a[hidden] { display: none; }
+.game-next { margin: var(--s3) 0 0; font-size: var(--t-sm); color: var(--muted); }
+.game-next[hidden], .game-archive[hidden] { display: none; }
+
+/* archive: a month grid of 44px day buttons */
+.game-archive { margin-top: var(--s5); padding-top: var(--s3); border-top: .5px solid var(--line-strong); }
+.game-archive summary { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); font-weight: 600; cursor: pointer; }
+.archive-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin: var(--s2) 0; }
+.archive-month { margin: 0; font-size: var(--t-lg); text-align: center; }
+.archive-nav .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.archive-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s1); margin: 0; padding: 0; list-style: none; }
+.archive-day { min-width: 0; }
+.archive-day a, .archive-day.disabled span {
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+  min-width: var(--hit); min-height: var(--hit); border-radius: var(--radius-sm);
+  background: var(--fill); font-size: var(--t-md); font-variant-numeric: tabular-nums; text-decoration: none; color: var(--text);
+}
+.archive-day a { transition: background-color var(--dur-micro) var(--ease-sheet), color var(--dur-micro) var(--ease-sheet), transform var(--dur-micro) var(--ease-sheet); }
+.archive-day.disabled span { background: none; color: var(--muted); opacity: 0.5; }
+.archive-day a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.archive-day a:active { transform: scale(.97); }
+.archive-day.current a { background: var(--primary); color: var(--on-primary); font-weight: 650; }
+.archive-day.done a { font-weight: 650; }
+.archive-check { color: var(--green); font-size: var(--t-xs); }
+.archive-day.current .archive-check { color: var(--on-primary); }
+.archive-legend { margin: var(--s3) 0 0; font-size: var(--t-xs); color: var(--muted); }
+.game-note {
+  margin: var(--s3) 0 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--t-sm);
+}
+
+/* round header: a figures strip, one cell per round */
+.game-progress.figures { grid-auto-flow: column; grid-auto-columns: 1fr; grid-template-columns: none; margin: var(--s4) 0; padding: 0; list-style: none; background: var(--pane); box-shadow: none; }
+.game-step.figure { align-items: center; justify-content: center; padding: var(--s2) var(--s1); color: var(--muted); font-size: var(--t-xl); font-weight: 650; font-variant-numeric: tabular-nums; }
+.game-step.current { background: var(--accent-soft); color: var(--accent); }
+.game-step.done { color: var(--text); }
+.game-message:empty { display: none; }
+.game-message { margin-bottom: var(--s3); color: var(--error); font-size: var(--t-md); }
+.game-round-num { margin: 0; font-size: var(--t-sm); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-round h2 { margin: var(--s1) 0 var(--s2); font-size: var(--t-2xl); overflow-wrap: anywhere; }
+.game-round-date { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); margin: 0 0 var(--s3); font-weight: 600; font-variant-numeric: tabular-nums; }
+.game-category { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 400; font-size: var(--t-sm); color: var(--muted); }
+.game-round-excerpt { margin: 0 0 var(--s4); font-size: var(--t-md); line-height: 1.5; }
+.game-hint { margin: 0 0 var(--s3); font-size: var(--t-sm); color: var(--muted); }
+
+/* hints: pills */
+.game-hint-box { margin: 0 0 var(--s3); }
+.game-hint-box[hidden] { display: none; }
+.game-hint-cost { color: var(--muted); font-weight: 400; }
+.game-hint-text { margin: var(--s2) 0 0; padding: var(--s2) var(--s3); font-size: var(--t-md); font-weight: 500; line-height: 1.5; background: var(--accent-soft); border-radius: var(--radius); }
+.game-hint-text[hidden] { display: none; }
+.game-hint-line { display: block; }
+.game-hint-line + .game-hint-line { margin-top: var(--s1); font-weight: 600; }
+.game-hint-box .btn { white-space: normal; text-align: left; }
+
+/* result: a sheet with distance and points */
+.game-result { margin-top: var(--s4); }
+.game-points { margin: 0; font-size: var(--t-lg); color: var(--muted); }
+.game-points strong { font-size: var(--t-figure); font-weight: 650; letter-spacing: -.035em; color: var(--text); font-variant-numeric: tabular-nums; }
+.game-distance, .game-answer { margin: var(--s1) 0; font-variant-numeric: tabular-nums; }
+.game-links { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin: var(--s2) 0 var(--s4); font-size: var(--t-md); }
+.game-links a[hidden] { display: none; }
+.game-summary h2 { margin: 0; font-size: var(--t-xl); }
+.game-total { margin: var(--s1) 0 var(--s3); color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-total strong { font-size: var(--t-figure); font-weight: 650; letter-spacing: -.035em; color: var(--text); }
+.game-summary-list { margin: 0 0 var(--s4); padding: 0; list-style: none; }
+.game-summary-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--s2);
+  padding: var(--s2) 0;
+  border-bottom: .5px solid var(--line-strong);
+  font-size: var(--t-md);
+}
+.game-summary-emoji { grid-row: span 2; }
+.game-summary-title { overflow-wrap: anywhere; }
+.game-summary-points { font-size: var(--t-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-share { width: 100%; margin-bottom: var(--s2); resize: none; font-family: inherit; font-size: var(--t-md); }
+.game-streak { margin: var(--s4) 0 var(--s1); font-weight: 600; font-variant-numeric: tabular-nums; }
+.game-countdown { margin: 0; font-size: var(--t-md); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 768px) {
+  /* three mode labels on one line, each as wide as its text */
+  .game-mode { flex: 1 1 auto; padding: 2px var(--s2); gap: var(--s1); white-space: nowrap; }
+  .game-links a:not([hidden]) { display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--hit); }
+  .game-layout { display: flex; flex-direction: column; height: auto; min-height: 0; padding: var(--s3); gap: var(--s3); }
+  .game-panel { overflow: visible; padding: var(--s4); }
+  .game-map-wrap { height: 65vh; flex: none; }
+  .game-map-confirm:not([hidden]) {
+    display: inline-flex;
+    position: absolute;
+    left: 50%;
+    bottom: var(--s5);
+    z-index: var(--z-bar);
+    transform: translateX(-50%);
+    box-shadow: var(--shadow-lg);
+  }
+}
+/* The game's tiles come in a dark version already: no darkening filter. */
+:root[data-theme="dark"] .page-game .leaflet-tile-pane { filter: none; }
+
+/* modes: a segmented control made of links */
+.game-modes { display: flex; gap: 2px; margin: var(--s4) 0 0; padding: 2px; border-radius: var(--radius-pill); background: var(--pane); }
+.game-mode {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--ctl);
+  padding: 2px var(--s3);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-weight: 500;
+  font-size: var(--t-md);
+  text-decoration: none;
+  transition: background-color var(--dur-micro) var(--ease-sheet), color var(--dur-micro) var(--ease-sheet), transform var(--dur-micro) var(--ease-sheet);
+}
+.game-mode::after { content: ""; position: absolute; inset: calc((var(--ctl) - var(--hit)) / 2) 0; }
+.game-mode:hover { color: var(--text); text-decoration: none; }
+.game-mode:active { transform: scale(.97); }
+.game-mode.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px var(--shadow-color-sm), 0 0 0 .5px var(--line); }
+.game-hard[hidden] { display: none; }
+.game-stats { margin: var(--s3) 0 0; font-size: var(--t-md); color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-stats[hidden], .game-pairs[hidden], .game-pairs [hidden] { display: none; }
+.game-layout-pairs { grid-template-columns: 1fr; }
+.game-layout-pairs .game-map-wrap { display: none; }
+.game-layout-pairs .game-panel > * { max-width: 640px; margin-left: auto; margin-right: auto; }
+.game-pairs { margin-top: var(--s2); }
+.game-pairs h2 { margin: var(--s1) 0 var(--s3); }
+.pairs-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.pairs-card {
+  display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; text-align: left;
+  min-height: var(--hit); padding: var(--s4); font: inherit; color: var(--text);
+  background: var(--pane); border: 1px solid transparent; border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-sheet), border-color var(--dur-micro) var(--ease-sheet), transform var(--dur-micro) var(--ease-sheet);
+}
+.pairs-card:hover:not(:disabled) { border-color: var(--accent); }
+.pairs-card:active:not(:disabled) { transform: scale(.97); }
+.pairs-card:disabled { cursor: default; opacity: 1; }
+.pairs-card.chosen { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pairs-card.earlier { background: var(--accent-soft); }
+.pairs-letter { font-size: var(--t-xs); font-weight: 650; color: var(--muted); }
+.pairs-title { overflow-wrap: anywhere; }
+.pairs-excerpt { font-size: var(--t-sm); color: var(--muted); }
+.pairs-date { font-weight: 650; color: var(--accent); font-variant-numeric: tabular-nums; }
+.game-pairs .game-result { margin-top: var(--s3); }
+@media (max-width: 560px) { .pairs-cards { grid-template-columns: 1fr; } }
+.game-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2); margin: var(--s3) 0 0; }
+.game-filters[hidden] { display: none; }
+.game-filter { display: flex; flex-direction: column; gap: var(--s1); flex: 1 1 8rem; font-size: var(--t-xs); color: var(--muted); }
+.game-filter .form-input { font-size: var(--t-md); }
+
+/* the selection ring is part of the selected marker, so it moves with the dot */
+.leaflet-marker-icon.marker-selected { overflow: visible; }
+.leaflet-marker-icon.marker-selected::after {
+  content: "";
+  position: absolute;
+  inset: -10px; /* around a dot or a whole cluster, whatever its size */
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid var(--paper);
+  box-shadow: 0 0 0 3px var(--toast-bg), 0 0 0 6px color-mix(in srgb, var(--paper) 90%, transparent);
+  animation: selected-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+/* lost in the CSS split; transform and opacity only */
+@keyframes selected-pulse {
+  0% { transform: scale(0.96); opacity: 1; }
+  100% { transform: scale(1.14); opacity: 0.35; }
+}
+/* main map: the ring takes the event's colour (set as --ring-color by map.js) */
+.leaflet-marker-icon.marker-selected.ring-colored::after {
+  border: 4px solid var(--ring-color);
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--shadow-color);
+  animation: ring-colored-pulse 1.6s ease-out infinite;
+}
+@keyframes ring-colored-pulse {
+  0% { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--shadow-color), 0 0 0 3px color-mix(in srgb, var(--ring-color) 55%, transparent); }
+  100% { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--shadow-color), 0 0 0 18px color-mix(in srgb, var(--ring-color) 0%, transparent); }
+}
+/* main map, event still bundled: a ring around its cluster pulses. The ring is a
+   pseudo-element: scaling the cluster itself (`scale` or `transform`) would also
+   scale Leaflet's translate3d position, flinging the cluster across the map. */
+.leaflet-marker-icon.cluster-selected { box-shadow: 0 2px 8px var(--shadow-color), 0 0 0 3px var(--toast-bg); }
+.leaflet-marker-icon.cluster-selected::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--toast-bg) 60%, transparent);
+  pointer-events: none;
+  animation: cluster-selected-pulse 1.4s ease-out infinite;
+}
+@keyframes cluster-selected-pulse {
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-marker-icon.marker-selected::after { animation: none; }
+  .leaflet-marker-icon.cluster-selected::after { animation: none; }
+  .archive-day a:active, .game-mode:active, .pairs-card:active:not(:disabled) { transform: none; }
+}
+
+/* Game hard mode: the switch and the year picker */
+.game-hard { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); margin: var(--s2) 0 0; font-size: var(--t-md); cursor: pointer; }
+.game-hard input { width: 20px; height: 20px; }
+.game-year { margin: 0 0 var(--s3); padding: var(--s4); border-radius: var(--radius); background: var(--pane); }
+.game-year[hidden] { display: none; }
+.game-year > label { display: block; margin-bottom: var(--s2); font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
+.game-year-row { display: flex; align-items: center; gap: var(--s3); }
+.game-year-input { width: 9rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.game-year-shown { font-size: var(--t-xl); font-weight: 650; color: var(--accent); font-variant-numeric: tabular-nums; }
+.game-year-scale { display: flex; justify-content: space-between; gap: var(--s2); font-size: var(--t-xs); color: var(--muted); }
+.game-breakdown { margin: var(--s1) 0; font-size: var(--t-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-breakdown[hidden], .game-distance[hidden] { display: none; }
+
+/* the year slider: a 44px touch row, a 4px track and a 28px thumb */
+.game-year-slider { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: var(--hit); margin: var(--s2) 0 0; padding: 0; background: none; cursor: pointer; }
+.game-year-slider::-webkit-slider-runnable-track { height: 4px; border-radius: var(--radius-pill); background: var(--fill-strong); }
+.game-year-slider::-moz-range-track { height: 4px; border-radius: var(--radius-pill); background: var(--fill-strong); }
+.game-year-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: var(--ctl-sm); height: var(--ctl-sm); margin-top: -12px;
+  border: .5px solid var(--line-strong); border-radius: 50%; background: var(--card); box-shadow: 0 1px 3px var(--shadow-color), var(--elev-btn);
+  transition: transform var(--dur-micro) var(--ease-sheet);
+}
+.game-year-slider::-moz-range-thumb {
+  width: var(--ctl-sm); height: var(--ctl-sm); box-sizing: border-box;
+  border: .5px solid var(--line-strong); border-radius: 50%; background: var(--card); box-shadow: 0 1px 3px var(--shadow-color), var(--elev-btn);
+  transition: transform var(--dur-micro) var(--ease-sheet);
+}
+.game-year-slider:active::-webkit-slider-thumb { transform: scale(.97); }
+.game-year-slider:active::-moz-range-thumb { transform: scale(.97); }
+.game-year-slider:focus-visible { outline: none; }
+.game-year-slider:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.game-year-slider:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
