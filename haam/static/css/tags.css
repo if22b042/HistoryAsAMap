@@ -155,3 +155,6 @@
   .tree-bar { display: none; }
   .tree-children { margin-left: 0.45rem; padding-left: 0.35rem; }
 }
+
+/* the tag combobox list scrolls instead of growing without bound (lost in the CSS split) */
+.tag-combo-list { max-height: 18rem; overflow-y: auto; }

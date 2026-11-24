@@ -21,7 +21,7 @@
   <div class="figures" role="group" aria-label="Collections on this page">
     <div class="figure"><b>{{ mine|length }}</b><span>yours to edit</span></div>
     <div class="figure"><b>{{ public|length }}</b><span>public on this page</span></div>
-    <div class="figure"><b>{{ (mine + public)|map(attribute='entries')|map('length')|sum }}</b><span>entries in them</span></div>
+    <div class="figure"><b>{{ (mine + public)|unique(attribute='id')|map(attribute='entries')|map('length')|sum }}</b><span>entries in them</span></div>
   </div>
   {% endif %}
 
