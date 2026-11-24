@@ -649,6 +649,11 @@ function addToClusters(markers) {
   clusters.addLayers(markers);
 }
 
+// The heatmap colours come from theme tokens: redraw it when the theme changes (nav.js
+// dispatches "themechange") or when the OS scheme flips while no explicit theme is set.
+document.addEventListener("themechange", () => { if (state.heatmap) rebuildMarkers(); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.heatmap) rebuildMarkers(); });
+
 /** Replace everything on the map by the markers (or the heatmap) of the current filters. */
 function rebuildMarkers() {
   rebuildQueued = false;
