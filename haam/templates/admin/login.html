@@ -3,9 +3,9 @@
 {% block title %}Log in{% endblock %}
 
 {% block content %}
-<div class="page narrow">
+<div class="page narrow login">
   <header class="page-header"><h1>Editor login</h1></header>
-  <form class="card" method="post" novalidate>
+  <form class="card login-card" method="post" novalidate>
     {{ form.csrf_token }}
     {{ text_field(form.username, icon='user', autocomplete='username', autofocus=True) }}
     {{ text_field(form.password, icon='lock', autocomplete='current-password') }}
