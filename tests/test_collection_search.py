@@ -2,7 +2,6 @@
 
 from haam import collections_service as service
 from haam.collections_service import CustomEntryData
-from haam.extensions import db
 from haam.models import Category
 
 
