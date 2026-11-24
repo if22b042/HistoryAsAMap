@@ -52,43 +52,45 @@
   {% if not embed %}
   <header class="navbar">
     <a class="brand" href="{{ url_for('public.index') }}">
-      <span class="brand-icon"><i class="fas fa-map-marked-alt" aria-hidden="true"></i></span>
+      <span class="brand-icon"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.25"/></svg></span>
       <span class="brand-name">History As A Map</span>
     </a>
 
     <button class="nav-toggle" type="button" aria-controls="nav-menu" aria-expanded="false" aria-label="Open menu">
-      <i class="fas fa-bars" aria-hidden="true"></i>
+      <span class="icon-open"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+      <span class="icon-close"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
     </button>
 
     <nav id="nav-menu" class="nav-menu" aria-label="Main">
       {% set endpoint = request.endpoint or '' %}
-      <a class="nav-link {{ 'active' if endpoint == 'public.index' }}" href="{{ url_for('public.index') }}">
-        <i class="fas fa-globe-europe" aria-hidden="true"></i> Map
+      <a class="nav-link {{ 'active' if endpoint == 'public.index' }}" href="{{ url_for('public.index') }}"{% if endpoint == 'public.index' %} aria-current="page"{% endif %}>
+        Map
       </a>
       <a class="nav-link {{ 'active' if endpoint.startswith('public.submit') or endpoint in ('public.preview', 'public.confirm') }}"
-         href="{{ url_for('public.submit') }}">
-        <i class="fas fa-plus-circle" aria-hidden="true"></i> Add event
+         href="{{ url_for('public.submit') }}"{% if endpoint.startswith('public.submit') or endpoint in ('public.preview', 'public.confirm') %} aria-current="page"{% endif %}>
+        Add event
       </a>
-      <a class="nav-link {{ 'active' if endpoint.startswith('collections.') }}" href="{{ url_for('collections.index') }}">
-        <i class="fas fa-layer-group" aria-hidden="true"></i> Collections
+      <a class="nav-link {{ 'active' if endpoint.startswith('collections.') }}" href="{{ url_for('collections.index') }}"{% if endpoint.startswith('collections.') %} aria-current="page"{% endif %}>
+        Collections
       </a>
-      <a class="nav-link {{ 'active' if endpoint.startswith('game.') }}" href="{{ url_for('game.page') }}">
-        <i class="fas fa-gamepad" aria-hidden="true"></i> Game
+      <a class="nav-link {{ 'active' if endpoint.startswith('game.') }}" href="{{ url_for('game.page') }}"{% if endpoint.startswith('game.') %} aria-current="page"{% endif %}>
+        Game
       </a>
-      <a class="nav-link {{ 'active' if endpoint == 'public.about' }}" href="{{ url_for('public.about') }}">
-        <i class="fas fa-info-circle" aria-hidden="true"></i> About
+      <a class="nav-link {{ 'active' if endpoint == 'public.about' }}" href="{{ url_for('public.about') }}"{% if endpoint == 'public.about' %} aria-current="page"{% endif %}>
+        About
       </a>
       {% if is_admin %}
-        <a class="nav-link {{ 'active' if endpoint.startswith('admin.') }}" href="{{ url_for('admin.review') }}">
-          <i class="fas fa-user-shield" aria-hidden="true"></i> Review
+        <a class="nav-link {{ 'active' if endpoint.startswith('admin.') }}" href="{{ url_for('admin.review') }}"{% if endpoint.startswith('admin.') %} aria-current="page"{% endif %}>
+          Review
         </a>
         <form class="nav-form" method="post" action="{{ url_for('admin.logout') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="nav-link" type="submit"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> Log out</button>
+          <button class="nav-link" type="submit"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3M16 8l4 4-4 4M20 12H9"/></svg> Log out</button>
         </form>
       {% endif %}
-      <button class="nav-link theme-toggle" type="button" aria-label="Toggle dark mode">
-        <i class="fas fa-moon" aria-hidden="true"></i>
+      <button class="nav-link theme-toggle" type="button" aria-label="Dark mode" aria-pressed="false">
+        <span class="icon-moon"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></span>
+        <span class="icon-sun"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
       </button>
     </nav>
   </header>
