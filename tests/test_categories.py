@@ -9,6 +9,7 @@ from flask_migrate import downgrade, upgrade
 from sqlalchemy import text
 
 from haam import create_app
+from haam.config import TestingConfig
 from haam.data.event_types import CATEGORY_CLASSES, EVENT_TYPES
 from haam.extensions import db
 from haam.models import Category, Tag
@@ -164,7 +165,9 @@ def test_migration_moves_listed_events_and_downgrades(tmp_path, monkeypatch):
     back_to_other = _migration("a91c3e5f7b20").BACK_TO_OTHER.split()
     massacre_qid = next(q for q in moves[("other", "violence")] if q not in back_to_other)
     assassination_qid = next(q for q in back_to_other if q in moves[("other", "violence")])
-    monkeypatch.setenv("TEST_DATABASE_URL", f"sqlite:///{tmp_path / 'haam.db'}")
+    # The config reads TEST_DATABASE_URL when it is imported, so patch the class: this test walks the
+    # migrations on its own throwaway SQLite file and must not touch the suite's (PostgreSQL) database.
+    monkeypatch.setattr(TestingConfig, "SQLALCHEMY_DATABASE_URI", f"sqlite:///{tmp_path / 'haam.db'}")
     app = create_app("testing")
     with app.app_context():
         upgrade(directory=str(MIGRATIONS), revision="c3f1d2a4b5e6")
