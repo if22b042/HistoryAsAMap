@@ -317,6 +317,7 @@ h1 .trust { width: 32px; height: 32px; font-size: var(--t-md); }
 }
 .collection-banner strong { font-size: 1rem; color: var(--text-strong); }
 .collection-banner span { color: var(--text-muted); }
+.collection-banner .collection-banner-story { justify-self: start; margin-top: 0.3rem; font-weight: 600; }
 .detail-note { margin: 0.75rem 0; padding: 0.6rem 0.75rem; border: 1px solid var(--line); background: var(--accent-soft); border-radius: var(--radius-sm); white-space: pre-line; }
 
 /* "Embed this map" (filter panel) */

@@ -36,6 +36,10 @@
         <strong>{{ collection.title }}</strong>
         <span>{{ collection.entries|length }} {{ 'entry' if collection.entries|length == 1 else 'entries' }}
           {%- if collection.year_span %} · {{ collection.year_span }}{% endif %}</span>
+        {% if collection.entries %}
+          <a class="collection-banner-story" href="{{ url_for('collections.story', view_token=collection.view_token) }}">
+            <i class="fas fa-play" aria-hidden="true"></i> Play story</a>
+        {% endif %}
       </div>
     {% endif %}
     <div class="filters-header">

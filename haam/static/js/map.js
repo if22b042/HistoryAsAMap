@@ -1462,6 +1462,7 @@ function renderTagChips() {
       });
       tools.append(mode);
     }
+    if (state.tagIds.length === 1) tools.append(storyLink(state.tagIds[0]));
     const clear = el("button", "tag-chip-clear", state.tagIds.length > 1 ? "Clear tags" : "Clear tag");
     clear.type = "button";
     clear.addEventListener("click", () => setTags([]));
@@ -1469,6 +1470,25 @@ function renderTagChips() {
     box.replaceChildren(el("div", "tag-chips", null), tools);
     box.firstChild.append(...chips);
   });
+}
+
+/** "▶ Play as a story": the tag (and its part and years, as in the address) step by step, oldest first. */
+function storyLink(tagId) {
+  const link = el("a", "tag-chip-story", "▶ Play as a story");
+  link.title = "Fly through these events in date order, one at a time";
+  // The years can change without the chips being redrawn: read the address when the link is used.
+  const update = () => {
+    const params = new URLSearchParams(window.location.search);
+    const query = new URLSearchParams();
+    ["part", "from", "to"].forEach((key) => { if (params.get(key)) query.set(key, params.get(key)); });
+    const search = query.toString();
+    link.href = `${EMBED ? "/embed" : ""}/story/tag/${tagId}${search ? `?${search}` : ""}`;
+  };
+  update();
+  link.addEventListener("pointerdown", update);
+  link.addEventListener("focus", update);
+  link.addEventListener("click", update);
+  return link;
 }
 
 /** The tag menu: counts that follow the other filters; empty and selected tags hidden. */

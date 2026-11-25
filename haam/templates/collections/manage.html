@@ -15,7 +15,13 @@
       <h1>{{ collection.title }} {{ collection_badges(collection) }}</h1>
       <p>Editing. Every change is saved straight away.</p>
     </div>
-    <a class="btn btn-secondary" href="{{ url_for('collections.view', view_token=token) }}"><i class="fas fa-eye" aria-hidden="true"></i> View collection</a>
+    <div class="button-row">
+      {% if collection.entries %}
+        <a class="btn btn-secondary" href="{{ url_for('collections.story', view_token=token) }}"
+           title="Play the entries in their order, as visitors will see it"><i class="fas fa-play" aria-hidden="true"></i> Preview story</a>
+      {% endif %}
+      <a class="btn btn-secondary" href="{{ url_for('collections.view', view_token=token) }}"><i class="fas fa-eye" aria-hidden="true"></i> View collection</a>
+    </div>
   </header>
 
   <section class="card links-card">

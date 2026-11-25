@@ -25,6 +25,9 @@
     </div>
     <div class="button-row">
       {% if collection.entries %}
+        <a class="btn {{ 'btn-secondary' if editable else 'btn-primary' }}" href="{{ url_for('collections.story', view_token=collection.view_token) }}"
+           title="Fly from entry to entry in this order, with each note as a caption">
+          <i class="fas fa-play" aria-hidden="true"></i> Play story</a>
         <a class="btn btn-secondary" href="{{ url_for('collections.full_map', view_token=collection.view_token) }}"
            title="The full map – filters, search, timeline – with only this collection's entries">
           <i class="fas fa-map" aria-hidden="true"></i> Map view</a>

@@ -52,6 +52,15 @@
 }
 .tag-mode-btn.active { background: var(--accent-soft); color: var(--link); font-weight: 700; }
 .tag-chip-clear { border: 0; background: none; color: var(--link); font: inherit; font-size: 0.78rem; cursor: pointer; text-decoration: underline; }
+.tag-chip-story {
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--link);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.tag-chip-story:hover { background: var(--accent-soft); text-decoration: none; }
 
 .tag-selection-wide { margin-top: 0.6rem; }
 .tag-search-hint { margin: 0.4rem 0 0; font-size: 0.78rem; color: var(--text-muted); }
