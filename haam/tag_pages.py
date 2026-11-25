@@ -169,8 +169,8 @@ def key_events(tag: Tag, events: list[Event]) -> list[Event]:
 
 
 def story_url(tag: Tag) -> str | None:
-    """Where "Play as a story" goes for this tag. None until story mode exists."""
-    return None
+    """Where "Play as a story" goes for this tag: its events one by one, oldest first (haam/story.py)."""
+    return url_for("public.tag_story", tag_id=tag.id)
 
 
 # ------------------------------------------------------------ the page

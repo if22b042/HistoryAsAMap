@@ -276,6 +276,12 @@ function start(story) {
       more.addEventListener("click", () => go(saved - 1));
       actions.append(more);
     }
+    if (story.page_url) {
+      const page = el("a", "btn btn-secondary", "About this tag");
+      page.href = story.page_url;
+      if (embed) { page.target = "_blank"; page.rel = "noopener"; }
+      actions.append(page);
+    }
     intro.append(actions);
   }
 

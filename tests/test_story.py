@@ -125,6 +125,14 @@ def test_tag_story_order_and_year_range(client, war):
     assert payload(client.get(f"/story/tag/{tag.id}?from=junk"))["count"] == 4
 
 
+def test_tag_page_and_tag_story_link_to_each_other(client, war):
+    tag, _ = war
+    data = payload(client.get(f"/story/tag/{tag.id}"))
+    assert data["page_url"].startswith(f"/tag/{tag.id}-")
+    page = client.get(data["page_url"]).get_data(as_text=True)
+    assert f'href="/story/tag/{tag.id}"' in page and "Play as a story" in page
+
+
 def test_tag_story_404_cases_and_embed(client, war, make_event):
     tag, _ = war
     assert client.get("/story/tag/9999").status_code == 404

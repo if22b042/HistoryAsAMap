@@ -149,8 +149,10 @@ def tag_story(tag, year_from: int | None, year_to: int | None, part_qid: str | N
     if part_node is not None:
         title, intro = part_node["label"], "Part of " + SEPARATOR.join(part_trail)
     given = {"tag": tag.id, "part": part_qid, "from": year_from, "to": year_to}
-    return _payload(
+    payload = _payload(
         kind="tag", title=title, intro=intro, steps=steps, parts=parts,
         back_url=url_for("public.index", **{k: v for k, v in given.items() if v is not None}),
         back_label="Back to the map", path_default=False,
         story_endpoint="public.tag_story", embed_endpoint="public.tag_story_embed", tag_id=tag.id)
+    payload["page_url"] = seo.tag_path(tag)  # the tag's landing page: its parts, timeline and all its events
+    return payload
