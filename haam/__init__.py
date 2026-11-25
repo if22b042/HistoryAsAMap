@@ -31,6 +31,7 @@ CSP = "; ".join([
 
 # /embed is made to be framed by other sites: any page may embed it.
 EMBED_CSP = CSP.replace("frame-ancestors 'none'", "frame-ancestors *")
+EMBED_ENDPOINTS = frozenset({"public.embed", "collections.embed", "public.tag_story_embed"})
 
 
 def _config_name() -> str:
@@ -132,9 +133,10 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.after_request
     def security_headers(response):
-        if request.endpoint == "public.embed":
+        if request.endpoint in EMBED_ENDPOINTS:
             response.headers["Content-Security-Policy"] = EMBED_CSP
-            response.headers["X-Robots-Tag"] = "noindex"  # the full map is what search engines should list
+            # The full map is what search engines should list; setdefault keeps a collection's "noindex, nofollow".
+            response.headers.setdefault("X-Robots-Tag", "noindex")
         response.headers.setdefault("Content-Security-Policy", CSP)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")

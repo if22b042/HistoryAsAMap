@@ -39,8 +39,17 @@ def test_embed_may_be_framed_by_anyone_and_is_noindex(client):
     assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 
-def test_other_pages_still_forbid_framing(client):
-    for path in ("/", "/about", "/game", "/collections/"):
+def test_other_pages_still_forbid_framing(client, make_event):
+    from haam.extensions import db
+    from haam.models import Tag
+    from tests.test_collections import create
+    collection, _ = create(client)
+    tag = Tag(name="Framing test")
+    db.session.add(tag)
+    db.session.commit()
+    make_event("Framed", tags=[tag])
+    for path in ("/", "/about", "/game", "/collections/", f"/collections/{collection.view_token}/story",
+                 f"/story/tag/{tag.id}"):
         response = client.get(path)
         assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"], path
         assert "X-Robots-Tag" not in response.headers or "/collections" in path

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ story.title }} · Story{% endblock %}
+{% block body_class %}page-story{% if embed %} page-embed{% endif %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block head %}
+  <meta name="robots" content="noindex{% if story.kind == 'collection' %}, nofollow{% endif %}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/story.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="story" id="story">
+  <div id="story-map" class="story-map" role="region" aria-label="Map of the story"></div>
+  {% if not story.steps %}
+    <p class="empty-state">This story has no steps yet.</p>
+    <a class="story-back" href="{{ story.back_url }}">← {{ story.back_label }}</a>
+  {% endif %}
+  <noscript>
+    <p>The story needs JavaScript.</p>
+    <a class="story-back" href="{{ story.back_url }}">← {{ story.back_label }}</a>
+  </noscript>
+  {% if not embed %}
+    <a class="story-back" href="{{ story.back_url }}">← {{ story.back_label }}</a>
+  {% else %}
+    <a class="embed-brand" id="story-brand" href="{{ story.story_url }}" target="_blank" rel="noopener">History As A Map</a>
+  {% endif %}
+  <script type="application/json" id="story-data">{{ story|tojson }}</script>
+</main>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module" src="{{ url_for('static', filename='js/story.js') }}"></script>
+{% endblock %}

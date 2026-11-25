@@ -1,17 +1,19 @@
 """Pages for visitors: the map, event and tag pages, the about page and the submission flow."""
 
+import re
 from datetime import date
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from sqlalchemy import func, select
 
 from haam import events, feed, seo, tag_pages
-from haam.dates import format_year
+from haam.dates import format_year, parse_year_input
 from haam.events import EventData, EventError
 from haam.extensions import db
 from haam.forms import EventForm, EventReportForm, LinkForm
 from haam.models import Event, Status, Tag, event_tags
 from haam.ratelimit import limit
+from haam.story import tag_story as build_tag_story
 
 bp = Blueprint("public", __name__)
 
@@ -41,6 +43,29 @@ def index():
 def embed():
     """Just the map, for an <iframe> on another site (see ``security_headers`` in haam/__init__.py)."""
     return _map_page(embed=True)
+
+
+def _tag_story_page(tag_id: int, embed: bool):
+    """A tag played in date order; ``from``, ``to`` (years) and ``part`` (a Wikidata item) narrow it."""
+    tag = db.session.get(Tag, tag_id)
+    if tag is None:
+        abort(404)
+    part = request.args.get("part", "")
+    story = build_tag_story(tag, parse_year_input(request.args.get("from", "")),
+                            parse_year_input(request.args.get("to", "")), part if re.fullmatch(r"Q\d+", part) else None)
+    if not story["steps"]:
+        abort(404)
+    return render_template("story.html", story=story, embed=embed)
+
+
+@bp.get("/story/tag/<int:tag_id>")
+def tag_story(tag_id: int):
+    return _tag_story_page(tag_id, embed=False)
+
+
+@bp.get("/embed/story/tag/<int:tag_id>")
+def tag_story_embed(tag_id: int):
+    return _tag_story_page(tag_id, embed=True)
 
 
 def _related(event: Event) -> tuple[object | None, list[Event]]:

@@ -14,6 +14,7 @@ from haam.extensions import csrf, db
 from haam.forms import (ActionForm, CollectionForm, CustomEntryForm, EntryEventEditForm, EventEntryForm,
                         NewCollectionForm, ReportForm, SearchCollectionForm, SuggestionForm, TagEntriesForm)
 from haam.ratelimit import limit
+from haam.story import collection_story
 from haam.models import Category, Event, Status, Tag, event_tags
 
 bp = Blueprint("collections", __name__, url_prefix="/collections")
@@ -293,6 +294,23 @@ def full_map(view_token: str):
     collection, editable = _viewable_or_410(view_token)
     return render_template("map.html", collection=collection, editable=editable,
                            events_url=url_for("collections.map_data", view_token=view_token))
+
+
+def _story_page(view_token: str, embed: bool):
+    collection, _ = _viewable_or_410(view_token)
+    return render_template("story.html", story=collection_story(collection), embed=embed)
+
+
+@bp.get("/<view_token>/story")
+def story(view_token: str):
+    """The collection played step by step, full screen."""
+    return _story_page(view_token, embed=False)
+
+
+@bp.get("/<view_token>/embed")
+def embed(view_token: str):
+    """The same story for an <iframe>; see ``security_headers`` in haam/__init__.py."""
+    return _story_page(view_token, embed=True)
 
 
 @bp.get("/<view_token>/map.json")
