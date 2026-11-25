@@ -620,6 +620,24 @@ function addToClusters(markers) {
   clusters.addLayers(markers);
 }
 
+const heatPeakCache = { events: null, size: 0, peak: 1 };
+/** Most events in one 6-degree cell: how crowded the busiest place is. */
+function heatPeak(events) {
+  if (events === state.events && heatPeakCache.events === events && heatPeakCache.size === events.length) {
+    return heatPeakCache.peak;
+  }
+  const cells = new Map();
+  let peak = 1;
+  for (const e of events) {
+    const key = Math.floor(e.lat / 6) * 1000 + Math.floor(e.lon / 6);
+    const n = (cells.get(key) || 0) + 1;
+    cells.set(key, n);
+    if (n > peak) peak = n;
+  }
+  if (events === state.events) Object.assign(heatPeakCache, { events, size: events.length, peak });
+  return peak;
+}
+
 /** Replace everything on the map by the markers (or the heatmap) of the current filters. */
 function rebuildMarkers() {
   rebuildQueued = false;
@@ -631,7 +649,10 @@ function rebuildMarkers() {
     heatLayer = null;
   }
   if (state.heatmap) {
-    heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10 });
+    // The scale follows the data: the busiest spot of the shown events is always red, however
+    // few events there are (a war's 1000 look as strong as all 19000), never beyond the full view.
+    const max = Math.min(1, Math.max(0.03, heatPeak(state.filtered) / heatPeak(state.events)));
+    heatLayer = L.heatLayer(state.filtered.map((e) => [e.lat, e.lon, 0.6]), { radius: 25, blur: 18, maxZoom: 10, max });
     heatLayer.addTo(map);
   } else {
     // Markers off the map only store their new icon, so this is cheap.
