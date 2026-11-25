@@ -51,6 +51,7 @@ MIN_PRECISION = 9  # Wikidata time precision: 9 = year, 10 = month, 11 = day
 EVENT_COLUMNS = [
     "wikidata_id", "wiki_page_id", "url", "title", "year", "date", "lat", "lon", "country",
     "category", "status", "tags", "summary", "event_type", "date_source", "coord_source",
+    "sitelinks",  # filled by `fetch-sitelinks`; empty = unknown (sync-wikidata then keeps the database's)
 ]
 REJECT_COLUMNS = ["wikidata_id", "title", "event_type", "reason"]
 
@@ -354,6 +355,23 @@ class WikidataClient:
             for row in rows:
                 item, prop, value = (row[k]["value"].rsplit("/", 1)[1] for k in ("item", "p", "v"))
                 result.setdefault(item, {}).setdefault(prop, []).append(value)
+        return result
+
+    def sitelinks(self, ids: Iterable[str], report: Reporter | None = None) -> dict[str, int]:
+        """``item → number of sitelinks`` (Wikipedia language editions and sister projects).
+
+        One SPARQL query per 400 items. Items Wikidata no longer has (deleted, or merged
+        into another item) are missing from the result.
+        """
+        result: dict[str, int] = {}
+        batches = list(chunks(sorted(set(ids)), 400))
+        for number, chunk in enumerate(batches, start=1):
+            values = " ".join(f"wd:{qid}" for qid in chunk)
+            rows = self._sparql(f"SELECT ?item ?n WHERE {{ VALUES ?item {{ {values} }} ?item wikibase:sitelinks ?n . }}")
+            for row in rows:
+                result[row["item"]["value"].rsplit("/", 1)[1]] = int(row["n"]["value"])
+            if report:
+                report(f"  {number} of {len(batches)} queries, {len(result)} counts so far")
         return result
 
     def entities(self, ids: list[str], props: str = "claims") -> dict:

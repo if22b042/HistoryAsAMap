@@ -49,6 +49,7 @@ export function decodeCore(chunk) {
       lon: chunk.lon[i],
       category: chunk.categories[chunk.cat[i]],
       tags: chunk.tags[i],
+      imp: chunk.imp ? chunk.imp[i] : 0, // importance 0–9 from Wikidata sitelinks (haam/feed.py)
     };
   }
   return events;

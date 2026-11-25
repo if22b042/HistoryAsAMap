@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-from sqlalchemy import inspect, select, text
+from sqlalchemy import bindparam, inspect, select, text
 
 from haam.data.tags import TAGS
 from haam.dates import format_year, month_day, parse_year_input
@@ -279,6 +279,7 @@ def _event_from_row(row: dict, default_status: Status, tags_by_name: dict) -> tu
         return str(exc), None
     page_id = row.get("wiki_page_id", "").strip()
     return None, Event(
+        sitelinks=_sitelinks(row) or 0,
         title=row["title"].strip()[:300],
         year=year,
         date_label=(row.get("date") or "").strip()[:120],
@@ -389,6 +390,12 @@ def _legacy_tag_names(value) -> list[str]:
 
 # ---------------------------------------------------------- sync with the CSV
 
+def _sitelinks(row: dict) -> int | None:
+    """The row's sitelink count, or None when the file has none (the column is missing or empty)."""
+    value = (row.get("sitelinks") or "").strip()
+    return int(value) if value.isdigit() else None
+
+
 @dataclass
 class SyncStats:
     added: int = 0
@@ -399,6 +406,7 @@ class SyncStats:
     unchanged: int = 0
     adopted: int = 0  # older rows of the same article that now carry the Wikidata id
     rejected: int = 0  # invalid rows in the file
+    sitelinks: int = 0  # imported events whose sitelink count changed
     kept_in_collections: list[str] = field(default_factory=list)  # titles
 
 
@@ -539,6 +547,21 @@ def sync_wikidata(path: str, *, dry_run: bool = False, report: Reporter = print,
                                    .values(**wanted, month=month, day=day))
         if not dry_run:
             db.session.commit()
+
+    # 3c. sitelink counts (not editorial, so also for edited events). A row without a count
+    # leaves the database's alone: never 0 over a count fetched with `fetch-sitelinks`.
+    counts: dict[int, int] = {}
+    for start in range(0, len(stay), chunk):
+        counts.update(db.session.execute(select(Event.id, Event.sitelinks).where(Event.id.in_(stay[start:start + chunk]))).all())
+    new_counts = [{"row_id": event_id, "count": wanted} for event_id, have in counts.items()
+                  if (wanted := _sitelinks(rows[by_id[event_id]])) is not None and wanted != have]
+    stats.sitelinks = len(new_counts)
+    if not dry_run and new_counts:
+        update = (Event.__table__.update().where(Event.id == bindparam("row_id"))
+                  .values(sitelinks=bindparam("count"), updated_at=Event.updated_at))
+        for start in range(0, len(new_counts), chunk):
+            db.session.execute(update, new_counts[start:start + chunk])
+        db.session.commit()
 
     # 4. set the tags of the imported events that stay
     links: dict[int, set[int]] = {}

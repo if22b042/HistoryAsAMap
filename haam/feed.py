@@ -18,6 +18,7 @@ an unchanged map is never downloaded twice.
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import time
 
@@ -38,7 +39,15 @@ CHUNKS = len(BOUNDS) - 1
 WIKI_PREFIX = "https://en.wikipedia.org/wiki/"
 CATEGORIES = [c.value for c in Category]
 # Bump when the shape of a chunk changes, so browsers never mix old and new formats.
-FORMAT = 3
+# 4: the importance bucket "imp".
+FORMAT = 4
+
+# Importance buckets: the lowest sitelink count of buckets 1–9 (below 3 and unknown = 0).
+# Each step is about 1.5x the last, so the scale is logarithmic: the raw count would let a
+# few famous European battles swamp the rest (sitelinks favour Europe and recent wars).
+# Measured on the events: median 6 (bucket 2), p75 12 (4), p90 19 (5), p99 48 (7);
+# Normandy 74 (8), Hastings 81, Waterloo 95, Stalingrad 108 (9).
+IMPORTANCE_CUTS = (3, 5, 8, 12, 18, 26, 38, 55, 80)
 # How long a process keeps the computed state (seconds); `FEED_STATE_TTL` overrides it.
 STATE_TTL = 30
 
@@ -58,6 +67,11 @@ def state() -> dict:
     if ttl:
         current_app.extensions["haam_feed_state"] = (now, result)
     return dict(result)
+
+
+def importance_bucket(sitelinks: int | None) -> int:
+    """0–9 from a sitelink count (see ``IMPORTANCE_CUTS``); 0 also for "unknown"."""
+    return bisect.bisect_right(IMPORTANCE_CUTS, sitelinks or 0)
 
 
 def _tag_fingerprint() -> str:
@@ -82,6 +96,10 @@ def _compute_state() -> dict:
         select(func.sum((event_id * 7919 + tag_id) * (tag_id + 13))).scalar_subquery(),
         # The chunks carry page ids: a changed page id must change every URL too.
         select(func.sum(cast(Event.wiki_page_id, BigInteger))).scalar_subquery(),
+        # `fetch-sitelinks` and sync-wikidata set sitelinks in bulk, leaving updated_at alone.
+        # Mixed with the id so moving counts between events changes the sum too.
+        select(func.sum(cast(Event.sitelinks, BigInteger) * (cast(Event.id, BigInteger) % 9973 + 1)))
+        .where(approved).scalar_subquery(),
     )).one()
     total, min_year, max_year = row[0], row[1], row[2]
     # Bulk recategorisations (migrations, `flask haam recategorize`, sync-wikidata) leave
@@ -90,7 +108,7 @@ def _compute_state() -> dict:
     per_category = sorted((c.value, n) for c, n in db.session.execute(
         select(Event.category, func.count(Event.id)).where(approved).group_by(Event.category)))
     digest = hashlib.sha1(repr((tuple(row), _tag_fingerprint(), tuple(per_category), tuple(CATEGORIES), MODULUS,
-                                BOUNDS, FORMAT)).encode()).hexdigest()
+                                BOUNDS, FORMAT, IMPORTANCE_CUTS)).encode()).hexdigest()
     return {"version": digest[:12], "total": total, "years": [min_year, max_year]}
 
 
@@ -131,7 +149,8 @@ def core_chunk(chunk: int, version: str) -> dict:
     day_key = Event.month * 100 + Event.day  # NULL unless the date is precise to the day
     rows = db.session.execute(
         select(Event.id.label("row_id"), PUBLIC_ID.label("pid"), Event.title, Event.year, Event.date_label,
-               Event.wiki_url, Event.lat, Event.lon, Event.category, func.coalesce(day_key, 0).label("md"))
+               Event.wiki_url, Event.lat, Event.lon, Event.category, Event.sitelinks,
+               func.coalesce(day_key, 0).label("md"))
         .where(_in_chunk(chunk))
         .order_by(Event.year, func.coalesce(day_key, 9999), Event.title, PUBLIC_ID)
     ).all()
@@ -164,6 +183,8 @@ def core_chunk(chunk: int, version: str) -> dict:
         "lon": [round(r.lon, 4) for r in rows],
         "cat": [category_index[r.category.value] for r in rows],
         "tags": [tags.get(r.row_id, []) for r in rows],
+        # Importance 0–9 from Wikidata sitelinks (importance_bucket): the map's "Major events".
+        "imp": [importance_bucket(r.sitelinks) for r in rows],
     }
 
 

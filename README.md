@@ -52,7 +52,8 @@ haam/
   geocoding.py      optional country lookup (OpenStreetMap Nominatim)
   importer.py       bulk imports used by the CLI
   recategorize.py   re-derives imported events' categories (`recategorize`)
-  feed.py           the map's data in versioned, cacheable chunks
+  feed.py           the map's data in versioned, cacheable chunks (with a 0–9 importance bucket)
+  sitelinks.py      Wikidata sitelink counts per event (`fetch-sitelinks`)
   game.py           the daily and practice game: picks, scoring, hints, scores
   welcome.py        the map's welcome card: on this day, today's game, featured collections
   seo.py            canonical links, share previews, map-tile images, sitemap and robots.txt
@@ -135,7 +136,8 @@ printed and saved to `instance/demo-links.txt`.
 `seed/wikidata_events.csv` holds 19,176 validated events (52 of them pending
 review) with every column the Event model needs: Wikidata id, Wikipedia page id
 and URL, title, year, date text, coordinates, country, category, status, tags and
-introduction, plus where the date and coordinates came from. Make a database's
+introduction, plus where the date and coordinates came from, and its Wikidata
+sitelink count (see "Major events" below). Make a database's
 Wikidata events match it – offline, in seconds, safe to re-run – with:
 
 ```bash
@@ -223,6 +225,25 @@ new export or retag (about 7,000 events, a few minutes) and commit it:
 flask --app haam haam build-part-of
 ```
 
+### Major events (importance from sitelinks)
+
+`Event.sitelinks` is the number of wikis with a page on the event, mostly Wikipedia
+language editions (median 5, p90 19, p99 52; Stalingrad 108, Waterloo 95, Hastings 81).
+Fetch it for every event with a Wikidata id (about 50 SPARQL queries, one a second; only
+the ids are sent) – it writes the database and the CSV's `sitelinks` column, so commit
+the CSV afterwards, and run it again after `export-wikidata`:
+
+```bash
+flask --app haam haam fetch-sitelinks --dry-run --limit 20   # trial run
+flask --app haam haam fetch-sitelinks
+```
+
+`sync-wikidata` sets the counts from the CSV; a row with no count leaves the database's
+alone. The map gets a 0–9 bucket (`haam/feed.py: IMPORTANCE_CUTS`, lower bounds of
+buckets 1–9: 3, 5, 8, 12, 18, 26, 38, 55, 80). The **Major events** button next to
+**Heatmap** (off by default, `?major=1`) shows only events with bucket ≥ 10 − zoom, at
+most 7: about 470 at world zoom, everything from zoom 10. Nothing else uses the score yet.
+
 ## Commands
 
 | Command | Purpose |
@@ -234,6 +255,7 @@ flask --app haam haam build-part-of
 | `flask --app haam haam import-region --lat 35 70 --lon -10 40 --max-new 100` | Find dated events by geosearch in a lat/lon box |
 | `flask --app haam haam export-wikidata` | Rebuild `seed/wikidata_events.csv` from Wikidata |
 | `flask --app haam haam sync-wikidata` | Make the database's Wikidata events match `seed/wikidata_events.csv` |
+| `flask --app haam haam fetch-sitelinks` | Store each event's Wikidata sitelink count (database and CSV) for "Major events" |
 | `flask --app haam haam recategorize` | Re-derive imported events' categories from their Wikidata classes (database and CSV) |
 | `flask --app haam haam retag-csv seed/wikidata_events.csv` | Recompute the file's tags column from Wikidata |
 | `flask --app haam haam build-part-of` | Fetch the tagged events' "part of" chains into `haam/data/part_of.json` (tag trees) |
@@ -291,7 +313,7 @@ The old tables (`entries`, `locations`, `tags`, `entry_tags`) are only read by
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/events/manifest` | Map data: the version and the URLs of the event chunks |
-| GET | `/api/events/<version>/core/<n>.json` | One chunk of the map's core data (position, year, title, category); cached for a year |
+| GET | `/api/events/<version>/core/<n>.json` | One chunk of the map's core data (position, year, title, category, importance); cached for a year |
 | GET | `/api/events/<version>/text/<n>.json` | The same chunk's short descriptions |
 | GET | `/api/events/<version>/tags.json` | Tags and the tags of each event |
 | GET | `/api/events/<id>` | One approved event, with its full summary |
