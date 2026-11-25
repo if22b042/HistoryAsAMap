@@ -249,6 +249,11 @@
             title="Events within 50 km of the map centre or of your location">
       <i class="fas fa-location-dot" aria-hidden="true"></i> <span>Near here</span>
     </button>
+    <button type="button" class="welcome-open here-open pill" id="here-open" aria-controls="here" aria-expanded="false"
+            aria-label="What happened here?" title="Everything around a point, in all years, oldest first">
+      <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
+      <span class="here-label-long">What happened here?</span><span class="here-label-short">Here</span>
+    </button>
     <button type="button" class="welcome-open pill" id="welcome-open" aria-controls="welcome" aria-expanded="false"
             title="On this day, today's game and featured collections">
       <i class="fas fa-calendar-day" aria-hidden="true"></i> <span>Today</span>
@@ -273,6 +278,36 @@
       </div>
       <p class="near-status" id="near-status" aria-live="polite"></p>
       <ol class="welcome-events near-list" id="near-list"></ol>
+    </div>
+  </section>
+  <section class="welcome near-card here-card sheet" id="here" role="dialog" aria-modal="false" aria-labelledby="here-title"
+           tabindex="-1" hidden>
+    <header class="welcome-header">
+      <h2 id="here-title">What happened here?</h2>
+      <button type="button" class="icon-btn" id="here-close" aria-label="Close">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div class="welcome-body" id="here-body">
+      <p class="welcome-intro" id="here-intro"></p>
+      <div class="seg here-radius" role="group" aria-label="Radius">
+        <button type="button" data-km="10">10 km</button>
+        <button type="button" data-km="25">25 km</button>
+        <button type="button" data-km="50">50 km</button>
+        <button type="button" data-km="100">100 km</button>
+      </div>
+      <div class="near-actions">
+        <button type="button" class="btn btn-secondary btn-small" id="here-pick" aria-pressed="false">
+          <i class="fas fa-hand-pointer" aria-hidden="true"></i> <span>Pick a point</span></button>
+        <button type="button" class="btn btn-secondary btn-small" id="here-locate" hidden>
+          <i class="fas fa-location-crosshairs" aria-hidden="true"></i> Use my location</button>
+        <button type="button" class="btn btn-secondary btn-small" id="here-centre">
+          <i class="fas fa-crosshairs" aria-hidden="true"></i> Use the map centre</button>
+      </div>
+      <p class="near-status" id="here-status" aria-live="polite"></p>
+      <button type="button" class="btn btn-secondary btn-small here-filters" id="here-filters" hidden></button>
+      <div class="here-strip" id="here-strip"></div>
+      <div class="here-list" id="here-list"></div>
     </div>
   </section>
   <section class="welcome sheet" id="welcome" role="dialog" aria-modal="false" aria-labelledby="welcome-title"
