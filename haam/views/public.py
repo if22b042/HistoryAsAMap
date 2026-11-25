@@ -1,16 +1,16 @@
-"""Pages for visitors: the map, event pages, the about page and the submission flow."""
+"""Pages for visitors: the map, event and tag pages, the about page and the submission flow."""
 
 from datetime import date
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from sqlalchemy import func, select
 
-from haam import events, feed, seo
+from haam import events, feed, seo, tag_pages
 from haam.dates import format_year
 from haam.events import EventData, EventError
 from haam.extensions import db
 from haam.forms import EventForm, EventReportForm, LinkForm
-from haam.models import Event, Status, event_tags
+from haam.models import Event, Status, Tag, event_tags
 from haam.ratelimit import limit
 
 bp = Blueprint("public", __name__)
@@ -108,6 +108,24 @@ def report_event(event_id: int):
     events.create_report(event, form)
     flash("Thank you. An editor will look at your report.", "success")
     return redirect(seo.event_path(event) + "#report")
+
+
+@bp.get("/tag/<int:tag_id>")
+@bp.get("/tag/<int:tag_id>-<slug>")
+def tag_page(tag_id: int, slug: str = ""):
+    """A tag's landing page. A renamed tag keeps its id, so its old address redirects here.
+
+    A merged tag's row is deleted without a trace of where it went, so its old id is a 404.
+    """
+    tag = db.session.get(Tag, tag_id)
+    if tag is None:
+        abort(404)
+    if slug != seo.slugify(tag.name):
+        return redirect(seo.tag_path(tag), 301)
+    context = tag_pages.page(tag)
+    if context is None:
+        abort(404)
+    return render_template("tag.html", **context)
 
 
 @bp.get("/about")

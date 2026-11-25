@@ -20,7 +20,7 @@ def _text(body: str, mimetype: str) -> Response:
 def sitemap():
     """One sitemap while everything fits in 50,000 URLs, otherwise an index of several."""
     if seo.fits_one_sitemap():
-        return _text(seo.urlset_xml(seo.static_urls() + seo.event_urls()), "application/xml")
+        return _text(seo.urlset_xml(seo.page_urls() + seo.event_urls()), "application/xml")
     pages = [seo.external_url("seo.sitemap_part", part="pages")]
     pages += [seo.external_url("seo.sitemap_part", part=f"events-{n}")
               for n in range(1, seo.sitemap_page_count() + 1)]
@@ -32,7 +32,7 @@ def sitemap_part(part: str):
     if seo.fits_one_sitemap():
         abort(404)
     if part == "pages":
-        return _text(seo.urlset_xml(seo.static_urls()), "application/xml")
+        return _text(seo.urlset_xml(seo.page_urls()), "application/xml")
     prefix, _, number = part.partition("-")
     if prefix != "events" or not number.isdigit() or not 1 <= int(number) <= seo.sitemap_page_count():
         abort(404)

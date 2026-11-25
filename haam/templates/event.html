@@ -57,7 +57,7 @@
       <div class="event-tags">
         <h2 class="sr-only">Tags</h2>
         {% for tag in event.tags %}
-          <a class="tag-pill" href="{{ url_for('public.index', tag=tag.id) }}" title="{{ tag.display_range }}">{{ tag.name }}</a>
+          <a class="tag-pill" href="{{ tag_path(tag) }}" title="{{ tag.display_range }}">{{ tag.name }}</a>
         {% endfor %}
       </div>
     {% endif %}
@@ -92,7 +92,7 @@
 
   {% if related %}
     <section class="card related-events">
-      <h2>More from {{ related_tag.name }}</h2>
+      <h2>More from <a href="{{ tag_path(related_tag) }}">{{ related_tag.name }}</a></h2>
       <ul>
         {% for other in related %}
           <li><span class="year-pill">{{ other.display_year }}</span> <a href="{{ event_path(other) }}">{{ other.title }}</a></li>
