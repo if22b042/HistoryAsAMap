@@ -268,3 +268,11 @@ def test_owner_can_delete_collection(client):
     assert client.post(f"/collections/{collection.view_token}/delete").status_code == 302
     assert db.session.scalar(db.select(db.func.count(Collection.id))) == 0
     assert db.session.scalar(db.select(db.func.count(CollectionEntry.id))) == 0
+
+
+def test_manage_page_shows_the_view_link_as_share_link(client):
+    """base.html's own og:url variable must not replace the view's share_url (it once showed /manage)."""
+    collection, response = create(client)
+    page = client.get(response.headers["Location"]).get_data(as_text=True)
+    share = re.search(r'id="share-url" class="form-input" type="text" value="([^"]+)"', page).group(1)
+    assert share.endswith(f"/collections/{collection.view_token}")

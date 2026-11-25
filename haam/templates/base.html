@@ -8,7 +8,7 @@
       below; the share title defaults to the page title without the site name. -#}
   {%- set meta_description = self.description()|trim or default_description %}
   {%- set share_title = self.share_title()|trim or self.title()|trim or site_name %}
-  {%- set share_url = self.share_url()|trim or self.canonical()|trim or absolute_url(request.full_path.rstrip('?')) %}
+  {%- set og_url = self.share_url()|trim or self.canonical()|trim or absolute_url(request.full_path.rstrip('?')) %}
   {%- set share_image = self.share_image()|trim or absolute_url(url_for('static', filename='img/og-card.png')) %}
   <meta name="description" content="{{ meta_description }}">
   {% if self.canonical()|trim %}<link rel="canonical" href="{{ self.canonical()|trim }}">{% endif %}
@@ -16,7 +16,7 @@
   <meta property="og:type" content="{% block og_type %}website{% endblock %}">
   <meta property="og:title" content="{{ share_title }}">
   <meta property="og:description" content="{{ meta_description }}">
-  <meta property="og:url" content="{{ share_url }}">
+  <meta property="og:url" content="{{ og_url }}">
   <meta property="og:image" content="{{ share_image }}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
