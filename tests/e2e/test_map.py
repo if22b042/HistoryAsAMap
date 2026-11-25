@@ -1,6 +1,7 @@
 """The main map: filters, tags, search, event details and links that carry them."""
 
 import re
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Page, expect
 
@@ -9,6 +10,12 @@ def open_map(page: Page, path: str = "/"):
     page.goto(path)
     # map.js has loaded the events once the count is shown.
     expect(page.locator("#result-count")).to_have_text(re.compile(r"\d+ events$"))
+
+
+def filters_in_url(page: Page) -> dict:
+    """The filter part of the address. The map also writes its view (view, base, color) there."""
+    query = parse_qs(urlparse(page.url).query)
+    return {key: values for key, values in query.items() if key not in ("view", "base", "color")}
 
 
 def count(page: Page):
@@ -30,7 +37,8 @@ def test_filters_details_and_history(page: Page, seed):
     expect(page.locator('.category-btn[data-category="military"]')).to_have_attribute("aria-pressed", "true")
     expect(count(page)).to_have_text(re.compile(rf"^\d+ of {total} events$"))
     military_count = count(page).inner_text()
-    expect(page).to_have_url(re.compile(r"\?cat=military$"))
+    expect(page).to_have_url(re.compile(r"[?&]cat=military(&|$)"))
+    assert filters_in_url(page) == {"cat": ["military"]}
 
     # A tag: a new history entry, ?tag= in the address, a chip.
     napoleonic = seed.tag_ids["Napoleonic Wars"]
@@ -55,9 +63,16 @@ def test_filters_details_and_history(page: Page, seed):
     expect(sidebar.locator(".detail-summary")).to_contain_text("took place in 18 June 1815")
     expect(page).to_have_url(re.compile(rf"[?&]event={seed.event_ids['Battle of Waterloo']}(&|$)"))
 
-    # Back: the state before the tag was chosen (military, no tag, no search).
+    # Back closes the event (opening it was its own history entry), with no years written for the search.
     page.go_back()
-    expect(page).to_have_url(re.compile(r"\?cat=military$"))
+    expect(sidebar).to_be_hidden()
+    expect(page).not_to_have_url(re.compile(r"[?&]event="))
+    assert filters_in_url(page) == {"tag": [str(napoleonic)], "cat": ["military"], "q": ["Waterloo"]}
+
+    # Back again: the state before the tag was chosen (military, no tag, no search).
+    page.go_back()
+    expect(page).not_to_have_url(re.compile(r"[?&](tag|q)="))
+    assert filters_in_url(page) == {"cat": ["military"]}
     expect(chips).to_be_hidden()
     expect(page.locator("#search")).to_have_value("")
     expect(page.locator('.category-btn[data-category="military"]')).to_have_attribute("aria-pressed", "true")
@@ -69,6 +84,9 @@ def test_filters_details_and_history(page: Page, seed):
     expect(page.locator("#search")).to_have_value("Waterloo")
     expect(page.locator('.category-btn[data-category="military"]')).to_have_attribute("aria-pressed", "true")
     expect(count(page)).to_have_text(f"1 of {total} events")
+    # Forward once more: the event is open again.
+    page.go_forward()
+    expect(sidebar.locator(".detail-title")).to_have_text("Battle of Waterloo")
 
     # Closing the details removes ?event=.
     page.goto(page.url)  # reload: the ?event= in the address opens the panel again

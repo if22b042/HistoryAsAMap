@@ -55,6 +55,11 @@ EVENTS = [
     ("Yalta Conference", 1945, "4 February 1945", 44.468, 34.143, D, ["World War II"]),
     ("Trinity nuclear test", 1945, "16 July 1945", 33.677, -106.475, S, ["World War II"]),
     ("Launch of Apollo 11", 1969, "16 July 1969", 28.573, -80.649, S, []),
+    # "What happened here?" (test_here_smoke.py): three events in Jerusalem, one 60 km south of it.
+    ("Siege of Jerusalem (587 BC)", -587, "587 BC", 31.778, 35.235, M, []),
+    ("Siege of Jerusalem (70 CE)", 70, "AD 70", 31.776, 35.234, M, []),
+    ("Siege of Jerusalem (1187)", 1187, "1187", 31.780, 35.230, M, []),
+    ("Skirmish south of Jerusalem (1948)", 1948, "1948", 31.240, 35.229, M, []),
 ]
 
 # Waiting for review; its summary is too short for the game, so approving it in the

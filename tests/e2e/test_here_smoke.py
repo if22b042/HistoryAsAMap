@@ -1,25 +1,24 @@
 """'What happened here?' in a real browser: all years, radius, back to the list, phone."""
 
-import pytest
-
-expect = pytest.importorskip("playwright.sync_api").expect
+from playwright.sync_api import Page, expect
 
 JERUSALEM = "31.778,35.229"
+SIEGES = ["Siege of Jerusalem (587 BC)", "Siege of Jerusalem (70 CE)", "Siege of Jerusalem (1187)"]
 
 
-def test_what_happened_here_lists_all_years_and_comes_back(chromium, live_url):
-    page = chromium.new_page(viewport={"width": 1280, "height": 800})
+def test_what_happened_here_lists_all_years_and_comes_back(page: Page, seed):
+    page.set_viewport_size({"width": 1280, "height": 800})
     # The years 1900–2000 are selected, yet the list has every era.
-    page.goto(f"{live_url}/?here={JERUSALEM},25&from=1900&to=2000")
+    page.goto(f"/?here={JERUSALEM},25&from=1900&to=2000")
     card = page.locator("#here")
     expect(card).to_be_visible()
     titles = page.locator("#here-list .welcome-event-title")
-    expect(titles).to_have_text(["Siege of Jerusalem (587 BC)", "Siege of Jerusalem (70 CE)", "Siege of Jerusalem (1187)"])
+    expect(titles).to_have_text(SIEGES)
     expect(page.locator(".here-century > span:first-child")).to_have_text(
         ["6th century BC", "1st century", "12th century"])
 
     page.locator(".here-radius button[data-km='100']").click()
-    expect(titles).to_have_count(4)
+    expect(titles).to_have_count(4)  # and the skirmish 60 km south
     expect(page.locator(".here-radius button[data-km='100']")).to_have_attribute("aria-pressed", "true")
     assert "here=31.778%2C35.229%2C100" in page.url
 
@@ -35,12 +34,12 @@ def test_what_happened_here_lists_all_years_and_comes_back(chromium, live_url):
     page.keyboard.press("Escape")
     expect(card).to_be_hidden()
     assert "here=" not in page.url
-    page.close()
 
 
-def test_what_happened_here_on_a_phone(chromium, live_url):
-    page = chromium.new_page(viewport={"width": 375, "height": 812}, has_touch=True)
-    page.goto(f"{live_url}/?view=9/{JERUSALEM.replace(',', '/')}")
+def test_what_happened_here_on_a_phone(new_context, console_errors, base_url, seed):
+    phone = console_errors.watch(new_context(viewport={"width": 375, "height": 812}, has_touch=True))
+    page = phone.new_page()
+    page.goto(f"{base_url}/?view=9/{JERUSALEM.replace(',', '/')}")
     welcome = page.locator("#welcome")
     if welcome.is_visible():  # the first visit opens the welcome card
         page.locator("#welcome-close").click()
@@ -53,4 +52,3 @@ def test_what_happened_here_on_a_phone(chromium, live_url):
     expect(page.locator("#here-list .welcome-event")).to_have_count(3)
     box = card.bounding_box()
     assert box["y"] > 812 * 0.4 and box["y"] + box["height"] <= 812 + 1  # a bottom sheet, map above it
-    page.close()

@@ -9,7 +9,10 @@ def test_create_from_tag_edit_map_and_share(page: Page, seed, fresh_context):
     page.goto("/collections/new")
     page.locator("#title").fill("Wars against Carthage")
     page.locator("#description").fill("Rome and Carthage.")
-    page.locator("#tag_id").select_option(str(seed.tag_ids["Punic Wars"]))
+    # The tag menu is a search box with suggestions (tag-combobox.js) over the hidden <select>.
+    page.get_by_role("combobox").fill("Punic")
+    page.get_by_role("option", name=re.compile("Punic Wars")).click()
+    expect(page.locator("#tag_id")).to_have_value(str(seed.tag_ids["Punic Wars"]))
     page.get_by_role("button", name="Create collection").click()
 
     expect(page).to_have_url(re.compile(r"/collections/[^/]+/manage"))
@@ -23,7 +26,9 @@ def test_create_from_tag_edit_map_and_share(page: Page, seed, fresh_context):
     # Remove an entry (after confirming the browser's question).
     page.once("dialog", lambda dialog: dialog.accept())
     entries.filter(has_text="Battle of Zama").get_by_role("button", name="Remove").click()
-    expect(page.locator(".flashes")).to_contain_text("Removed “Battle of Zama”.")
+    # Removed in place by manage-entries.js (status line), or by the plain form when the click
+    # comes before the script is ready (flash after a reload): the same message either way.
+    expect(page.get_by_text("Removed “Battle of Zama”.")).to_be_visible()
     expect(entries).to_have_count(2)
     expect(page.locator("#entries h2")).to_contain_text("Entries (2)")
 

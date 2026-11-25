@@ -70,6 +70,7 @@ def pytest_collection_modifyitems(config, items):
 class E2EConfig(TestingConfig):
     SQLALCHEMY_DATABASE_URI = "sqlite://"  # replaced in live_server
     WTF_CSRF_ENABLED = True  # the real forms, tokens included
+    SITE_URL = ""  # absolute links (share and edit links) point at this live server, not https://haam.test
     ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
 
