@@ -125,10 +125,38 @@ def sync_wikidata_command(path, dry_run):
     prefix = "Would" if dry_run else "Done:"
     click.echo(f"{prefix} add {stats.added}, remove {stats.removed}, re-tag {stats.retagged}, "
                f"re-categorize {stats.recategorized}, update fields of {stats.updated} events "
-               f"({stats.unchanged} already up to date; {stats.adopted} older rows linked to their Wikidata id)")
+               f"({stats.unchanged} already up to date; {stats.adopted} older rows linked to their Wikidata id), "
+               f"set the sitelink count of {stats.sitelinks}")
     if stats.kept_in_collections:
         click.echo("Kept although not in the file, because a collection uses them: "
                    + "; ".join(stats.kept_in_collections))
+
+
+@haam_cli.command("fetch-sitelinks")
+@click.option("--csv", "csv_path", default="seed/wikidata_events.csv", show_default=True,
+              help="Also write the counts into this exported CSV ('' to skip).")
+@click.option("--dry-run", is_flag=True, help="Only show what would change.")
+@click.option("--limit", type=int, default=None, help="Look up only this many events (for a trial run).")
+def fetch_sitelinks_command(csv_path, dry_run, limit):
+    """Store each event's Wikidata sitelink count (the map's "Major events" importance).
+
+    About 50 queries, one per 400 events and at most one a second. Only Wikidata ids are
+    sent. Commit the CSV afterwards so `sync-wikidata` sets the counts on other databases.
+    """
+    import os
+
+    from flask import current_app
+
+    from haam.sitelinks import fetch_sitelinks
+    from haam.wikidata import WikidataClient
+
+    if csv_path and not os.path.exists(csv_path):
+        raise click.BadParameter(f"{csv_path} does not exist", param_hint="--csv")
+    client = WikidataClient(current_app.config["HAAM_USER_AGENT"], pause=1.0)
+    stats = fetch_sitelinks(client, csv_path=csv_path or None, dry_run=dry_run, limit=limit, report=click.echo)
+    verb = "Would change" if dry_run else "Changed"
+    click.echo(f"Wikidata returned {stats.found} of {stats.asked} items. {verb} the count of {stats.changed} "
+               f"events" + (f" and {stats.csv_changed} rows of {csv_path}" if csv_path else "") + ".")
 
 
 @haam_cli.command("recategorize")

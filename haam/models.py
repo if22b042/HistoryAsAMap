@@ -138,6 +138,13 @@ class Event(db.Model):
     modified: Mapped[bool] = mapped_column(default=False)
     # True for events submitted through "Add event"; False for imports (CLI, CSV, Wikidata).
     from_website: Mapped[bool] = mapped_column(default=False, server_default=false())
+    # Wikidata sitelinks: the wikis with a page on the event, mostly Wikipedia language
+    # editions (Waterloo 95, a local fire 2). A rough importance signal. 0 = unknown (no Wikidata id, or `flask haam fetch-sitelinks` not run).
+    # Today only the map's opt-in "Major events" filter uses it (as a 0-9 bucket, see
+    # haam.feed.importance_bucket). It could later rank search results, pick new daily games
+    # (stored in DailyGame.refs, so past days stay) or choose canon-import candidates; the
+    # seeded practice and pairs games must not use it, or their links would reshuffle.
+    sitelinks: Mapped[int] = mapped_column(default=0, server_default="0")
 
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
