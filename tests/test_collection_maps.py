@@ -136,6 +136,7 @@ def test_full_map_view_shows_only_the_collection(client, napoleonic):
     assert page.status_code == 200
     assert f'data-events-url="/collections/{collection.view_token}/map.json"' in html
     assert "Two battles" in html and "Back to the collection" in html
+    assert 'id="here-open"' not in html and 'id="here"' not in html  # "What happened here?" is main-map only
     assert page.headers["X-Robots-Tag"] == "noindex, nofollow"
 
     data = client.get(f"/collections/{collection.view_token}/map.json").json
@@ -159,6 +160,8 @@ def test_main_map_still_loads_all_events(client):
     html = client.get("/").get_data(as_text=True)
     # No events URL: the main map reads the manifest instead.
     assert "data-events-url" not in html and "data-manifest" in html and "data-full-text" not in html
+    # "What happened here?": the pill and its card
+    assert 'id="here-open"' in html and 'aria-controls="here"' in html and 'id="here"' in html
 
 
 # --------------------------------------------------------------- natural

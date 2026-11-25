@@ -14,6 +14,7 @@ def test_embed_is_the_map_without_the_site_around_it(client, make_event):
     assert 'data-manifest=' in page
     assert 'class="page-map page-embed filters-hidden"' in page
     for gone in ('class="navbar"', 'class="footer"', 'id="welcome"', 'id="near"', 'id="near-open"',
+                 'id="here"', 'id="here-open"',
                  'welcome.js', 'data-collections-url', 'data-collection-from-search', 'id="embed-view"',
                  'class="scroll-to-list'):
         assert gone not in page, gone

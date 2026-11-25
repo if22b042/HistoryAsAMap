@@ -338,7 +338,8 @@
   .page-map .map .leaflet-right { transition: transform var(--dur-sheet) var(--ease-sheet); }
   .page-map.sidebar-open .map .leaflet-right,
   .page-map.welcome-shown .map .leaflet-top.leaflet-right,
-  .page-map.near-shown .map .leaflet-top.leaflet-right { transform: translateX(calc(-400px - var(--s4))); }
+  .page-map.near-shown .map .leaflet-top.leaflet-right,
+  .page-map.here-shown .map .leaflet-top.leaflet-right { transform: translateX(calc(-400px - var(--s4))); }
 }
 
 /* ------------------------------------------------------- events list */
@@ -887,7 +888,7 @@
 .welcome-open:active { transform: scale(.97); }
 .welcome-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
 .welcome-dot[hidden] { display: none; }
-.sidebar-open .map-quick, .welcome-shown .map-quick, .near-shown .map-quick { display: none; }
+.sidebar-open .map-quick, .welcome-shown .map-quick, .near-shown .map-quick, .here-shown .map-quick { display: none; }
 
 .welcome {
   position: absolute;
@@ -1033,6 +1034,66 @@
 .near-status { margin: 0.5rem 0 0.3rem; font-size: 0.82rem; color: var(--text-muted); }
 .near-list .welcome-event { grid-template-columns: 3.4rem auto minmax(0, 1fr) auto; }
 .near-distance { font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* "What happened here?": a pin and a circle on the map; in the card, a bar per century
+   and the events grouped by century. On a phone the pill says just "Here". */
+.here-label-short { display: none; }
+.here-radius { margin: var(--s3) 0 0; }
+.here-filters { margin: 0 0 var(--s2); }
+.here-filters[hidden], .here-strip[hidden] { display: none; }
+.here-strip { margin: var(--s2) 0 var(--s1); }
+.here-bars { display: flex; align-items: flex-end; gap: 1px; height: 40px; }
+.here-bar { position: relative; flex: 1 1 0; min-width: 3px; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.here-bar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--share, 0) * 100%);
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  transition: opacity var(--dur-micro);
+}
+.here-bar:hover::before { opacity: .7; }
+.here-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+.here-bar-empty { cursor: default; }
+.here-bar-empty::before { height: 2px; background: var(--fill-strong); }
+.here-scale { display: flex; justify-content: space-between; gap: var(--s2); margin-top: var(--s1); font-size: var(--t-xs); color: var(--muted); }
+.here-group + .here-group { margin-top: var(--s2); }
+.here-century {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0;
+  padding: var(--s2) var(--s2) var(--s1);
+  background: var(--material-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
+  backdrop-filter: saturate(180%) blur(30px);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.here-century:focus { outline: none; }
+.here-century:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.here-century-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* the circle and the pin take the accent colour (CSS beats Leaflet's own attributes) */
+.here-circle { stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 6 5; fill: var(--accent); fill-opacity: .1; }
+.here-pin { border-radius: 50%; background: var(--accent); border: 3px solid var(--card); box-shadow: 0 1px 4px var(--shadow-color-sm), 0 0 0 1px var(--accent); cursor: grab; }
+.here-pin::after { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+.here-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.leaflet-dragging .here-pin { cursor: grabbing; }
+.here-picking .map, .here-picking .map .leaflet-interactive { cursor: crosshair; }
+@media (max-width: 860px) {
+  .here-label-long { display: none; }
+  .here-label-short { display: inline; }
+  .here-card { max-height: 55vh; max-height: 55dvh; }
+  /* while picking, only the header stays up: the map is free to tap */
+  .here-picking .here-card .welcome-body { display: none; }
+}
 
 /* time-lapse button beside the year slider */
 .year-slider-row { display: flex; align-items: center; gap: 0.5rem; }

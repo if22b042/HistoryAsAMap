@@ -132,14 +132,16 @@ if (card && openButton) {
 
   // The card and the event details share one place: opening an event closes the card.
   new MutationObserver(() => {
-    // …and so does the "Near here" card, which sits in the same place.
-    if (document.body.classList.contains("sidebar-open") || document.body.classList.contains("near-shown")) {
+    // …and so do "Near here" and "What happened here?", which sit in the same place.
+    const body = document.body.classList;
+    if (body.contains("sidebar-open") || body.contains("near-shown") || body.contains("here-shown")) {
       close({ restoreFocus: false });
     }
   }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
-  // A shared link to one event goes straight to it; the card waits for a later visit.
-  const linkedEvent = new URLSearchParams(window.location.search).has("event");
+  // A shared link to one event or place goes straight to it; the card waits for a later visit.
+  const linkParams = new URLSearchParams(window.location.search);
+  const linkedEvent = linkParams.has("event") || linkParams.has("here");
   const seen = readSeen();
   if (!seen && !linkedEvent) open({ first: true });
   else if (seen !== localDay()) document.getElementById("welcome-dot").hidden = false;

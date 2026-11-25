@@ -271,7 +271,7 @@ function heatHitsAt(point, firstOnly = false) {
 }
 
 map.on("click", (e) => {
-  if (!state.heatmap) return;
+  if (!state.heatmap || herePicking) return;
   const hits = heatHitsAt(e.containerPoint);
   if (!hits.length) return;
   hits.sort((a, b) => a.distance - b.distance);
@@ -755,7 +755,9 @@ function dismissSidebar() {
 document.getElementById("sidebar-close").addEventListener("click", () => dismissSidebar());
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.defaultPrevented) return;
-  if (isNearOpen()) closeNear();
+  if (herePicking) setHerePicking(false);
+  else if (isHereShown()) closeHere();
+  else if (isNearOpen()) closeNear();
   else if (isPhone() && document.body.classList.contains("filters-open")) setFiltersOpen(false);
   else if (!sidebar.hidden) dismissSidebar();
 });
@@ -1375,6 +1377,11 @@ window.addEventListener("popstate", () => {
   if (filterKey(params) !== appliedFilterKey) applyUrlFilters(filtersFromUrl());
   const view = parseView(params.get("view"));
   if (view) map.setView([view.lat, view.lng], view.zoom);
+  if (hereCard) {
+    const linked = parseHere(params.get("here"));
+    if (!linked) closeHere({ restoreFocus: false });
+    else if (!here || hereText(linked) !== hereText(here)) openHere(linked, { fit: !view });
+  }
   const id = Number(params.get("event")) || null;
   if (id === null) {
     if (state.openId !== null || !sidebar.hidden) closeSidebar({ record: false });
@@ -1579,6 +1586,7 @@ function finishRender() {
   renderList();
   renderSearchResults();
   if (isNearOpen()) renderNear();
+  if (isHereShown()) renderHere();
 }
 
 const LIST_PAGE = 60;
@@ -2445,21 +2453,21 @@ function formatDistance(km) {
   return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
 }
 
-/** The shown events within NEAR_KM of a point, nearest first. */
-function nearbyEvents(lat, lng) {
-  const dLat = NEAR_KM / 111;
+/** The events of a list within ``km`` of a point, in the list's order, with their distance. */
+function eventsWithin(events, lat, lng, km) {
+  const dLat = km / 111;
   const cos = Math.cos((lat * Math.PI) / 180);
-  const dLng = cos > 0.01 ? NEAR_KM / (111 * cos) : 360; // near a pole every longitude is close
+  const dLng = cos > 0.01 ? km / (111 * cos) : 360; // near a pole every longitude is close
   const found = [];
-  state.filtered.forEach((event) => {
+  events.forEach((event) => {
     if (Math.abs(event.lat - lat) > dLat) return; // a cheap box test before the trigonometry
     let across = Math.abs(event.lon - lng);
     if (across > 180) across = 360 - across;
     if (across > dLng) return;
-    const km = distanceKm(lat, lng, event.lat, event.lon);
-    if (km <= NEAR_KM) found.push({ event, km });
+    const distance = distanceKm(lat, lng, event.lat, event.lon);
+    if (distance <= km) found.push({ event, km: distance });
   });
-  return found.sort((a, b) => a.km - b.km);
+  return found;
 }
 
 function renderNear() {
@@ -2469,7 +2477,7 @@ function renderNear() {
   document.getElementById("near-locate").hidden = !navigator.geolocation;
   document.getElementById("near-centre").hidden = !nearOrigin;
 
-  const found = nearbyEvents(centre.lat, centre.lng);
+  const found = eventsWithin(state.filtered, centre.lat, centre.lng, NEAR_KM).sort((a, b) => a.km - b.km);
   const filtered = state.filtered.length < state.events.length;
   const more = state.loading ? " More events are still loading." : "";
   const status = document.getElementById("near-status");
@@ -2554,8 +2562,389 @@ function setupNear() {
   // The card, the welcome card and the event details share one place: whichever opens last wins.
   new MutationObserver(() => {
     const body = document.body.classList;
-    if (isNearOpen() && (body.contains("sidebar-open") || body.contains("welcome-shown"))) closeNear({ restoreFocus: false });
+    if (isNearOpen() && (body.contains("sidebar-open") || body.contains("welcome-shown") || body.contains("here-shown"))) {
+      closeNear({ restoreFocus: false });
+    }
   }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+}
+
+// ------------------------------------------------------- what happened here
+// A pin and a circle on the map, and in a card every loaded event within the circle,
+// oldest first and grouped by century, in all years: the year slider does not apply,
+// the category, tags and search do (unless "Show them" includes what they hide). The
+// view is in the address as ?here=lat,lng,km. Browser only; only on the main map.
+// Opening an event hides the card (pin and circle stay); closing the details brings it back.
+
+const hereCard = document.getElementById("here");
+const hereButton = document.getElementById("here-open");
+const hereBody = document.getElementById("here-body");
+const HERE_RADII = [10, 25, 50, 100];
+const HERE_KM = 25;
+const HERE_STRIP_MAX = 60; // centuries; a longer span shows only the centuries with events
+let here = null; // {lat, lng, km, all}: the open view (it stays while the details hide the card)
+let hereLayer = null;
+let hereCircle = null;
+let herePin = null;
+let herePicking = false;
+let hereReturn = null; // {id, scrollTop}: where the list was when the details took its place
+let hereReturnFocus = null;
+let hereSeen = { near: false, welcome: false, sidebar: false };
+
+const isHereShown = () => Boolean(hereCard) && !hereCard.hidden;
+const hereText = (view) => `${view.lat.toFixed(3)},${view.lng.toFixed(3)},${view.km}`;
+
+/** "31.778,35.229,25" → {lat, lng, km}; null if it is not one. */
+function parseHere(text) {
+  const m = /^(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?),(\d{1,3})$/.exec(text || "");
+  if (!m) return null;
+  const view = { lat: Number(m[1]), lng: Number(m[2]), km: Number(m[3]) };
+  if (Math.abs(view.lat) > 90 || Math.abs(view.lng) > 200 || !HERE_RADII.includes(view.km)) return null;
+  return view;
+}
+
+function writeHereUrl() {
+  const url = new URL(window.location);
+  if (here) url.searchParams.set("here", hereText(here));
+  else url.searchParams.delete("here");
+  if (url.href !== window.location.href) history.replaceState(history.state, "", url);
+}
+
+/** AD 1–100 → 1, 1901–2000 → 20; 100–1 BC → -1 (there is no year 0). */
+const centuryOf = (year) => (year > 0 ? Math.ceil(year / 100) : -Math.max(1, Math.ceil(-year / 100)));
+
+function ordinal(n) {
+  const v = n % 100;
+  const suffix = v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th";
+  return `${n}${suffix}`;
+}
+
+const centuryLabel = (c) => (c > 0 ? `${ordinal(c)} century` : `${ordinal(-c)} century BC`);
+const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
+
+/** Bars of events per century, from the first to the last; a bar jumps to its century. */
+function renderHereStrip(groups) {
+  const strip = document.getElementById("here-strip");
+  const centuries = [...groups.keys()];
+  strip.hidden = centuries.length < 2;
+  if (strip.hidden) {
+    strip.replaceChildren();
+    return;
+  }
+  let span = [];
+  for (let c = centuries[0]; c <= centuries[centuries.length - 1]; c += 1) if (c !== 0) span.push(c);
+  if (span.length > HERE_STRIP_MAX) span = centuries;
+  let most = 1;
+  groups.forEach((hits) => { most = Math.max(most, hits.length); });
+  const bars = el("div", "here-bars");
+  bars.setAttribute("role", "group");
+  bars.setAttribute("aria-label", "Events per century");
+  span.forEach((c) => {
+    const count = groups.get(c)?.length || 0;
+    if (!count) {
+      bars.append(el("span", "here-bar here-bar-empty"));
+      return;
+    }
+    const bar = el("button", "here-bar");
+    bar.type = "button";
+    bar.style.setProperty("--share", String(Math.max(0.1, count / most)));
+    const label = `${centuryLabel(c)}: ${plural(count, "event")}`;
+    bar.setAttribute("aria-label", label);
+    bar.title = label;
+    bar.addEventListener("click", () => {
+      const heading = document.getElementById(`here-c${c}`);
+      heading.scrollIntoView({ block: "start", behavior: reducedMotion.matches ? "auto" : "smooth" });
+      heading.focus({ preventScroll: true });
+    });
+    bars.append(bar);
+  });
+  const scale = el("div", "here-scale");
+  scale.setAttribute("aria-hidden", "true");
+  scale.append(el("span", null, centuryLabel(span[0])), el("span", null, centuryLabel(span[span.length - 1])));
+  strip.replaceChildren(bars, scale);
+}
+
+function renderHere() {
+  if (!here || !isHereShown()) return; // a hidden card is drawn again when it comes back
+  const scrollTop = hereBody.scrollTop;
+  const focusedId = document.activeElement?.closest?.("#here-list .welcome-event")?.dataset.id;
+
+  document.getElementById("here-intro").textContent =
+    `Every event within ${here.km} km of the pin, in all years, oldest first. Drag the pin to move it.`;
+  document.querySelectorAll(".here-radius button").forEach((button) => {
+    const active = Number(button.dataset.km) === here.km;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  // state.events is in date order (compareEvents), so the hits are too.
+  const found = eventsWithin(state.events, here.lat, here.lng, here.km);
+  const matching = found.filter(({ event }) => matchesIgnoringYears(event));
+  const shown = here.all ? found : matching;
+  const hidden = found.length - matching.length;
+
+  let status;
+  if (!shown.length) {
+    status = hidden
+      ? `${hidden === 1 ? "The one event" : `None of the ${hidden.toLocaleString()} events`} within ${here.km} km ${hidden === 1 ? "does not match" : "matches"} the filters.`
+      : `No event within ${here.km} km yet.`;
+    if (!hidden && !state.loading && here.km < HERE_RADII[HERE_RADII.length - 1]) status += " Try a larger radius.";
+  } else {
+    const first = shown[0].event.display_year;
+    const last = shown[shown.length - 1].event.display_year;
+    status = `${plural(shown.length, "event")} within ${here.km} km, ${first === last ? first : `${first} – ${last}`}.`;
+    if (hidden) {
+      status += here.all ? ` ${hidden.toLocaleString()} of them outside the filters.`
+        : ` ${hidden.toLocaleString()} more hidden by the filters.`;
+    }
+  }
+  if (state.loading) status += " More events are still loading.";
+  document.getElementById("here-status").textContent = status;
+  const filtersButton = document.getElementById("here-filters");
+  filtersButton.hidden = !hidden;
+  filtersButton.textContent = here.all ? "Apply the filters" : `Show ${hidden === 1 ? "it" : "them"}`;
+
+  const groups = new Map(); // century -> hits, oldest first
+  shown.forEach((hit) => {
+    const c = centuryOf(hit.event.year);
+    if (!groups.has(c)) groups.set(c, []);
+    groups.get(c).push(hit);
+  });
+  renderHereStrip(groups);
+
+  const list = document.getElementById("here-list");
+  list.replaceChildren(...[...groups].map(([c, hits]) => {
+    const section = el("section", "here-group");
+    const heading = el("h3", "here-century");
+    heading.id = `here-c${c}`;
+    heading.tabIndex = -1;
+    heading.append(el("span", null, centuryLabel(c)), el("span", "here-century-count", hits.length.toLocaleString()));
+    const items = el("ol", "welcome-events near-list");
+    hits.forEach(({ event, km }) => {
+      const item = el("li");
+      const button = el("button", "welcome-event");
+      button.type = "button";
+      button.dataset.id = event.id;
+      button.title = event.excerpt || event.title;
+      button.append(
+        el("span", "welcome-event-year", event.display_year),
+        el("span", `dot dot-${event.category}`),
+        el("span", "welcome-event-title", event.title),
+        el("span", "near-distance", formatDistance(km)),
+      );
+      button.addEventListener("click", () => {
+        hereReturn = { id: event.id, scrollTop: hereBody.scrollTop };
+        showEvent(event.id, { zoom: 7 });
+      });
+      item.append(button);
+      items.append(item);
+    });
+    section.append(heading, items);
+    return section;
+  }));
+
+  hereBody.scrollTop = scrollTop;
+  if (focusedId) list.querySelector(`.welcome-event[data-id="${CSS.escape(focusedId)}"]`)?.focus({ preventScroll: true });
+}
+
+/** Fit the circle into the part of the map that the card and the filter panel leave free. */
+function fitHere() {
+  if (!hereCircle) return;
+  const mapRect = MAP_ELEMENT.getBoundingClientRect();
+  const gap = 16;
+  let left = gap;
+  let right = gap;
+  let bottom = gap;
+  const top = isPhone() ? FAB_SPACE : gap;
+  // The card's layout size, not its on-screen box: it may still be sliding in. On a phone it
+  // grows up to its max-height as the events arrive, so that is what it will cover.
+  if (isHereShown() && isPhone()) {
+    bottom = Math.max(hereCard.offsetHeight, parseFloat(getComputedStyle(hereCard).maxHeight) || 0) + gap;
+  } else if (isHereShown()) {
+    right = hereCard.offsetWidth + 2 * gap;
+  }
+  const filters = document.getElementById("filters")?.getBoundingClientRect();
+  if (!isPhone() && filters && filters.width && filters.right > mapRect.left && filters.left < mapRect.left + mapRect.width / 2) {
+    left = filters.right - mapRect.left + gap;
+  }
+  map.fitBounds(hereCircle.getBounds(), {
+    paddingTopLeft: [left, top],
+    paddingBottomRight: [right, bottom],
+    maxZoom: 13,
+    animate: !reducedMotion.matches,
+  });
+}
+
+function showHereCard(show) {
+  hereCard.hidden = !show;
+  hereButton.setAttribute("aria-expanded", String(show));
+  document.body.classList.toggle("here-shown", show);
+}
+
+function setHerePicking(on, { render = true } = {}) {
+  if (!hereCard) return;
+  herePicking = on;
+  document.body.classList.toggle("here-picking", on);
+  const pick = document.getElementById("here-pick");
+  pick.setAttribute("aria-pressed", String(on));
+  pick.querySelector("span").textContent = on ? "Cancel" : "Pick a point";
+  if (on) document.getElementById("here-status").textContent = `${isPhone() ? "Tap" : "Click"} a place on the map. Esc cancels.`;
+  else if (render) renderHere();
+}
+
+/** Move the pin (after a drag, a pick, "Use the map centre" or the visitor's location). */
+function setHerePoint(lat, lng, { fit = false } = {}) {
+  if (!here) return;
+  here.lat = lat;
+  here.lng = lng;
+  herePin.setLatLng([lat, lng]);
+  hereCircle.setLatLng([lat, lng]);
+  if (fit || !map.getBounds().contains(herePin.getLatLng())) fitHere();
+  renderHere();
+  writeHereUrl();
+}
+
+function setHereRadius(km) {
+  if (!here || km === here.km) return;
+  here.km = km;
+  hereCircle.setRadius(km * 1000);
+  fitHere();
+  renderHere();
+  writeHereUrl();
+}
+
+function buildHereLayer() {
+  hereCircle = L.circle([0, 0], { radius: HERE_KM * 1000, className: "here-circle", interactive: false });
+  herePin = L.marker([0, 0], {
+    icon: L.divIcon({ className: "here-pin", iconSize: [22, 22], iconAnchor: [11, 11] }),
+    draggable: true,
+    keyboard: true,
+    title: "Drag to move the point",
+    alt: "The point of “What happened here?”",
+    zIndexOffset: 1000,
+  });
+  herePin.on("drag", () => hereCircle.setLatLng(herePin.getLatLng()));
+  herePin.on("dragend", () => {
+    const point = herePin.getLatLng().wrap();
+    setHerePoint(point.lat, point.lng);
+  });
+  hereLayer = L.layerGroup([hereCircle, herePin]);
+}
+
+/** Open the view at a point (default: the map centre) and fit the map to its circle. */
+function openHere(view = null, { fit = true } = {}) {
+  const centre = map.getCenter().wrap();
+  const wasOpen = Boolean(here);
+  here = { lat: view?.lat ?? centre.lat, lng: view?.lng ?? centre.lng, km: view?.km ?? HERE_KM, all: false };
+  hereReturn = null;
+  if (!wasOpen) hereReturnFocus = document.activeElement;
+  if (!hereLayer) buildHereLayer();
+  hereCircle.setLatLng([here.lat, here.lng]).setRadius(here.km * 1000);
+  herePin.setLatLng([here.lat, here.lng]);
+  hereLayer.addTo(map);
+  if (!document.body.classList.contains("sidebar-open")) {
+    showHereCard(true);
+    hereBody.scrollTop = 0;
+    hereCard.focus({ preventScroll: true });
+  }
+  renderHere();
+  if (fit) fitHere();
+  writeHereUrl();
+}
+
+function closeHere({ restoreFocus = true } = {}) {
+  if (!here) return;
+  const hadFocus = hereCard.contains(document.activeElement);
+  setHerePicking(false, { render: false });
+  here = null;
+  hereReturn = null;
+  hereLayer.remove();
+  showHereCard(false);
+  writeHereUrl();
+  if (restoreFocus && hadFocus) {
+    const target = hereReturnFocus && hereReturnFocus !== document.body && document.contains(hereReturnFocus)
+      && !hereReturnFocus.closest("[hidden]") ? hereReturnFocus : hereButton;
+    target.focus({ preventScroll: true });
+  }
+  hereReturnFocus = null;
+}
+
+function hereLocate() {
+  const status = document.getElementById("here-status");
+  status.textContent = "Finding your location…";
+  navigator.geolocation.getCurrentPosition((position) => {
+    setHerePoint(position.coords.latitude, position.coords.longitude, { fit: true });
+  }, (error) => {
+    status.textContent = error.code === 1
+      ? "Location access was refused. Allow it in the browser, or drag the pin instead."
+      : "Could not find your location.";
+  }, { timeout: 10000, maximumAge: 300000 });
+}
+
+/** The details took the card's place and are gone again: back to the list where it was. */
+function returnToHere() {
+  const back = hereReturn;
+  hereReturn = null;
+  showHereCard(true);
+  renderHere();
+  if (back) hereBody.scrollTop = back.scrollTop;
+  if (!map.getBounds().contains(herePin.getLatLng())) fitHere();
+  const active = document.activeElement;
+  if (active && active !== document.body && !MAP_ELEMENT.contains(active) && !sidebar.contains(active)) return;
+  const row = back?.id != null && hereCard.querySelector(`.welcome-event[data-id="${back.id}"]`);
+  (row || hereCard).focus({ preventScroll: true });
+}
+
+function setupHere() {
+  if (!hereCard || !hereButton) return; // collection maps and the embed have no "What happened here?"
+  hereButton.addEventListener("click", () => (isHereShown() ? closeHere() : openHere()));
+  document.getElementById("here-close").addEventListener("click", () => closeHere());
+  document.querySelectorAll(".here-radius button").forEach((button) => {
+    button.addEventListener("click", () => setHereRadius(Number(button.dataset.km)));
+  });
+  document.getElementById("here-pick").addEventListener("click", () => setHerePicking(!herePicking));
+  const locate = document.getElementById("here-locate");
+  locate.hidden = !navigator.geolocation;
+  locate.addEventListener("click", hereLocate);
+  document.getElementById("here-centre").addEventListener("click", () => {
+    const centre = map.getCenter().wrap();
+    setHerePoint(centre.lat, centre.lng);
+  });
+  document.getElementById("here-filters").addEventListener("click", () => {
+    here.all = !here.all;
+    renderHere();
+  });
+  // Picking: the next click on the map (not on a dot or a cluster) places the pin.
+  map.on("click", (e) => {
+    if (!herePicking) return;
+    setHerePicking(false, { render: false });
+    const point = e.latlng.wrap();
+    setHerePoint(point.lat, point.lng);
+  });
+  // The card shares its place with the welcome card, "Near here" and the event details:
+  // whichever opens last wins, except the details, which only hide the card for a while.
+  const shownNow = () => {
+    const body = document.body.classList;
+    return { near: body.contains("near-shown"), welcome: body.contains("welcome-shown"), sidebar: body.contains("sidebar-open") };
+  };
+  hereSeen = shownNow();
+  new MutationObserver(() => {
+    const now = shownNow();
+    if (here) {
+      if ((now.near && !hereSeen.near) || (now.welcome && !hereSeen.welcome)) {
+        closeHere({ restoreFocus: false }); // opened last: it wins
+      } else if (now.sidebar && !hereSeen.sidebar && isHereShown()) {
+        setHerePicking(false, { render: false });
+        if (!hereReturn) hereReturn = { id: null, scrollTop: hereBody.scrollTop };
+        showHereCard(false);
+      } else if (!now.sidebar && hereSeen.sidebar && !isHereShown() && !now.near && !now.welcome) {
+        returnToHere();
+      }
+    }
+    hereSeen = now;
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+  const linked = parseHere(urlParams.get("here"));
+  if (linked) openHere(linked, { fit: !linkedView });
 }
 
 // ------------------------------------------------------------- time-lapse
@@ -2806,6 +3195,7 @@ async function init() {
   setupEmbedBrand();
   setupCollectionFromSearch();
   setupNear();
+  setupHere();
   setupTimelapse();
 
   const manifest = MAP_ELEMENT.dataset.manifest ? JSON.parse(MAP_ELEMENT.dataset.manifest) : null;
