@@ -127,7 +127,9 @@ def _payload(*, kind, title, intro, steps, parts, back_url, back_label, path_def
         "back_url": back_url, "back_label": back_label,
         "story_url": url_for(story_endpoint, _external=True, **url_args),
         "embed_url": url_for(embed_endpoint, _external=True, **url_args),
-        "path_default": path_default, "steps": steps, "parts": parts, "chapters": chapters(steps),
+        "path_default": path_default, "steps": steps, "parts": parts,
+        # A collection is in its owner's order, not by date, so periods would not fit it.
+        "chapters": chapters(steps) if kind == "tag" else [],
     }
 
 

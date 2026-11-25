@@ -53,6 +53,15 @@ def test_collection_story_follows_entry_order_with_links(client, make_event):
     assert [s["title"] for s in data["steps"]] == ["Unsafe", "Safe", "Battle of Zama"]
 
 
+def test_a_long_collection_has_no_period_chapters(client, make_event):
+    """Its order is the owner's, not the date's: the steps list stays flat."""
+    collection, _ = create(client)
+    for year in range(1800, 2000, 8):  # 25 entries over two centuries
+        service.add_event(collection, make_event(f"Event of {year}", year=year).id, "")
+    data = payload(client.get(f"/collections/{collection.view_token}/story"))
+    assert data["count"] == 25 and data["chapters"] == []
+
+
 def test_hidden_unknown_and_empty_collections(client, app):
     collection, _ = create(client)
     page = client.get(f"/collections/{collection.view_token}/story").get_data(as_text=True)
