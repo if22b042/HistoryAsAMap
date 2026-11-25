@@ -1193,7 +1193,8 @@ function syncUrl(push = false) {
   const slider = document.getElementById("year-slider")?.noUiSlider;
   if (slider) {
     // Only years narrowed by hand: the slider's own range follows the tags and search.
-    const { min, max } = slider.options.range;
+    // Compared with the fitted years: a single fitted year is padded by one on each side of the slider.
+    const [min, max] = fittedYears || [slider.options.range.min, slider.options.range.max];
     if (state.yearFrom > min) url.searchParams.set("from", state.yearFrom);
     if (state.yearTo < max) url.searchParams.set("to", state.yearTo);
   }
@@ -1748,6 +1749,8 @@ let refilterSoon = () => {}; // refilter after the slider has settled (set by se
 let yearScopeKey = "";
 let yearsNarrowed = false;
 let yearsTouched = false; // the years were changed by hand (not by a link or a tag)
+let fittedYears = null; // [min, max] the slider was fitted to, before sliderRange pads a single year
+let fitPending = false; // a tag or search matched no loaded event yet: fit once its events arrive
 
 /**
  * A chunk arrived while the slider is fitted to a tag or search: widen it to the
@@ -1765,10 +1768,19 @@ function widenYearScope() {
     search.terms.length ? `“${search.terms.join(" ")}”` : null].filter(Boolean).join(" + ");
   document.getElementById("year-scope").textContent =
     `Slider fitted to ${what}: ${years.length.toLocaleString()} event${years.length === 1 ? "" : "s"}`;
+  if (fitPending) {
+    // The first chunk held none of these events, so the slider still spans everything: fit it now.
+    fitPending = false;
+    fittedYears = [min, max];
+    slider.updateOptions({ range: sliderRange(min, max) }, false);
+    slider.set([min, max]);
+    return;
+  }
   const range = slider.options.range;
   if (min >= range.min && max <= range.max) return;
   const [from, to] = slider.get().map(Number);
-  slider.updateOptions({ range: sliderRange(Math.min(min, range.min), Math.max(max, range.max)) }, false);
+  fittedYears = [Math.min(min, range.min), Math.max(max, range.max)];
+  slider.updateOptions({ range: sliderRange(fittedYears[0], fittedYears[1]) }, false);
   slider.set([from <= range.min ? min : from, to >= range.max ? max : to]);
 }
 
@@ -1801,6 +1813,8 @@ function rescaleYears() {
   } else {
     scope.textContent = "";
   }
+  fitPending = narrowed && !years.length && state.loading;
+  fittedYears = [min, max];
   slider.updateOptions({ range: sliderRange(min, max) }, false);
   slider.set([min, max]);
 }
@@ -1811,6 +1825,7 @@ function setupYearSlider(years) {
   const toInput = document.getElementById("year-to");
   const [min, max] = yearExtent(years);
   state.allYears = { min, max };
+  fittedYears = [min, max];
   const range = sliderRange(min, max);
 
   noUiSlider.create(slider, {
