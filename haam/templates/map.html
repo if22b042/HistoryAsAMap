@@ -107,6 +107,12 @@
       <button type="button" id="heatmap-toggle" class="btn btn-secondary" aria-pressed="false">
         <i class="fas fa-fire" aria-hidden="true"></i> <span>Heatmap</span>
       </button>
+      {% if manifest %}
+      <button type="button" id="major-toggle" class="btn btn-secondary" aria-pressed="false"
+              title="Show only the events covered by the most Wikipedia languages; more appear as you zoom in">
+        <i class="fas fa-ranking-star" aria-hidden="true"></i> <span>Major events</span>
+      </button>
+      {% endif %}
       <button type="button" id="color-toggle" class="btn btn-secondary" aria-pressed="false"
               title="Colour each event by its year: the earliest shown is red, the latest violet">
         <i class="fas fa-palette" aria-hidden="true"></i> <span>Colour by year</span>

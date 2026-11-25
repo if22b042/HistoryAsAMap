@@ -43,6 +43,8 @@ const state = {
   part: null,
   query: "",
   heatmap: false,
+  major: false, // "Major events": only the most important events for the zoom (see majorMinFor)
+  majorMin: 0, // the importance bucket shown at the current zoom while "major" is on
   colorByYear: false,
   // Years the colour scale spans: the earliest and latest event currently shown.
   colorFrom: 0,
@@ -991,6 +993,7 @@ function activeFilterCount() {
   if (state.category !== "all") active += 1;
   if (state.tagIds.length) active += 1;
   if (state.queryText) active += 1;
+  if (state.major) active += 1;
   if (slider) {
     const { min, max } = slider.options.range;
     if (state.yearFrom > min || state.yearTo < max) active += 1;
@@ -1131,7 +1134,7 @@ function tagNames() {
 // (Back undoes it); typing, dragging the slider or a category only update the
 // current one, so Back does not step through every keystroke.
 
-const URL_KEYS = ["tag", "tagmode", "part", "cat", "q", "from", "to"];
+const URL_KEYS = ["tag", "tagmode", "part", "cat", "q", "from", "to", "major"];
 let restoringUrl = false; // while a link's filters are applied, do not rewrite it
 
 /** The filter part of an address, to tell whether Back/Forward changed the filters. */
@@ -1150,6 +1153,7 @@ function filtersFromUrl() {
     q: (params.get("q") || "").slice(0, 200),
     from: year("from"),
     to: year("to"),
+    major: params.get("major") === "1" && Boolean(majorButton), // only the main map has the importance data
   };
 }
 
@@ -1162,6 +1166,7 @@ function syncUrl(push = false) {
   if (state.part?.qid) url.searchParams.set("part", state.part.qid);
   if (state.category !== "all") url.searchParams.set("cat", state.category);
   if (state.queryText) url.searchParams.set("q", state.queryText);
+  if (state.major) url.searchParams.set("major", "1");
   const slider = document.getElementById("year-slider")?.noUiSlider;
   if (slider) {
     // Only years narrowed by hand: the slider's own range follows the tags and search.
@@ -1184,6 +1189,8 @@ function applyUrlFilters(filters) {
     state.part = null;
     state.category = filters.category;
     markCategory(filters.category);
+    state.major = filters.major;
+    renderMajorToggle();
     ["search", "search-big"].forEach((id) => {
       const input = document.getElementById(id);
       if (input) input.value = filters.q;
@@ -1464,6 +1471,7 @@ function updateTagOptions() {
 /** Every filter except the tags (their counts are taken from these events). */
 function matchesBase(event) {
   if (event.year < state.yearFrom || event.year > state.yearTo) return false;
+  if (state.major && (event.imp || 0) < state.majorMin) return false;
   if (state.category !== "all" && event.category !== state.category) return false;
   return searchScore(event) > 0;
 }
@@ -1491,6 +1499,7 @@ function timelineRange() {
  * of rebuilding all of them.
  */
 function applyFilters({ added = null } = {}) {
+  state.majorMin = majorMinFor(map.getZoom());
   // One pass: the events shown, and per tag how many events match the other filters.
   state.tagCounts = new Map();
   state.filtered = [];
@@ -1536,6 +1545,7 @@ function finishRender() {
   const total = state.events.length;
   const shown = state.filtered.length.toLocaleString();
   let count = state.filtered.length === total ? `${total.toLocaleString()} events` : `${shown} of ${total.toLocaleString()} events`;
+  if (state.major) count += state.majorMin > 0 ? " · major events only, zoom in for more" : " · major events: all at this zoom";
   if (state.loading) count += " (still loading…)";
   document.getElementById("result-count").textContent = count;
   // The figures strip shows the same two numbers (the count above stays the live region).
@@ -1982,7 +1992,8 @@ function renderSearchResults() {
   const total = state.events.length;
   const loadingNote = state.loading ? " (more are still loading)" : state.textsLoading && search.in === "all"
     ? " (descriptions are still loading)" : "";
-  const filtersOn = state.category !== "all" || hasTags() || state.filtered.length < total && !search.terms.length;
+  const filtersOn = state.category !== "all" || hasTags() || state.major
+    || state.filtered.length < total && !search.terms.length;
   status.textContent = !search.terms.length
     ? `Type to search ${total.toLocaleString()} events${filtersOn ? " (filters apply)" : ""}.`
     : results.length
@@ -2127,6 +2138,37 @@ function setupHeatmapToggle() {
     if (!state.heatmap) map.getContainer().classList.remove("heat-clickable");
     applyFilters();
     syncView();
+  });
+}
+
+// "Major events": only events whose importance bucket (0–9 from Wikidata sitelinks, see
+// haam/feed.py importance_bucket) reaches a threshold that falls as you zoom in: 7+ (about
+// the top 2 %) at world zoom, one bucket lower per zoom level, everything from zoom 10 on.
+// A filter like the others (matchesBase), so the count, list, search, tags, heatmap and
+// time-lapse all follow it. Off by default; ?major=1 keeps it in a link.
+// Not used for ranking search results, the list or the game (yet).
+const majorButton = document.getElementById("major-toggle"); // absent on collection maps
+const majorMinFor = (zoom) => Math.max(0, Math.min(7, 10 - Math.floor(zoom)));
+
+function renderMajorToggle() {
+  if (!majorButton) return;
+  majorButton.classList.toggle("active", state.major);
+  majorButton.setAttribute("aria-pressed", String(state.major));
+  majorButton.querySelector("span").textContent = state.major ? "Major events on" : "Major events";
+}
+
+function setupMajorToggle() {
+  if (!majorButton) return;
+  renderMajorToggle(); // the state itself comes from the address with the other filters
+  majorButton.addEventListener("click", () => {
+    state.major = !state.major;
+    renderMajorToggle();
+    listLimit = LIST_PAGE;
+    applyFilters();
+  });
+  // Zooming changes which events count as major: refilter when the threshold moves.
+  map.on("zoomend", () => {
+    if (state.major && majorMinFor(map.getZoom()) !== state.majorMin) applyFilters();
   });
 }
 
@@ -2734,6 +2776,7 @@ async function init() {
   setupCategoryButtons();
   setupSearch();
   setupHeatmapToggle();
+  setupMajorToggle();
   setupColorToggle();
   setupListSort();
   setupFilterPanelToggle();
