@@ -9,6 +9,9 @@ Background documents for History As A Map. None of them is needed to run the sit
 | [IMPROVEMENTS.md](IMPROVEMENTS.md) | The improvements proposed then, which led to the clean rewrite |
 | [TOP-20-IMPROVEMENTS.md](TOP-20-IMPROVEMENTS.md) | The 20 best improvements after hands-on testing of the rewritten site (8 Nov 2026), ranked by value for effort |
 | [REVIEW-2026-11-16.md](REVIEW-2026-11-16.md) | Code review of 16 Nov 2026: what is left of the TOP-20, 17 bugs and risks, improvements, and the new features that were approved or refused |
+| [FEATURE-DECISIONS.md](FEATURE-DECISIONS.md) | The owner's decision on every proposed feature and improvement, across all review lists |
+| [search-precision.md](search-precision.md) | Would full-summary search flood the map? Hand-labelled precision and the recommended design (25 Nov 2026) |
+| [TOP-30-FEATURES.md](TOP-30-FEATURES.md) | 30 candidate new features (25 Nov 2026), each with measured necessity, feasibility in the code and Wikidata coverage, ranked by priority |
 | [tag-ux-design.md](tag-ux-design.md) | Design proposal for related tags, browsing tags by era and broader/narrower tags (not built yet) |
 | [prototypes/tag-eras.html](prototypes/tag-eras.html) | Throwaway prototype page for the era browser in that proposal |
 | [analysis/](analysis/) | Scripts behind the search analysis (why "hannibal" missed Zama, and the excerpt length of 300 characters): hand-labelled relevance, excerpt-length and link checks |
