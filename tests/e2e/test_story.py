@@ -21,6 +21,8 @@ def test_collection_story_steps_with_keys_and_the_steps_menu(page: Page, seed):
     expect(counter).to_have_text("1 / 3")
     expect(title).to_have_text("Battle of Marathon")
     expect(intro).to_be_hidden()
+    # The focus leaves the hidden Start button for the caption, so Space reaches the story's keys.
+    expect(page.locator("#story-caption")).to_be_focused()
 
     page.keyboard.press("ArrowRight")
     expect(counter).to_have_text("2 / 3")

@@ -81,6 +81,7 @@
 .story-custom { color: var(--muted); font-size: var(--t-xs); font-weight: 600; }
 .story-step-title, .story-intro-title { margin: 0 0 var(--s2); font-size: var(--t-xl); }
 .story-intro-title { font-size: var(--t-2xl); }
+.story-caption:focus { outline: none; } /* focused by the script when the story starts, not a control */
 /* The shared note style has a bar down one side; in the caption it is a tinted box, like the map's detail note. */
 .story-caption .entry-note { margin: var(--s2) 0 0; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .story-text { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--t-sm); text-wrap: pretty; }

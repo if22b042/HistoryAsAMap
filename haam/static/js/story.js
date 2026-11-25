@@ -167,6 +167,7 @@ function start(story) {
   const caption = el("div", "story-caption");
   caption.id = "story-caption";
   caption.setAttribute("aria-live", "polite");
+  caption.tabIndex = -1; // takes the focus from the intro's buttons when the story starts
   caption.hidden = true;
   body.append(intro, caption);
 
@@ -292,8 +293,12 @@ function start(story) {
     cur = i;
     clearTimeout(dwellTimer);
     if (wasIntro) {
+      // Focus on a button of the intro (Start, Continue) would stay on that hidden button until the
+      // browser moves it, and Space would then press Start again instead of reaching the story's keys.
+      const hadFocus = intro.contains(document.activeElement);
       intro.hidden = true;
       caption.hidden = false;
+      if (hadFocus) caption.focus({ preventScroll: true });
       controls.hidden = false;
       panel.classList.remove("is-intro");
       map?.invalidateSize();
