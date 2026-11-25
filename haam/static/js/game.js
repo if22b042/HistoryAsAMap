@@ -4,7 +4,8 @@
 // sets of five, optionally from one era or category; nothing is stored.
 // Hard mode (&hard=1, either mode): the year is hidden and guessed too; the daily
 // hard game has five other events, with its own progress and streak.
-// Practice can come from one collection (&collection=<token>) or a shared set
+// Practice can come from one collection (&collection=<token>) or one tag (&tag=<id>,
+// with a best score per tag kept in localStorage), or be a shared set
 // (&seed=..., "Challenge a friend"). "Which came first?" (?mode=pairs): ten pairs of
 // events with hidden years; the player picks the earlier one, the server checks.
 /* global L */
@@ -33,6 +34,7 @@ function loadStore() {
     if (parsed && typeof parsed === "object" && parsed.days) {
       parsed.streak = parsed.streak || { current: 0, best: 0, last: null };
       parsed.hardStreak = parsed.hardStreak || { current: 0, best: 0, last: null };
+      if (!parsed.practiceBest || typeof parsed.practiceBest !== "object") parsed.practiceBest = {};
       pruneDays(parsed);
       return parsed;
     }
@@ -41,6 +43,7 @@ function loadStore() {
     days: {},
     streak: { current: 0, best: 0, last: null },
     hardStreak: { current: 0, best: 0, last: null },
+    practiceBest: {}, // best practice total per tag: { "<tag id>" or "<tag id>:hard": points }
   };
 }
 
@@ -115,6 +118,7 @@ const PAIRS = PARAMS.get("mode") === "pairs";
 const HARD = PARAMS.get("hard") === "1" && !PAIRS;
 const COLLECTION = PRACTICE ? PARAMS.get("collection") : null;
 const SEED_PATTERN = /^[0-9a-f]{32}$/;
+const TAG_SELECT = $("practice-tag"); // only in practice mode, when some tag has enough events
 
 /** The game page URL for a mode, day and difficulty; without a mode argument, the current one. */
 function pageUrl({ practice, pairs, hard = HARD, day = null } = {}) {
@@ -126,6 +130,7 @@ function pageUrl({ practice, pairs, hard = HARD, day = null } = {}) {
   if (pairs) params.set("mode", "pairs");
   else if (practice) params.set("mode", "practice");
   if (practice && COLLECTION) params.set("collection", COLLECTION);
+  if (practice && TAG_SELECT && TAG_SELECT.value) params.set("tag", TAG_SELECT.value);
   if (day && !practice && !pairs) params.set("date", day);
   if (hard && !pairs) params.set("hard", "1");
   const query = params.toString();
@@ -331,7 +336,7 @@ async function requestHint() {
   $("game-message").textContent = "";
   try {
     const body = PRACTICE
-      ? { index, level, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
+      ? { index, level, ...practiceFilters() }
       : { index, level, date: puzzle.date, hard: HARD };
     const response = await fetch(ROOT.dataset.hintUrl, {
       method: "POST",
@@ -621,6 +626,7 @@ function renderSummary() {
 
   $("summary-daily").hidden = PRACTICE;
   $("practice-again").hidden = !PRACTICE;
+  renderTagBest();
   if (PRACTICE) {
     $("practice-again").focus({ preventScroll: true });
     return;
@@ -672,7 +678,7 @@ async function submitGuess() {
     if (used) guessed.hint = used;
     if (HARD) Object.assign(guessed, { hard: true, year: yearGuess });
     const body = PRACTICE
-      ? { ...guessed, seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION }
+      ? { ...guessed, ...practiceFilters() }
       : { ...guessed, date: puzzle.date };
     const response = await fetch(PRACTICE ? ROOT.dataset.practiceCheckUrl : ROOT.dataset.checkUrl, {
       method: "POST",
@@ -695,7 +701,10 @@ async function submitGuess() {
       });
     }
     record.guesses.push(guess);
-    if (record.guesses.length >= record.rounds.length) finishDay();
+    if (record.guesses.length >= record.rounds.length) {
+      finishDay();
+      saveTagBest();
+    }
     if (!PRACTICE) saveStore(store);
     if (record.guesses.length >= record.rounds.length) renderArchive();
     if (guessMarker) {
@@ -781,11 +790,48 @@ function resetBoard() {
 }
 
 let sharedSeed = SEED_PATTERN.test(PARAMS.get("seed") || "") ? PARAMS.get("seed") : null;
+// A link may name a tag the picker does not offer (too few events): ask once anyway, the server says why.
+let linkTag = PRACTICE && /^\d+$/.test(PARAMS.get("tag") || "") ? PARAMS.get("tag") : null;
+
+/** The seed and filters a practice set was drawn with: the server draws it again to check a guess. */
+function practiceFilters() {
+  return {
+    seed: puzzle.seed, era: puzzle.era, category: puzzle.category, collection: COLLECTION,
+    tag: puzzle.tag ? puzzle.tag.id : null,
+  };
+}
+
+const tagBestKey = () => `${puzzle.tag.id}${HARD ? ":hard" : ""}`;
+
+/** At the end of a tag game: remember the best total for the tag (and difficulty) on this device. */
+function saveTagBest() {
+  if (!PRACTICE || !puzzle.tag) return;
+  const previous = store.practiceBest[tagBestKey()];
+  record.previousBest = typeof previous === "number" ? previous : null;
+  if (record.previousBest === null || total() > record.previousBest) {
+    store.practiceBest[tagBestKey()] = total();
+    saveStore(store);
+  }
+}
+
+function renderTagBest() {
+  const line = $("practice-best");
+  line.hidden = !PRACTICE || !puzzle.tag;
+  if (line.hidden) return;
+  const name = `${puzzle.tag.name}${HARD ? " (hard)" : ""}`;
+  const before = record.previousBest;
+  if (before === null || before === undefined) line.textContent = `Your first score for ${name} on this device.`;
+  else if (total() > before) line.textContent = `New best for ${name}! Previous best ${formatPoints(before)}.`;
+  else line.textContent = `Your best for ${name}: ${formatPoints(before)}.`;
+}
 
 async function loadPractice() {
   const params = new URLSearchParams();
   if ($("practice-era").value) params.set("era", $("practice-era").value);
   if ($("practice-category").value) params.set("category", $("practice-category").value);
+  const tag = linkTag || (TAG_SELECT ? TAG_SELECT.value : "");
+  if (tag) params.set("tag", tag);
+  linkTag = null;
   if (HARD) params.set("hard", "1");
   if (COLLECTION) params.set("collection", COLLECTION);
   // A shared link plays its set once; "New set" and filter changes draw a new one.
@@ -801,14 +847,18 @@ async function loadPractice() {
       $("game-meta").textContent = "That collection is not available for a quiz.";
       return;
     }
+    if (response.status === 404 && tag) {
+      $("game-meta").textContent = "That tag does not exist (any more). Pick another one.";
+      return;
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     puzzle = await response.json();
   } catch (e) {
     $("game-meta").textContent = "The practice set could not be loaded. Please try again.";
     return;
   }
-  $("game-meta").textContent = `Practice${HARD ? " · Hard" : ""}`
-    + (COLLECTION ? " · quiz from a collection" : " · random events") + ", not counted for your streak";
+  const source = puzzle.tag ? puzzle.tag.name : COLLECTION ? "quiz from a collection" : "random events";
+  $("game-meta").textContent = `Practice${HARD ? " · Hard" : ""} · ${source}, not counted for your streak`;
   resetBoard();
   if (!puzzle.rounds.length) {
     record = null;
@@ -830,6 +880,7 @@ $("practice-filters").addEventListener("submit", (e) => {
 });
 $("practice-era").addEventListener("change", loadPractice);
 $("practice-category").addEventListener("change", loadPractice);
+if (TAG_SELECT) TAG_SELECT.addEventListener("change", loadPractice); // tag-combobox.js fires it on a pick
 $("practice-again").addEventListener("click", loadPractice);
 
 /** A link to the page with this practice set's seed and filters, for a friend to play the same five. */
@@ -839,6 +890,8 @@ function challengeUrl() {
   if (HARD) url.searchParams.set("hard", "1"); // the same five events are drawn in hard mode only
   if (puzzle.era !== null && puzzle.era !== undefined) url.searchParams.set("era", String(puzzle.era));
   if (puzzle.category) url.searchParams.set("category", puzzle.category);
+  if (puzzle.tag) url.searchParams.set("tag", String(puzzle.tag.id));
+  else url.searchParams.delete("tag");
   return url.href;
 }
 

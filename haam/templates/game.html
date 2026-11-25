@@ -86,6 +86,16 @@
           {% for category in categories %}<option value="{{ category.value }}">{{ category.label }}</option>{% endfor %}
         </select>
       </label>
+      {% if practice_tags %}
+      <div class="game-filter game-filter-tag">
+        <label for="practice-tag">Tag: a war, era or period</label>
+        {# tag-combobox.js turns this into a search box; only tags with enough events for a game. #}
+        <select class="form-input" id="practice-tag" data-tag-combobox data-empty-label="Any tag: events from all of history.">
+          <option value="">Any tag</option>
+          {% for tag in practice_tags %}<option value="{{ tag.id }}" data-name="{{ tag.name }}" data-range="{{ tag.range }}" data-count="{{ tag.count }}"{% if chosen_tag == tag.id|string %} selected{% endif %}>{{ tag.name }} ({{ tag.range }})</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
       <button class="btn btn-secondary btn-small" type="submit">
         <i class="fas fa-random" aria-hidden="true"></i> New set</button>
       <button class="btn btn-secondary btn-small" type="button" id="challenge-btn" hidden
@@ -199,6 +209,7 @@
         <p class="game-streak" id="summary-streak"></p>
         <p class="game-countdown" id="summary-countdown"></p>
       </div>
+      <p class="game-streak" id="practice-best" hidden></p>
       <button class="btn btn-primary btn-block" type="button" id="practice-again" hidden>
         <i class="fas fa-redo" aria-hidden="true"></i> Play another set</button>
     </article>
@@ -231,5 +242,6 @@
 {% block scripts %}
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{{ url_for('static', filename='js/copy.js') }}" defer></script>
+  {% if practice_tags %}<script type="module" src="{{ url_for('static', filename='js/tag-combobox.js') }}"></script>{% endif %}
   <script type="module" src="{{ url_for('static', filename='js/game.js') }}"></script>
 {% endblock %}

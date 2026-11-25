@@ -1018,3 +1018,147 @@ def test_game_page_has_archive_and_next_game_slots(client):
     assert 'id="game-archive"' in html and 'id="archive-grid"' in html
     assert 'id="game-next"' in html
     assert "<script>" not in html.split('id="game"')[1]
+
+
+# ---------------------------------------------------------------- game by tag
+
+def _tagged(make_event, tag, titles, year=1808, **kwargs):
+    """Playable events (long summary, no country in the title) carrying ``tag``, spread apart."""
+    from haam.extensions import db
+
+    made = []
+    for n, title in enumerate(titles):
+        event = make_event(title, year=year + n, lat=-40 + 15 * n, lon=-150 + 50 * n, summary=LONG,
+                           category=list(Category)[n % len(Category)], **kwargs)
+        event.tags.append(tag)
+        made.append(event)
+    db.session.commit()
+    return made
+
+
+@pytest.fixture
+def napoleonic(app, events, make_event):
+    """"Napoleonic Wars" with three events, and "Peninsular War" (a part of it by TAG_PARENTS)
+    with two events tagged by hand with the part only."""
+    from haam.extensions import db
+    from haam.models import Tag
+
+    wars, peninsula = Tag(name="Napoleonic Wars", start_year=1803, end_year=1815), \
+        Tag(name="Peninsular War", start_year=1807, end_year=1814)
+    db.session.add_all([wars, peninsula])
+    db.session.commit()
+    whole = _tagged(make_event, wars, ["Battle of Austerlitz", "Battle of Jena", "Battle of Borodino"])
+    parts = _tagged(make_event, peninsula, ["Battle of Talavera", "Siege of Badajoz"], year=1809)
+    return wars, peninsula, whole, parts
+
+
+def test_tag_game_takes_the_tag_and_its_parts(client, napoleonic):
+    wars, peninsula, whole, parts = napoleonic
+    assert game.tag_family(wars) == tuple(sorted((wars.id, peninsula.id)))
+    data = client.get(f"/api/game/practice?tag={wars.id}").json
+    assert data["tag"] == {"id": wars.id, "name": "Napoleonic Wars"}
+    # Exactly five events carry the tag or its part: all of them, and no untagged event.
+    assert {r["title"] for r in data["rounds"]} == {e.title for e in whole + parts}
+    only_part = client.get(f"/api/game/practice?tag={peninsula.id}").json
+    assert only_part["rounds"] == [] and "Too few events" in only_part["message"]
+
+
+def test_tag_game_cache_keeps_tags_apart(app, events, make_event):
+    from haam.extensions import db
+    from haam.models import Tag
+
+    a, b = Tag(name="Thirty Years' War"), Tag(name="Cold War")
+    db.session.add_all([a, b])
+    db.session.commit()
+    in_a = _tagged(make_event, a, [f"Battle {n} of the first" for n in range(6)], year=1620)
+    in_b = _tagged(make_event, b, [f"Crisis {n} of the second" for n in range(6)], year=1950)
+    seed = "1" * 32
+    picked_a = game.practice_event_ids(seed, tag_ids=game.tag_family(a))
+    picked_b = game.practice_event_ids(seed, tag_ids=game.tag_family(b))
+    assert set(picked_a) <= {e.id for e in in_a} and set(picked_b) <= {e.id for e in in_b}
+    assert len(picked_a) == len(picked_b) == game.EVENTS_PER_DAY
+    game.practice_event_ids(seed)
+    # One cache entry per tag (and one without): asking again does not return another tag's set.
+    assert len(app.extensions["haam_practice_cache"]) == 3
+    assert game.practice_event_ids(seed, tag_ids=game.tag_family(a)) == picked_a
+    assert game.practice_event_ids(seed, tag_ids=game.tag_family(b)) == picked_b
+
+
+def test_tag_game_needs_five_playable_events(app, client, events, make_event):
+    from haam.extensions import db
+    from haam.models import Tag
+
+    small = Tag(name="Crusades", start_year=1095, end_year=1291)
+    db.session.add(small)
+    db.session.commit()
+    _tagged(make_event, small, ["Siege of Acre", "Battle of Hattin", "Siege of Antioch", "Battle of Arsuf"],
+            year=1100)
+    # Neither counts: a stub, and a title that names the country.
+    for title, summary in (("Siege of Jerusalem", "Short."), ("Crusade in Egypt", LONG)):
+        event = make_event(title, year=1099, summary=summary)
+        event.tags.append(small)
+    db.session.commit()
+    data = client.get(f"/api/game/practice?tag={small.id}").json
+    assert data["rounds"] == [] and data["tag"]["name"] == "Crusades"
+    assert data["message"] == ("Too few events for a game: “Crusades” has 4 playable events; "
+                               "a game needs at least 5.")
+    assert small.id not in {t.id for t in game.practice_tags()}
+    # The same count with filters says so.
+    filtered = client.get(f"/api/game/practice?tag={small.id}&category=naval").json
+    assert filtered["rounds"] == [] and "with these filters" in filtered["message"]
+
+
+def test_tag_picker_lists_only_tags_with_enough_events(client, napoleonic):
+    wars, peninsula, _, _ = napoleonic
+    listed = {t.id: t for t in game.practice_tags()}
+    assert listed[wars.id].count == 5 and peninsula.id not in listed
+    html = client.get(f"/game?mode=practice&tag={wars.id}").get_data(as_text=True)
+    assert f'<option value="{wars.id}" data-name="Napoleonic Wars"' in html
+    assert f'value="{wars.id}" data-name="Napoleonic Wars" data-range="1803 – 1815" data-count="5" selected' in html
+    assert 'data-name="Peninsular War"' not in html
+    # Other modes do not count the tags.
+    assert 'data-name="Napoleonic Wars"' not in client.get("/game").get_data(as_text=True)
+
+
+def test_tag_challenge_link_replays_the_same_rounds(client, napoleonic):
+    wars = napoleonic[0]
+    first = client.get(f"/api/game/practice?tag={wars.id}&hard=1").json
+    again = client.get(f"/api/game/practice?tag={wars.id}&hard=1&seed={first['seed']}").json
+    assert again["rounds"] == first["rounds"] and again["tag"] == first["tag"]
+
+
+def test_tag_game_check_and_hint(client, napoleonic):
+    wars, _, whole, parts = napoleonic
+    by_title = {e.title: e for e in whole + parts}
+    data = client.get(f"/api/game/practice?tag={wars.id}").json
+    for round_ in data["rounds"]:
+        event = by_title[round_["title"]]
+        body = {"seed": data["seed"], "tag": wars.id, "index": round_["index"]}
+        result = client.post("/api/game/practice/check", json={**body, "lat": event.lat, "lon": event.lon})
+        assert result.status_code == 200 and result.json["answer"]["title"] == event.title
+        assert result.json["points"] == game.MAX_POINTS
+        hint = client.post("/api/game/hint", json={**body, "level": 2})
+        assert hint.status_code == 200 and hint.json["level"] == 2
+    # The tag travels as a string from query args too.
+    assert client.post("/api/game/hint", json={"seed": data["seed"], "tag": str(wars.id), "index": 0}).status_code == 200
+
+
+@pytest.mark.parametrize("value, status", [("99999", 404), ("x", 400), ("-1", 400), ("1.5", 400)])
+def test_unknown_or_bad_tag(client, events, value, status):
+    assert client.get(f"/api/game/practice?tag={value}").status_code == status
+    body = {"seed": "a" * 32, "index": 0, "lat": 0, "lon": 0, "tag": value}
+    assert client.post("/api/game/practice/check", json=body).status_code == status
+    assert client.post("/api/game/hint", json=body).status_code == status
+
+
+@pytest.mark.parametrize("value, status", [(99999, 404), (10**30, 404), (-1, 404), (True, 400), ([1], 400),
+                                           (1.0, 400)])
+def test_bad_tag_in_a_json_body(client, events, value, status):
+    body = {"seed": "a" * 32, "index": 0, "lat": 0, "lon": 0, "tag": value}
+    assert client.post("/api/game/practice/check", json=body).status_code == status
+    assert client.post("/api/game/hint", json=body).status_code == status
+
+
+def test_empty_tag_means_any(client, events):
+    data = client.get("/api/game/practice?tag=").json
+    assert data["tag"] is None and len(data["rounds"]) == game.EVENTS_PER_DAY

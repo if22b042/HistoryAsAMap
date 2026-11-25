@@ -15,8 +15,8 @@ from flask import Blueprint, abort, jsonify, render_template, request, url_for
 
 from haam import game
 from haam.events import public_id
-from haam.extensions import csrf
-from haam.models import Category
+from haam.extensions import csrf, db
+from haam.models import Category, Tag
 from haam.ratelimit import allow, limit
 
 bp = Blueprint("game", __name__)
@@ -47,7 +47,11 @@ def page():
         day = None
     if day is not None and game.is_playable(day):
         shared_day = {"date": day, "number": game.game_number(day), "hard": _hard_arg()}
-    return render_template("game.html", eras=game.ERA_LABELS, shared_day=shared_day)
+    # The tag picker of practice mode (only tags with enough events for a game).
+    practice = request.args.get("mode") == "practice"
+    return render_template("game.html", eras=game.ERA_LABELS, shared_day=shared_day,
+                           practice_tags=game.practice_tags() if practice else [],
+                           chosen_tag=request.args.get("tag", ""))
 
 
 def _hard_arg() -> bool:
@@ -172,8 +176,24 @@ def check():
 
 # ---------------------------------------------------------------- practice
 
-def _filters(source) -> tuple[int | None, Category | None]:
-    """Era index and category from query args or a JSON body; empty means "any"."""
+def _tag(value) -> Tag | None:
+    """The tag of ``tag=<id>``: 400 when it is not an id, 404 when no tag has it."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= 9:
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int):
+        abort(400)
+    if not 0 < value < 2**31:  # no such row; a huge int would overflow the database integer
+        abort(404)
+    tag = db.session.get(Tag, value)
+    if tag is None:
+        abort(404)
+    return tag
+
+
+def _filters(source) -> tuple[int | None, Category | None, Tag | None]:
+    """Era index, category and tag from query args or a JSON body; empty means "any"."""
     era, category = source.get("era"), source.get("category")
     if era in (None, ""):
         era = None
@@ -191,7 +211,17 @@ def _filters(source) -> tuple[int | None, Category | None]:
             category = Category(category)
         except ValueError:
             abort(400)
-    return era, category
+    return era, category, _tag(source.get("tag"))
+
+
+def _family(tag: Tag | None) -> tuple[int, ...] | None:
+    return game.tag_family(tag) if tag is not None else None
+
+
+def _practice_set(seed: str, source) -> list:
+    """The events of a practice set, from its seed and the filters it was drawn with."""
+    era, category, tag = _filters(source)
+    return game.practice_events(seed, era, category, _collection_ids(source), _family(tag))
 
 
 def _collection_ids(source) -> list[int] | None:
@@ -211,7 +241,7 @@ def _collection_ids(source) -> list[int] | None:
 @limit("game-practice", 60, 60)
 def practice():
     """A random set of five (or the one of ``seed``); only the seed is needed to check guesses later."""
-    era, category = _filters(request.args)
+    era, category, tag = _filters(request.args)
     hard = _hard_arg()
     only_ids = _collection_ids(request.args)
     seed = request.args.get("seed")
@@ -219,24 +249,25 @@ def practice():
         seed = game.new_practice_seed()
     elif not game.SEED_PATTERN.fullmatch(seed):
         abort(400)
-    if only_ids is not None and len(only_ids) < game.MIN_COLLECTION_EVENTS:
-        response = jsonify(
-            seed=seed, era=era, category=category.value if category else None, hard=hard,
-            max_points=game.MAX_POINTS, rounds=[],
-            message=f"This collection has {len(only_ids)} approved events from the main map; "
-                    f"a quiz needs at least {game.MIN_COLLECTION_EVENTS}.",
-        )
+    filters = dict(seed=seed, era=era, category=category.value if category else None,
+                   tag={"id": tag.id, "name": tag.name} if tag else None,
+                   hard=hard, max_points=game.MAX_POINTS)
+
+    def too_few(message: str):
+        response = jsonify(**filters, rounds=[], message=message)
         response.cache_control.no_store = True
         return response
-    events = game.practice_events(seed, era, category, only_ids)
-    response = jsonify(
-        seed=seed,
-        era=era,
-        category=category.value if category else None,
-        max_points=game.MAX_POINTS,
-        hard=hard,
-        rounds=[game.round_dict(i, event, hard) for i, event in enumerate(events)],
-    )
+
+    if only_ids is not None and len(only_ids) < game.MIN_COLLECTION_EVENTS:
+        return too_few(f"This collection has {len(only_ids)} approved events from the main map; "
+                       f"a quiz needs at least {game.MIN_COLLECTION_EVENTS}.")
+    events = game.practice_events(seed, era, category, only_ids, _family(tag))
+    # A pick takes every candidate when there are fewer than five: this is the tag's count.
+    if tag is not None and len(events) < game.MIN_TAG_EVENTS:
+        where = " with these filters" if era is not None or category or only_ids is not None else ""
+        return too_few(f"Too few events for a game: “{tag.name}” has {len(events)} playable "
+                       f"event{'' if len(events) == 1 else 's'}{where}; a game needs at least {game.MIN_TAG_EVENTS}.")
+    response = jsonify(**filters, rounds=[game.round_dict(i, event, hard) for i, event in enumerate(events)])
     response.cache_control.no_store = True
     return response
 
@@ -249,8 +280,7 @@ def practice_check():
     seed = data.get("seed")
     if not isinstance(seed, str) or not game.SEED_PATTERN.fullmatch(seed):
         abort(400)
-    era, category = _filters(data)
-    return _score(data, game.practice_events(seed, era, category, _collection_ids(data)))
+    return _score(data, _practice_set(seed, data))
 
 
 # ---------------------------------------------------------------- hints
@@ -268,8 +298,7 @@ def hint():
         seed = data["seed"]
         if not isinstance(seed, str) or not game.SEED_PATTERN.fullmatch(seed):
             abort(400)
-        era, category = _filters(data)
-        events = game.practice_events(seed, era, category, _collection_ids(data))
+        events = _practice_set(seed, data)
     elif isinstance(data.get("date"), str):
         events = game.daily_events(_day(data["date"]), hard=data.get("hard") is True)
     else:

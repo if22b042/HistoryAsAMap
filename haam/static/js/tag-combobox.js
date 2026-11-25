@@ -58,7 +58,8 @@ function createCombobox(select) {
 
   function showChosen() {
     const tag = tags.find((t) => t.value === select.value);
-    chosen.textContent = tag ? `Chosen: ${tag.name} (${tag.range}) · ${plural(tag.count)}` : "No tag chosen.";
+    chosen.textContent = tag ? `Chosen: ${tag.name} (${tag.range}) · ${plural(tag.count)}`
+      : select.dataset.emptyLabel || "No tag chosen.";
     chosen.classList.toggle("chosen", Boolean(tag));
     return tag;
   }
