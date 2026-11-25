@@ -26,6 +26,7 @@ from collections.abc import Callable
 from functools import lru_cache
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from time import monotonic
 
 from flask import current_app
 from sqlalchemy import exists, func, select
@@ -38,8 +39,9 @@ from haam.dates import MONTHS
 from haam.events import public_id
 from haam.extensions import db
 from haam.models import (
-    Category, Collection, CollectionEntry, DailyGame, Event, GameScore, Status, event_tags,
+    Category, Collection, CollectionEntry, DailyGame, Event, GameScore, Status, Tag, event_tags,
 )
+from haam.tag_tree import narrower_tags
 
 EVENTS_PER_DAY = 5
 MAX_POINTS = 5000
@@ -185,8 +187,14 @@ def _era(year: int) -> int:
     return len(ERAS) - 1
 
 
+def _with_tag(tag_ids: tuple[int, ...]):
+    """Events carrying any of ``tag_ids`` (a tag and its parts, see :func:`tag_family`)."""
+    return exists().where(event_tags.c.event_id == Event.id, event_tags.c.tag_id.in_(tag_ids))
+
+
 def _candidates(rank: Callable[[int], int], era: int | None = None,
-                category: Category | None = None, only_ids: list[int] | None = None) -> list[_Candidate]:
+                category: Category | None = None, only_ids: list[int] | None = None,
+                tag_ids: tuple[int, ...] | None = None) -> list[_Candidate]:
     tagged = exists().where(event_tags.c.event_id == Event.id).label("tagged")
     stmt = select(Event.id, Event.title, Event.country, Event.year, Event.lat, Event.lon,
                   Event.category, tagged).where(Event.status == Status.APPROVED)
@@ -195,6 +203,8 @@ def _candidates(rank: Callable[[int], int], era: int | None = None,
     else:
         # A collection's own events: the owner chose them, so short texts are fine.
         stmt = stmt.where(Event.id.in_(only_ids))
+    if tag_ids is not None:
+        stmt = stmt.where(_with_tag(tag_ids))
     if era is not None:
         start, end = ERAS[era]
         if start is not None:
@@ -427,16 +437,75 @@ def collection_event_ids(view_token: str) -> list[int] | None:
 
 
 MIN_COLLECTION_EVENTS = EVENTS_PER_DAY
+# A tag game needs a full set; smaller tags are not offered.
+MIN_TAG_EVENTS = EVENTS_PER_DAY
+PRACTICE_TAGS_TTL = 600  # seconds
+
+
+def tag_family(tag: Tag) -> tuple[int, ...]:
+    """The tag's id and those of the tags TAG_PARENTS puts under it, directly or further down.
+
+    Tagging already gives an event every broader tag on its "part of" chain (as the
+    map's tag filter assumes), so this only adds events tagged by hand with a narrower tag.
+    """
+    ids = {tag.id}
+    names = narrower_tags(tag.name)
+    if names:
+        ids.update(db.session.scalars(select(Tag.id).where(Tag.name.in_(names))))
+    return tuple(sorted(ids))
+
+
+@dataclass(frozen=True)
+class PracticeTag:
+    id: int
+    name: str
+    range: str
+    count: int  # events a practice game can use
+
+
+def practice_tags() -> list[PracticeTag]:
+    """Tags with at least MIN_TAG_EVENTS playable events, oldest first.
+
+    "Playable" is what :func:`_candidates` takes: approved, a real description, a
+    title that does not name a country; a tag's parts (:func:`tag_family`) count too.
+    Cached for a few minutes per process, since every tagged event is scanned.
+    """
+    cached = current_app.extensions.get("haam_practice_tags")
+    now = monotonic()
+    if cached and now - cached[0] < PRACTICE_TAGS_TTL:
+        return cached[1]
+    rows = db.session.execute(
+        select(event_tags.c.tag_id, Event.id, Event.title, Event.country)
+        .join(Event, Event.id == event_tags.c.event_id)
+        .where(Event.status == Status.APPROVED, func.length(Event.summary) >= MIN_SUMMARY_LENGTH)
+    ).all()
+    playable: dict[int, bool] = {}
+    by_tag: dict[int, set[int]] = {}
+    for tag_id, event_id, title, country in rows:
+        if event_id not in playable:
+            playable[event_id] = not names_a_country(title, country)
+        if playable[event_id]:
+            by_tag.setdefault(tag_id, set()).add(event_id)
+    tags = list(db.session.scalars(select(Tag)))
+    id_of = {t.name: t.id for t in tags}
+    result = []
+    for tag in sorted(tags, key=lambda t: (t.sort_year, t.name)):
+        family = {tag.id} | {id_of[n] for n in narrower_tags(tag.name) if n in id_of}
+        count = len(set().union(*(by_tag.get(i, set()) for i in family)))
+        if count >= MIN_TAG_EVENTS:
+            result.append(PracticeTag(tag.id, tag.name, tag.display_range, count))
+    current_app.extensions["haam_practice_tags"] = (now, result)
+    return result
 
 
 def practice_event_ids(seed: str, era: int | None = None, category: Category | None = None,
-                       only_ids: list[int] | None = None) -> list[int]:
+                       only_ids: list[int] | None = None, tag_ids: tuple[int, ...] | None = None) -> list[int]:
     cache: dict[tuple, list[int]] = current_app.extensions.setdefault("haam_practice_cache", {})
-    key = (seed, era, category)
+    key = (seed, era, category, tag_ids)
     # A collection's events can change: its sets are not cached.
     if only_ids is None and key in cache:
         return cache[key]
-    candidates = _candidates(lambda event_id: _practice_rank(seed, event_id), era, category, only_ids)
+    candidates = _candidates(lambda event_id: _practice_rank(seed, event_id), era, category, only_ids, tag_ids)
     # Untagged events are fine in practice: no tag-first ordering.
     candidates.sort(key=lambda c: c.rank)
     ids = _pick(candidates, f"haam-practice:{seed}")
@@ -448,8 +517,8 @@ def practice_event_ids(seed: str, era: int | None = None, category: Category | N
 
 
 def practice_events(seed: str, era: int | None = None, category: Category | None = None,
-                    only_ids: list[int] | None = None) -> list[Event]:
-    return _load(practice_event_ids(seed, era, category, only_ids))
+                    only_ids: list[int] | None = None, tag_ids: tuple[int, ...] | None = None) -> list[Event]:
+    return _load(practice_event_ids(seed, era, category, only_ids, tag_ids))
 
 
 # ------------------------------------------------------------ which came first
