@@ -208,6 +208,7 @@ def _register_template_helpers(app: Flask) -> None:
         absolute_url=seo.absolute,
         external_url=seo.external_url,
         event_path=seo.event_path,
+        tag_path=seo.tag_path,
         public_id=public_id,
         site_name=seo.SITE_NAME,
         default_description=seo.DEFAULT_DESCRIPTION,

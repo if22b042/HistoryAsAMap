@@ -1,0 +1,88 @@
+/* ---------------------------------------------------------------- tag pages (/tag/<id>-<slug>)
+   Built on the event page (event.css): same article card, tile map and pills. */
+
+/* The map of all events: dots move with the tiles, so they sit inside .tile-map-inner. */
+.tile-map-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border: 1px solid var(--card);
+  border-radius: 50%;
+}
+
+/* Key numbers: the shared .figures component, flat inside the article card. */
+.tag-figures.figures { margin: 0; box-shadow: 0 0 0 .5px var(--line); }
+/* Hairlines from box-shadows, as on the collections page, so a figure that wraps to a new row has no stray left border. */
+.tag-figures.figures { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.tag-figures .figure { padding: var(--s3) var(--s4); border-left: 0; box-shadow: 0 0 0 .5px var(--line); }
+.tag-figures .figure b { font-size: var(--t-2xl); }
+.tag-figures .figure b.figure-mix { font-size: var(--t-md); font-weight: 600; letter-spacing: 0; line-height: 1.4; }
+.tag-figures .figure-mix .figure-cat { display: block; color: inherit; font-size: inherit; white-space: nowrap; }
+.tag-figures .dot { width: 8px; height: 8px; vertical-align: .05em; }
+
+/* Events per year (or per decade…): every bar is a full-height link, so a short bar is easy to hit. */
+.tag-timeline-bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+.tag-timeline-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(to top, var(--accent) var(--h, 0%), transparent var(--h, 0%));
+  opacity: .7;
+  transition: opacity var(--dur-micro), background-color var(--dur-micro);
+}
+span.tag-timeline-bar { align-self: flex-end; height: 1px; background: var(--line-strong); opacity: 1; }
+a.tag-timeline-bar:hover, a.tag-timeline-bar:focus-visible { opacity: 1; background-color: var(--accent-soft); }
+.tag-timeline-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--s1);
+  padding-top: var(--s1);
+  border-top: .5px solid var(--line-strong);
+  color: var(--muted);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-section h2 { margin-top: 0; font-size: var(--t-xl); }
+
+/* Parts (the tag tree's branches) */
+.tag-parts ul { list-style: none; margin: 0; padding: 0; }
+.tag-parts li { padding: var(--s3) 0; border-top: .5px solid var(--line); }
+.tag-parts li:first-child { border-top: 0; padding-top: 0; }
+.tag-part { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s2); margin: 0; font-weight: 600; }
+.tag-meta { font-size: var(--t-sm); font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tag-part-map {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--ctl-sm);
+  min-height: var(--ctl-sm);
+  margin: calc(var(--s1) * -1) 0 calc(var(--s1) * -1) auto;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  transition: background-color var(--dur-micro), color var(--dur-micro);
+}
+.tag-part-map:hover { background: var(--hover); color: var(--accent); }
+.tag-subparts { margin: var(--s1) 0 0; font-size: var(--t-md); }
+
+/* Related tags */
+.tag-neighbour-group + .tag-neighbour-group { margin-top: var(--s4); }
+.tag-neighbour-group h3 { margin: 0 0 var(--s2); font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
+.tag-pill-count { margin-left: var(--s1); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* All events in date order: a plain list (it can hold a thousand rows). */
+.tag-events ol { list-style: none; margin: 0; padding: 0; }
+.tag-events li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-top: .5px solid var(--line);
+  font-size: var(--t-md);
+  scroll-margin-top: calc(var(--bar) + var(--s4));
+}
+.tag-events li:first-child { border-top: 0; }
+.tag-events li:target { margin-inline: calc(var(--s2) * -1); padding-inline: var(--s2); border-radius: var(--radius-sm); background: var(--accent-soft); }
+.tag-events .year-pill { flex: none; min-width: 4.5rem; text-align: center; }
+.tag-events .dot { width: 8px; height: 8px; margin-right: 2px; }

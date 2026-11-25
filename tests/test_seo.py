@@ -94,7 +94,7 @@ def test_event_page_lists_related_events(client, make_event):
         event.tags.append(tag)
     db.session.commit()
     html = client.get(f"/event/{first.id}-battle-of-britain").get_data(as_text=True)
-    assert "More from World War II" in html
+    assert f'More from <a href="/tag/{tag.id}-world-war-ii">World War II</a>' in html
     assert f'href="/event/{second.id}-battle-of-midway"' in html
     assert "Battle of Nowhere" not in html
 

@@ -77,6 +77,9 @@ a.tag-pill::after { content: ""; position: absolute; inset: -5px -2px; }
 /* Related events as pills; the whole pill is the link. */
 .related-events { margin-top: var(--s4); }
 .related-events h2 { margin-top: 0; font-size: var(--t-xl); }
+/* The tag's name in the heading links to its tag page; only the pills below cover their own box. */
+.related-events h2 a { color: inherit; }
+.related-events h2 a::after { content: none; }
 .related-events ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2); }
 .related-events li {
   position: relative;

@@ -158,6 +158,12 @@ def new():
     form.tag_id.choices = _tag_choices("No – start empty")
     # "New collection with this event" on the map links here with ?event=<public id>.
     first_event = find_approved(request.values.get("event", type=int))
+    # "Make a collection" on a tag page links here with ?tag=<id>.
+    preset_id = request.args.get("tag", type=int) if request.method == "GET" else None
+    preset = db.session.get(Tag, preset_id) if preset_id else None
+    if preset is not None:
+        form.tag_id.data = preset.id
+        form.title.data = form.title.data or preset.name
     if form.validate_on_submit():
         collection, edit_token = service.create_collection(
             form.title.data, form.description.data or "", form.is_public.data)
