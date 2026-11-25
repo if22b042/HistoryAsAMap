@@ -1472,9 +1472,12 @@ function renderTagChips() {
   });
 }
 
-/** "▶ Play as a story": the tag (and its part and years, as in the address) step by step, oldest first. */
+/** "Play as a story": the tag (and its part and years, as in the address) step by step, oldest first. */
 function storyLink(tagId) {
-  const link = el("a", "tag-chip-story", "▶ Play as a story");
+  const link = el("a", "tag-chip-story", " Play as a story");
+  const icon = el("i", "fas fa-play");
+  icon.setAttribute("aria-hidden", "true");
+  link.prepend(icon);
   link.title = "Fly through these events in date order, one at a time";
   // The years can change without the chips being redrawn: read the address when the link is used.
   const update = () => {

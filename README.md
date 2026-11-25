@@ -30,6 +30,15 @@ Anyone can build a personal map at **Collections** (`/collections`), without an 
 - Collections marked public are listed on the Collections page right away. Visitors
   can report them; editors hide or delete them under **Review → Review collections**.
 
+**Story mode.** "▶ Play story" on a collection (and "▶ Play as a story" on a tag selected on the map)
+opens a full-screen player: the map flies to each entry in order, the caption shows its date, note
+and text, and the path so far is drawn. Previous/Next, the arrow keys, autoplay (Slow/Normal/Fast),
+a list of steps (by period for long tags), full screen and `?` for the keys. Links open a step
+directly: `/collections/<share token>/story?step=4`, `/story/tag/<id>?part=Q…&from=…&to=…&step=4`.
+Step numbers follow the entry order, so reordering a collection changes what an old step link shows.
+`/collections/<share token>/embed` and `/embed/story/tag/<id>` are the same player for an `<iframe>`
+on another site ("Share → Embed this story"); only the share link's token is ever in them.
+
 Trust marks: ★ on an entry means it is backed by an English Wikipedia article (always
 true for main-map events; checked against Wikipedia when an own entry's link is saved).
 ✔ marks confirmed main-map events. A collection shows the Wikipedia badge when every
@@ -328,7 +337,8 @@ The old tables (`entries`, `locations`, `tags`, `entry_tags`) are only read by
 | POST | `/api/game/hint`, `/api/game/score` | A hint for a round; a finished daily score |
 | GET, POST | `/api/game/pairs`, `/api/game/pairs/check` | The "which came first?" mode |
 
-Other routes: `/event/<id>-<slug>` (event pages), `/embed` (map without the page frame),
+Other routes: `/event/<id>-<slug>` (event pages), `/embed` (map without the page frame), `/story/tag/<id>`
+and `/embed/story/tag/<id>` (story mode),
 `/game`, `/submit`, `/collections/...`, `/admin/...`, `/sitemap.xml`, `/robots.txt`.
 Public event ids are Wikipedia page ids. Game, submit and report endpoints are rate limited
 (HTTP 429).
@@ -342,7 +352,7 @@ Event text © Wikipedia contributors,
 ## Browser tests (Playwright)
 
 `tests/e2e` drives the real app in Chromium: map filters, tags, search, event details and Back/Forward,
-collections, one round of the daily and the practice game, and approving an event as admin. A fixture builds a
+collections and their story mode, one round of the daily and the practice game, and approving an event as admin. A fixture builds a
 small SQLite database offline and serves the app on a free port; any browser console error fails a test.
 The pages still load Leaflet and friends from unpkg/cdnjs, so these tests need internet access; map tiles are stubbed.
 

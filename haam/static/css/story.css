@@ -1,1 +1,226 @@
-/* Story mode styles: filled by the front-end builder. */
+/* Story mode: a collection or a tag played step by step (story.js).
+   The map fills the page; the header chip, the toolbar and the caption card float over it.
+   On a phone the caption becomes a panel under the map, shaped like the details sheet on the main map. */
+
+.story {
+  position: relative;
+  height: calc(100vh - var(--nav-height));
+  height: calc(100dvh - var(--nav-height));
+  overflow: hidden;
+}
+.story-map { position: absolute; inset: 0; z-index: var(--z-map); }
+.story-map:empty { display: none; }
+.story-map .form-hint { padding: var(--s4); }
+.story > .empty-state { padding: var(--s6) var(--s4) var(--s3); }
+.story > .story-back { display: block; text-align: center; }
+
+/* ----------------------------------------------------- header and toolbar */
+
+.story-header {
+  position: absolute;
+  top: var(--s3);
+  left: var(--s3);
+  z-index: var(--z-bar);
+  max-width: calc(100% - 28rem);
+  min-height: var(--ctl);
+  gap: var(--s3);
+}
+.story-back { position: relative; flex: none; color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.story-back::after { content: ""; position: absolute; inset: calc((var(--ctl) - var(--hit)) / 2) calc(var(--s2) * -1); }
+.story-back:hover { text-decoration: underline; }
+.story .embed-brand {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  flex: none;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.story .embed-brand:hover { background: none; text-decoration: underline; }
+.story-header-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.story-header-years { flex: none; color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
+
+.story-toolbar {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  z-index: var(--z-bar);
+  gap: var(--s2);
+  padding: var(--s1) var(--s2);
+}
+.story-toolbar .icon-btn { background: none; }
+.story-toolbar .icon-btn:hover { background: var(--accent-soft); }
+.story-toolbar .icon-btn[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+.story-help-mark { font-size: var(--t-lg); font-weight: 650; line-height: 1; }
+
+.icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.icon-btn:disabled:hover { background: none; color: var(--text); }
+
+/* ------------------------------------------------------------ caption card */
+
+.story-panel {
+  position: absolute;
+  left: var(--s4);
+  bottom: var(--s5);
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  width: min(26rem, calc(100% - 2 * var(--s4)));
+  max-height: 50vh;
+  padding: 0;
+  overflow: hidden;
+}
+.story-handle { display: none; }
+.story-panel-body { flex: 1 1 auto; min-height: 0; padding: var(--s4); overflow-y: auto; overscroll-behavior: contain; }
+.story-panel.is-intro .story-panel-body { padding-bottom: var(--s4); }
+
+.story-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
+.story-custom { color: var(--muted); font-size: var(--t-xs); font-weight: 600; }
+.story-step-title, .story-intro-title { margin: 0 0 var(--s2); font-size: var(--t-xl); }
+.story-intro-title { font-size: var(--t-2xl); }
+/* The shared note style has a bar down one side; in the caption it is a tinted box, like the map's detail note. */
+.story-caption .entry-note { margin: var(--s2) 0 0; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.story-text { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--t-sm); text-wrap: pretty; }
+.story-where { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--t-xs); }
+.story-more { display: inline-block; position: relative; margin-top: var(--s2); font-size: var(--t-sm); font-weight: 600; }
+.story-more::after { content: ""; position: absolute; inset: -12px -4px; }
+.story-more i { margin-left: 2px; font-size: 0.75em; }
+.story-intro-text { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--t-md); white-space: pre-line; text-wrap: pretty; }
+.story-intro-meta { margin: 0 0 var(--s4); }
+.story-intro-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+.story-fade { animation: story-in 150ms var(--ease); }
+@keyframes story-in { from { opacity: 0; } }
+
+.story-controls {
+  position: sticky;
+  bottom: 0;
+  flex: none;
+  padding: var(--s2) var(--s4) var(--s3);
+  border-top: 1px solid var(--line);
+}
+.story-buttons { display: flex; align-items: center; gap: var(--s2); }
+.story-buttons .icon-btn[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+.story-counter { margin-left: auto; color: var(--muted); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.story-range { display: block; width: 100%; height: var(--ctl); margin: var(--s1) 0 0; accent-color: var(--primary); cursor: pointer; }
+
+/* ------------------------------------------------------- dialogs and share */
+
+.story-dialog {
+  width: min(32rem, calc(100vw - 2 * var(--s4)));
+  max-height: min(80vh, 40rem);
+  max-height: min(80dvh, 40rem);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  color: var(--text);
+}
+.story-dialog[open] { display: flex; flex-direction: column; }
+.story-dialog::backdrop { background: var(--backdrop); }
+.story-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4) var(--s4) var(--s2); }
+.story-dialog-head h2 { margin: 0; font-size: var(--t-xl); }
+.story-dialog-body { min-height: 0; padding: 0 var(--s4) var(--s4); overflow-y: auto; }
+
+.story-chapter { margin: var(--s4) 0 var(--s1); color: var(--muted); font-size: var(--t-sm); font-weight: 600; }
+.story-chapter:first-child { margin-top: 0; }
+.story-step-list { margin: 0; padding: 0; list-style: none; }
+.story-step-row {
+  display: grid;
+  grid-template-columns: 2.25rem 6.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--ctl);
+  padding: 6px var(--s2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--t-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-micro);
+}
+.story-step-row:hover { background: var(--hover); }
+.story-step-row[aria-current="step"] { background: var(--accent-soft); font-weight: 600; }
+.story-step-num { color: var(--muted); font-variant-numeric: tabular-nums; }
+.story-step-date { color: var(--muted); font-size: var(--t-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.story-keys { display: grid; grid-template-columns: max-content 1fr; gap: var(--s2) var(--s4); margin: 0; align-items: center; }
+.story-keys dt { justify-self: start; padding: 2px var(--s2); border-radius: var(--radius-sm); background: var(--fill); font-family: var(--font-mono); font-size: var(--t-sm); }
+.story-keys dd { margin: 0; }
+
+.story-share {
+  position: absolute;
+  top: calc(var(--s3) + var(--hit) + var(--s2));
+  right: var(--s3);
+  z-index: var(--z-bar);
+  width: min(22rem, calc(100% - 2 * var(--s3)));
+}
+.story-embed-label { margin: var(--s2) var(--s3) 0; font-size: var(--t-sm); }
+.story-share .form-input { width: auto; margin: 0 var(--s1); font-size: var(--t-sm); }
+.story-share textarea.form-input { min-height: 5rem; font-family: var(--font-mono); font-size: var(--t-xs); }
+.story-share > .btn { align-self: flex-end; margin: 0 var(--s1) var(--s1); }
+.story-toast { position: absolute; left: 50%; bottom: var(--s5); z-index: var(--z-modal); transform: translateX(-50%); }
+
+/* ----------------------------------------------------------------- phone */
+
+@media (max-width: 860px) {
+  .story { display: flex; flex-direction: column; }
+  .story-map { position: relative; inset: auto; flex: 1 1 auto; min-height: 40%; }
+  .story-header { right: var(--s3); max-width: none; }
+  .story-toolbar {
+    top: calc(var(--s3) + var(--ctl) + var(--s2));
+    left: var(--s3);
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    border-radius: var(--radius);
+  }
+  .story-share { top: calc(var(--s3) + var(--hit) * 3); }
+  /* One row of tools on a phone: no keyboard there, so no shortcut list; the back link keeps only its arrow. */
+  .story-help-btn { display: none; }
+  .story-back-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .story-panel {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    flex: none;
+    width: auto;
+    max-height: 60vh;
+    max-height: 60dvh;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .story-panel.is-compact { max-height: none; }
+  .story-panel.is-compact :is(.story-note, .story-text, .story-where, .story-more, .badge, .story-custom) { display: none; }
+  .story-handle {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 100%;
+    height: var(--hit);
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .story-panel-body { padding-top: 0; }
+  .story-panel .icon-btn { width: var(--hit); height: var(--hit); }
+  .story-range { height: var(--hit); }
+  .story-step-row { min-height: var(--hit); }
+  .story-toast { bottom: calc(var(--hit) * 3); }
+}
+
+/* Full screen is for a projector; touch screens (iPhone Safari cannot do it at all) leave it out. */
+@media (max-width: 860px) and (pointer: coarse) {
+  .story-full-btn { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story *, .story-dialog, .story-dialog * { transition: none; animation: none; }
+}

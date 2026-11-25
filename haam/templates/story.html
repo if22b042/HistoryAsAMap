@@ -6,27 +6,32 @@
 {% block head %}
   <meta name="robots" content="noindex{% if story.kind == 'collection' %}, nofollow{% endif %}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/story.css') }}">
 {% endblock %}
 
 {% block content %}
-<main class="story" id="story">
+<div class="story" id="story">
   <div id="story-map" class="story-map" role="region" aria-label="Map of the story"></div>
   {% if not story.steps %}
     <p class="empty-state">This story has no steps yet.</p>
-    <a class="story-back" href="{{ story.back_url }}">← {{ story.back_label }}</a>
+    <a class="story-back" href="{{ story.back_url }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ story.back_label }}</a>
   {% endif %}
   <noscript>
     <p>The story needs JavaScript.</p>
-    <a class="story-back" href="{{ story.back_url }}">← {{ story.back_label }}</a>
+    <a class="story-back" href="{{ story.back_url }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> {{ story.back_label }}</a>
   </noscript>
-  {% if not embed %}
-    <a class="story-back" href="{{ story.back_url }}">← {{ story.back_label }}</a>
-  {% else %}
-    <a class="embed-brand" id="story-brand" href="{{ story.story_url }}" target="_blank" rel="noopener">History As A Map</a>
+  {% if story.steps %}
+  <div class="story-header pill">
+    {% if not embed %}
+      <a class="story-back" href="{{ story.back_url }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> <span class="story-back-label">{{ story.back_label }}</span></a>
+    {% else %}
+      <a class="embed-brand" id="story-brand" href="{{ story.story_url }}" target="_blank" rel="noopener">History As A Map</a>
+    {% endif %}
+    <span class="story-header-title">{{ story.title }}</span>
+    {% if story.years %}<span class="story-header-years">{{ story.years }}</span>{% endif %}
+  </div>
   {% endif %}
   <script type="application/json" id="story-data">{{ story|tojson }}</script>
-</main>
+</div>
 {% endblock %}
 
 {% block scripts %}
